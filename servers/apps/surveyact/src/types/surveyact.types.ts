@@ -60,6 +60,12 @@ export class SubSurveyActivityType {
 
   @Field()
   targetSample: number;
+
+  @Field()
+  sampleType: string;
+
+  @Field()
+  activityType: string;
 }
 
 @ObjectType()

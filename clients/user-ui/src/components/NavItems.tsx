@@ -59,14 +59,16 @@ const NavItems = ({ isMinimized = false }: { isMinimized?: boolean }) => {
       logo: House,
     },
     ...(user?.role === "Admin"
-    ? [{
-      title: "Admin",
-      hovertitle: "Admin",
-      url: "/admin",
-      logo: User,
-      style: "border-b-2 border-white pb-2",
-    }]
-    : []),
+      ? [
+          {
+            title: "Admin",
+            hovertitle: "Admin",
+            url: "/admin",
+            logo: User,
+            style: "border-b-2 border-white pb-2",
+          },
+        ]
+      : []),
     {
       title: "KEGIATAN LAPANGAN",
       url: "#kegiatanlapangan",

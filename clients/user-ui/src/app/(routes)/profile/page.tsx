@@ -66,14 +66,165 @@ function Profile() {
     useLazyQuery(GET_USER_PROGRESS_BY_USER_ID, {
       fetchPolicy: "network-only",
     });
-  const [updateUserSurveyProgress] = useMutation(UPDATE_USER_PROGRESS);
 
-  // Fetch user progress ketika pilih kegiatan survei
   useEffect(() => {
     if (user?.id) {
       fetchUserProgress({ variables: { userId: user.id } });
     }
   }, [user?.id, fetchUserProgress]);
+  const [updateUserSurveyProgress] = useMutation(UPDATE_USER_PROGRESS);
+
+  const sum =
+    updateUserProgressForm.submitCount +
+    updateUserProgressForm.approvedCount +
+    updateUserProgressForm.rejectedCount;
+
+  const canIncSubmit = sum < updateUserProgressForm.totalAssigned;
+  const canDecSubmit = updateUserProgressForm.submitCount > 0;
+
+  const canIncApproved = updateUserProgressForm.submitCount > 0;
+  const canDecApproved = updateUserProgressForm.approvedCount > 0;
+
+  const canIncRejected = updateUserProgressForm.submitCount > 0;
+  const canDecRejected = updateUserProgressForm.rejectedCount > 0;
+
+  // === VALIDASI & STEPPER ===
+  const clamp = (x: number, min = 0, max = Number.POSITIVE_INFINITY) =>
+    Math.min(max, Math.max(min, Number.isFinite(x) ? x : 0));
+
+  const applyConstraints = (draft: typeof updateUserProgressForm) => {
+    let totalAssigned = clamp(Number(draft.totalAssigned), 0);
+    let submitCount = clamp(Number(draft.submitCount), 0);
+    let approvedCount = clamp(Number(draft.approvedCount), 0);
+    let rejectedCount = clamp(Number(draft.rejectedCount), 0);
+
+    // Pastikan tidak melebihi totalAssigned
+    let sum = submitCount + approvedCount + rejectedCount;
+    if (sum > totalAssigned) {
+      // kurangi dari submit terlebih dulu (kalau data server “kebablasan”)
+      let overflow = sum - totalAssigned;
+
+      const takeFromSubmit = Math.min(overflow, submitCount);
+      submitCount -= takeFromSubmit;
+      overflow -= takeFromSubmit;
+
+      if (overflow > 0) {
+        const takeFromRejected = Math.min(overflow, rejectedCount);
+        rejectedCount -= takeFromRejected;
+        overflow -= takeFromRejected;
+      }
+      if (overflow > 0) {
+        const takeFromApproved = Math.min(overflow, approvedCount);
+        approvedCount -= takeFromApproved;
+        overflow -= takeFromApproved;
+      }
+    }
+
+    return {
+      ...draft,
+      totalAssigned,
+      submitCount,
+      approvedCount,
+      rejectedCount,
+    };
+  };
+
+  // stepper untuk +/−, otomatis terapkan constraint & beri toast jika “mentok”
+  const currentUP = React.useMemo(() => {
+    const rows = userProgressData?.userProgressSurveyByUserId ?? [];
+    return rows.find(
+      (up: any) =>
+        up?.subSurveyActivity?.id === updateUserProgressForm.subSurveyActivityId
+    );
+  }, [userProgressData, updateUserProgressForm.subSurveyActivityId]);
+
+  useEffect(() => {
+    if (currentUP) {
+      setUpdateUserProgressForm((prev) =>
+        applyConstraints({
+          ...prev,
+          userProgressId: currentUP.id,
+          subSurveyActivityId: currentUP.subSurveyActivity?.id ?? "",
+          totalAssigned: Number(currentUP.totalAssigned ?? 0),
+          submitCount: Number(currentUP.submitCount ?? 0),
+          approvedCount: Number(currentUP.approvedCount ?? 0),
+          rejectedCount: Number(currentUP.rejectedCount ?? 0),
+          lastUpdated: new Date().toISOString(),
+        })
+      );
+    } else {
+      setUpdateUserProgressForm((prev) => ({
+        ...prev,
+        userProgressId: "",
+        subSurveyActivityId: "",
+        totalAssigned: 0,
+        submitCount: 0,
+        approvedCount: 0,
+        rejectedCount: 0,
+        lastUpdated: "",
+      }));
+    }
+  }, [currentUP]);
+
+  const step = (
+    field: "submitCount" | "approvedCount" | "rejectedCount",
+    delta: number
+  ) => {
+    setUpdateUserProgressForm((prev) => {
+      let { submitCount, approvedCount, rejectedCount, totalAssigned } = prev;
+
+      if (field === "submitCount") {
+        if (delta > 0) {
+          if (submitCount + approvedCount + rejectedCount >= totalAssigned) {
+            toast.error("Tidak bisa menambah Submit di atas Total Assigned");
+            return prev;
+          }
+          submitCount += 1;
+        } else {
+          if (submitCount <= 0) return prev;
+          submitCount -= 1;
+        }
+      }
+
+      if (field === "approvedCount") {
+        if (delta > 0) {
+          if (submitCount <= 0) {
+            toast.error("Tidak ada pending untuk di-approve");
+            return prev;
+          }
+          submitCount -= 1;
+          approvedCount += 1;
+        } else {
+          if (approvedCount <= 0) return prev;
+          approvedCount -= 1;
+          submitCount += 1;
+        }
+      }
+
+      if (field === "rejectedCount") {
+        if (delta > 0) {
+          if (submitCount <= 0) {
+            toast.error("Tidak ada pending untuk di-reject");
+            return prev;
+          }
+          submitCount -= 1;
+          rejectedCount += 1;
+        } else {
+          if (rejectedCount <= 0) return prev;
+          rejectedCount -= 1;
+          submitCount += 1;
+        }
+      }
+
+      return applyConstraints({
+        ...prev,
+        submitCount,
+        approvedCount,
+        rejectedCount,
+        lastUpdated: new Date().toISOString(),
+      });
+    });
+  };
 
   const subSurveyOptions = React.useMemo(() => {
     const rows = userProgressData?.userProgressSurveyByUserId ?? [];
@@ -102,29 +253,32 @@ function Profile() {
   ) => {
     e.preventDefault();
     try {
+      if (!updateUserProgressForm.userProgressId) {
+        toast.error("Pilih kegiatan survei terlebih dahulu.");
+        return;
+      }
+
+      const v = applyConstraints(updateUserProgressForm);
+      // cek aturan bisnis sekali lagi
+      if (v.submitCount > v.totalAssigned) {
+        toast.error("Submit tidak boleh melebihi Total Assigned");
+        return;
+      }
+
       await updateUserSurveyProgress({
         variables: {
-          userProgressId: userProgressData?.userProgressSurveyByUserId[0].id,
+          userProgressId: v.userProgressId,
           input: {
-            totalAssigned: Number(updateUserProgressForm.totalAssigned),
-            submitCount: Number(updateUserProgressForm.submitCount),
-            approvedCount: Number(updateUserProgressForm.approvedCount),
-            rejectedCount: Number(updateUserProgressForm.rejectedCount),
-            lastUpdated: new Date(
-              updateUserProgressForm.lastUpdated
-            ).toISOString(),
+            totalAssigned: Number(v.totalAssigned),
+            submitCount: Number(v.submitCount),
+            approvedCount: Number(v.approvedCount),
+            rejectedCount: Number(v.rejectedCount),
+            lastUpdated: new Date().toISOString(),
           },
         },
       });
-      setUpdateUserProgressForm({
-        userProgressId: "",
-        subSurveyActivityId: "",
-        totalAssigned: 0,
-        submitCount: 0,
-        approvedCount: 0,
-        rejectedCount: 0,
-        lastUpdated: "",
-      })
+
+      await fetchUserProgress({ variables: { userId: user!.id } });
       toast.success("UserProgress berhasil diupdate!");
     } catch (err) {
       toast.error("Gagal update user progress");
@@ -230,7 +384,7 @@ function Profile() {
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
-            <div className="mb-4">
+            <div className="mb-4 hidden">
               <label className="block text-sm font-bold mb-2" htmlFor="role">
                 Role
               </label>
@@ -251,17 +405,12 @@ function Profile() {
             >
               {loading ? "Menyimpan..." : "Perbarui"}
             </button>
-            {loading && (
-              <p className="text-sm text-gray-500 italic">
-                Menyimpan perubahan...
-              </p>
-            )}
           </form>
         </div>
       </div>
       <div className="bg-blue-100 rounded-lg p-4 shadow-md">
         <form onSubmit={handleUpdateUserProgress} className="space-y-3">
-          <h3 className="text-lg font-bold">Update UserProgress</h3>
+          <h3 className="text-lg font-bold">Update Data Petugas</h3>
 
           <div>
             <label
@@ -271,7 +420,7 @@ function Profile() {
               Kegiatan Survei
             </label>
             <select
-              id="subSurveyActivityId" // <- PENTING: id harus 'subSurveyActivityId'
+              id="subSurveyActivityId"
               value={updateUserProgressForm.subSurveyActivityId}
               onChange={handleChangeUpdateUserProgress}
               className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -286,87 +435,156 @@ function Profile() {
               ))}
             </select>
           </div>
-          <div>
-            <label
-              htmlFor="totalAssigned"
-              className="block text-sm font-bold mb-2"
-            >
-              Total Assigned
-            </label>
-            <input
-              type="number"
-              id="totalAssigned"
-              value={updateUserProgressForm.totalAssigned}
-              onChange={handleChangeUpdateUserProgress}
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-            />
+
+          <div className="flex gap-4 flex-wrap">
+            <div className="flex-1 min-w-[180px]">
+              <label
+                htmlFor="totalAssigned"
+                className="block text-sm font-bold mb-2"
+              >
+                Total Assigned
+              </label>
+              <input
+                type="number"
+                id="totalAssigned"
+                value={updateUserProgressForm.totalAssigned}
+                readOnly
+                className="w-full px-3 py-3 border rounded-md bg-white text-center text-2xl cursor-default focus:outline-none"
+              />
+            </div>
+
+            <div className="flex-1 min-w-[220px]">
+              <label
+                htmlFor="submitCount"
+                className="block text-sm font-bold mb-2"
+              >
+                Submit Count
+              </label>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => step("submitCount", -1)}
+                  disabled={
+                    !updateUserProgressForm.subSurveyActivityId || !canDecSubmit
+                  }
+                  className="px-3 py-2 border rounded-md font-bold bg-red-500 text-white hover:bg-red-600"
+                  aria-label="Kurangi Submit"
+                >
+                  -
+                </button>
+                <input
+                  type="number"
+                  id="submitCount"
+                  value={updateUserProgressForm.submitCount}
+                  readOnly
+                  className="w-full px-3 py-3 border rounded-md bg-white text-center text-2xl cursor-default focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => step("submitCount", +1)}
+                  disabled={
+                    !updateUserProgressForm.subSurveyActivityId || !canIncSubmit
+                  }
+                  className="px-3 py-2 border rounded-md font-bold bg-green-500 text-white hover:bg-green-600"
+                  aria-label="Tambah Submit"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            {/* Approved Count with stepper */}
+            <div className="flex-1 min-w-[220px]">
+              <label
+                htmlFor="approvedCount"
+                className="block text-sm font-bold mb-2"
+              >
+                Approved Count
+              </label>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => step("approvedCount", -1)}
+                  disabled={
+                    !updateUserProgressForm.subSurveyActivityId ||
+                    !canDecApproved
+                  }
+                  className="px-3 py-2 border rounded-md font-bold bg-red-500 text-white hover:bg-red-600"
+                  aria-label="Kurangi Approved"
+                >
+                  -
+                </button>
+                <input
+                  type="number"
+                  id="approvedCount"
+                  value={updateUserProgressForm.approvedCount}
+                  readOnly
+                  className="w-full px-3 py-3 border rounded-md bg-white text-center text-2xl cursor-default focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => step("approvedCount", +1)}
+                  disabled={
+                    !updateUserProgressForm.subSurveyActivityId ||
+                    !canIncApproved
+                  }
+                  className="px-3 py-2 border rounded-md font-bold bg-green-500 text-white hover:bg-green-600"
+                  aria-label="Tambah Approved"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            {/* Rejected Count with stepper */}
+            <div className="flex-1 min-w-[220px]">
+              <label
+                htmlFor="rejectedCount"
+                className="block text-sm font-bold mb-2"
+              >
+                Rejected Count
+              </label>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => step("rejectedCount", -1)}
+                  disabled={
+                    !updateUserProgressForm.subSurveyActivityId ||
+                    !canDecRejected
+                  }
+                  className="px-3 py-2 border rounded-md font-bold bg-red-500 text-white hover:bg-red-600"
+                  aria-label="Kurangi Rejected"
+                >
+                  -
+                </button>
+                <input
+                  type="number"
+                  id="rejectedCount"
+                  value={updateUserProgressForm.rejectedCount}
+                  readOnly
+                  className="w-full px-3 py-3 border rounded-md bg-white text-center text-2xl cursor-default focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => step("rejectedCount", +1)}
+                  disabled={
+                    !updateUserProgressForm.subSurveyActivityId ||
+                    !canIncRejected
+                  }
+                  className="px-3 py-2 border rounded-md font-bold bg-green-500 text-white hover:bg-green-600"
+                  aria-label="Tambah Rejected"
+                >
+                  +
+                </button>
+              </div>
+            </div>
           </div>
 
-          <div>
-            <label
-              htmlFor="submitCount"
-              className="block text-sm font-bold mb-2"
-            >
-              Submit Count
-            </label>
-            <input
-              type="number"
-              id="submitCount"
-              value={updateUserProgressForm.submitCount}
-              onChange={handleChangeUpdateUserProgress}
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="approvedCount"
-              className="block text-sm font-bold mb-2"
-            >
-              Approved Count
-            </label>
-            <input
-              type="number"
-              id="approvedCount"
-              value={updateUserProgressForm.approvedCount}
-              onChange={handleChangeUpdateUserProgress}
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="rejectedCount"
-              className="block text-sm font-bold mb-2"
-            >
-              Rejected Count
-            </label>
-            <input
-              type="number"
-              id="rejectedCount"
-              value={updateUserProgressForm.rejectedCount}
-              onChange={handleChangeUpdateUserProgress}
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="lastUpdated"
-              className="block text-sm font-bold mb-2"
-            >
-              Last Updated
-            </label>
-            <input
-              type="date"
-              id="lastUpdated"
-              value={updateUserProgressForm.lastUpdated}
-              onChange={handleChangeUpdateUserProgress}
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-            />
-          </div>
-
-          <button type="submit" className={`${styles.button} my-2 text-white`}>
+          <button
+            type="submit"
+            className={`${styles.button} my-2 text-white`}
+            disabled={!updateUserProgressForm.userProgressId}
+          >
             Update Progress
           </button>
         </form>

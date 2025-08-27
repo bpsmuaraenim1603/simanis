@@ -14,6 +14,7 @@ export const GET_USER_PROGRESS_BY_SUBSURVEY_ID = gql`
       user {
         id
         name
+        email
       }
       subSurveyActivity {
         id

@@ -12,6 +12,8 @@ export const GET_ALL_OF_SUB_SURVEY_ACTIVITIES: DocumentNode = gql`
       startDate
       endDate
       targetSample
+      sampleType
+      activityType
     }
   }
 `;

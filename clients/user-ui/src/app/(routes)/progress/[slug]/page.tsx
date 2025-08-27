@@ -74,17 +74,26 @@ const ProgressTemplate = () => {
         <p className="font-semibold text-xl">Pilih Jenis Survei:</p>
         <div className="space-x-4 p-2 flex justify-start">
           {subSurveyActivities.map((subSurvey: any) => (
-            <button
-              key={subSurvey.id}
-              onClick={() => {setSelectedSubSurvey(subSurvey.id); setSelectedName(subSurvey.name)}}
-              className={`p-2 rounded-md border font-semibold w-[12%] ${
-                selectedSubSurvey === subSurvey.id
-                  ? "bg-orange-500 text-white"
-                  : "bg-slate-700 text-white hover:bg-orange-500"
-              }`}
-            >
-              {subSurvey.name}
-            </button>
+            <div key={subSurvey.id} className="relative group">
+              <button
+                onClick={() => {
+                  setSelectedSubSurvey(subSurvey.id);
+                  setSelectedName(subSurvey.name);
+                }}
+                className={`p-2 rounded-md border font-semibold w-[40%] ${
+                  selectedSubSurvey === subSurvey.id
+                    ? "bg-orange-500 text-white"
+                    : "bg-slate-700 text-white hover:bg-orange-500"
+                }`}
+              >
+                <span className="block truncate overflow-hidden text-ellipsis">
+                  {subSurvey.name}
+                </span>
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block bg-black text-white text-xs rounded py-1 px-2 whitespace-nowrap shadow-lg z-10">
+                  {subSurvey.name}
+                </div>
+              </button>
+            </div>
           ))}
         </div>
       </div>

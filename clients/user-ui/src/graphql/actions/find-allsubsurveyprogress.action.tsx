@@ -12,6 +12,8 @@ export const GET_ALL_SUB_SURVEY_PROGRESS: DocumentNode = gql`
       submitCount
       approvedCount
       rejectedCount
+      sampleType
+      activityType
     }
   }
 `;

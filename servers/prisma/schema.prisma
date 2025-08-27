@@ -16,6 +16,8 @@ datasource db {
 enum Role {
   User
   Admin
+  Superadmin
+  Supervisor
 }
 
 enum IssueStatus {
@@ -60,6 +62,8 @@ model SubSurveyActivity {
   startDate        DateTime
   endDate          DateTime
   targetSample     Int
+  sampleType       String
+  activityType     String
 
   UserProgress UserProgress[]
   SuratTugas   JobLetter[]

@@ -12,6 +12,8 @@ export const GET_SUB_SURVEY_ACTIVITIES_BY_SLUG: DocumentNode = gql`
       startDate
       endDate
       targetSample
+      sampleType
+      activityType
     }
   }
 `;

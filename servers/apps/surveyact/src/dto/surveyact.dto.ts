@@ -55,6 +55,12 @@ export class CreateSubSurveyActivityDTO {
 
   @Field()
   targetSample: number;
+
+  @Field()
+  sampleType: string;
+
+  @Field()
+  activityType: string;
 }
 
 @InputType()
@@ -76,6 +82,12 @@ export class UpdateSubSurveyActivityDTO {
 
   @Field()
   targetSample: number;
+
+  @Field()
+  sampleType: string;
+
+  @Field()
+  activityType: string;
 }
 
 @InputType()

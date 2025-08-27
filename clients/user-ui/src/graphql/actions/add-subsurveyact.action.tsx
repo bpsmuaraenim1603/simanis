@@ -11,6 +11,8 @@ mutation AddSubSurveyActivity($input: CreateSubSurveyActivityDTO!) {
     startDate
     endDate
     targetSample
+    sampleType
+    activityType
   }
 }
 `;
