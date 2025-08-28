@@ -133,6 +133,9 @@ export class UpdateUserProgressDTO {
 
   @Field()
   lastUpdated: Date;
+
+  @Field()
+  districtId: string;
 }
 
 @InputType()

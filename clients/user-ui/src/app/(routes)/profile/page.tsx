@@ -1,7 +1,7 @@
 "use client";
 
 import useUser from "@/src/hooks/useUser";
-import { useLazyQuery, useMutation } from "@apollo/client";
+import { useApolloClient, useLazyQuery, useMutation } from "@apollo/client";
 import { useSession } from "next-auth/react";
 import { UPDATE_PROFILE } from "@/src/graphql/actions/update-user.action";
 import React, { useEffect, useState } from "react";
@@ -11,6 +11,13 @@ import { UPDATE_USER_PROGRESS } from "@/src/graphql/actions/update-userprogress.
 import { GET_USER_PROGRESS_BY_USER_ID } from "@/src/graphql/actions/find-usersurveyprogressbyuser.action";
 
 function Profile() {
+  const getDistrictId = (up: any) =>
+    up?.districtId ??
+    up?.district?.id ??
+    up?.subSurveyActivity?.districtId ??
+    up?.subSurveyActivity?.district?.id ??
+    "";
+
   const { user } = useUser();
   const { data } = useSession();
   const [updateProfile, { loading }] = useMutation(UPDATE_PROFILE);
@@ -21,6 +28,9 @@ function Profile() {
     address: user?.address || "",
     role: user?.role || "",
   });
+
+  const client = useApolloClient();
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -60,6 +70,7 @@ function Profile() {
     approvedCount: 0,
     rejectedCount: 0,
     lastUpdated: "",
+    districtId: "",
   });
 
   const [fetchUserProgress, { data: userProgressData, loading: upLoading }] =
@@ -74,12 +85,25 @@ function Profile() {
   }, [user?.id, fetchUserProgress]);
   const [updateUserSurveyProgress] = useMutation(UPDATE_USER_PROGRESS);
 
+  const currentUP = React.useMemo(() => {
+    const rows = userProgressData?.userProgressSurveyByUserId ?? [];
+    return rows.find(
+      (up: any) =>
+        up?.subSurveyActivity?.id === updateUserProgressForm.subSurveyActivityId
+    );
+  }, [userProgressData, updateUserProgressForm.subSurveyActivityId]);
+
+  const rawType = currentUP?.subSurveyActivity?.activityType ?? "";
+  const isListing = rawType.toLowerCase() === "listing";
+
   const sum =
     updateUserProgressForm.submitCount +
     updateUserProgressForm.approvedCount +
     updateUserProgressForm.rejectedCount;
 
-  const canIncSubmit = sum < updateUserProgressForm.totalAssigned;
+  const canIncSubmit = isListing
+    ? true
+    : sum < updateUserProgressForm.totalAssigned;
   const canDecSubmit = updateUserProgressForm.submitCount > 0;
 
   const canIncApproved = updateUserProgressForm.submitCount > 0;
@@ -98,25 +122,29 @@ function Profile() {
     let approvedCount = clamp(Number(draft.approvedCount), 0);
     let rejectedCount = clamp(Number(draft.rejectedCount), 0);
 
-    // Pastikan tidak melebihi totalAssigned
     let sum = submitCount + approvedCount + rejectedCount;
-    if (sum > totalAssigned) {
-      // kurangi dari submit terlebih dulu (kalau data server “kebablasan”)
-      let overflow = sum - totalAssigned;
 
-      const takeFromSubmit = Math.min(overflow, submitCount);
-      submitCount -= takeFromSubmit;
-      overflow -= takeFromSubmit;
+    if (isListing) {
+      totalAssigned = sum;
+    } else {
+      if (sum > totalAssigned) {
+        let overflow = sum - totalAssigned;
 
-      if (overflow > 0) {
-        const takeFromRejected = Math.min(overflow, rejectedCount);
-        rejectedCount -= takeFromRejected;
-        overflow -= takeFromRejected;
-      }
-      if (overflow > 0) {
-        const takeFromApproved = Math.min(overflow, approvedCount);
-        approvedCount -= takeFromApproved;
-        overflow -= takeFromApproved;
+        const takeFromSubmit = Math.min(overflow, submitCount);
+        submitCount -= takeFromSubmit;
+        overflow -= takeFromSubmit;
+
+        if (overflow > 0) {
+          const takeFromRejected = Math.min(overflow, rejectedCount);
+          rejectedCount -= takeFromRejected;
+          overflow -= takeFromRejected;
+        }
+        if (overflow > 0) {
+          const takeFromApproved = Math.min(overflow, approvedCount);
+          approvedCount -= takeFromApproved;
+          overflow -= takeFromApproved;
+        }
+        sum = submitCount + approvedCount + rejectedCount;
       }
     }
 
@@ -128,15 +156,6 @@ function Profile() {
       rejectedCount,
     };
   };
-
-  // stepper untuk +/−, otomatis terapkan constraint & beri toast jika “mentok”
-  const currentUP = React.useMemo(() => {
-    const rows = userProgressData?.userProgressSurveyByUserId ?? [];
-    return rows.find(
-      (up: any) =>
-        up?.subSurveyActivity?.id === updateUserProgressForm.subSurveyActivityId
-    );
-  }, [userProgressData, updateUserProgressForm.subSurveyActivityId]);
 
   useEffect(() => {
     if (currentUP) {
@@ -150,6 +169,7 @@ function Profile() {
           approvedCount: Number(currentUP.approvedCount ?? 0),
           rejectedCount: Number(currentUP.rejectedCount ?? 0),
           lastUpdated: new Date().toISOString(),
+          districtId: getDistrictId(currentUP),
         })
       );
     } else {
@@ -162,9 +182,14 @@ function Profile() {
         approvedCount: 0,
         rejectedCount: 0,
         lastUpdated: "",
+        districtId: "",
       }));
     }
   }, [currentUP]);
+
+  useEffect(() => {
+    setUpdateUserProgressForm((prev) => applyConstraints(prev));
+  }, [isListing, currentUP?.id]);
 
   const step = (
     field: "submitCount" | "approvedCount" | "rejectedCount",
@@ -175,11 +200,16 @@ function Profile() {
 
       if (field === "submitCount") {
         if (delta > 0) {
-          if (submitCount + approvedCount + rejectedCount >= totalAssigned) {
-            toast.error("Tidak bisa menambah Submit di atas Total Assigned");
+          if (
+            !isListing &&
+            submitCount + approvedCount + rejectedCount >= totalAssigned
+          ) {
+            toast.error(
+              "Tidak bisa menambah Jumlah Submit di atas Total Sampel Petugas"
+            );
             return prev;
           }
-          submitCount += 1;
+          submitCount += 1; // ✅ saat Listing, ini selalu boleh
         } else {
           if (submitCount <= 0) return prev;
           submitCount -= 1;
@@ -242,10 +272,19 @@ function Profile() {
   const handleChangeUpdateUserProgress = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
-    setUpdateUserProgressForm((prev) => ({
-      ...prev,
-      [e.target.id]: e.target.value,
-    }));
+    const { id, value } = e.target;
+    if (id === "subSurveyActivityId") {
+      // cari baris UP yg cocok dengan subSurvey terpilih
+      const rows = userProgressData?.userProgressSurveyByUserId ?? [];
+      const up = rows.find((r: any) => r?.subSurveyActivity?.id === value);
+      setUpdateUserProgressForm((prev) => ({
+        ...prev,
+        subSurveyActivityId: value,
+        districtId: getDistrictId(up), // isi sekarang juga
+      }));
+    } else {
+      setUpdateUserProgressForm((prev) => ({ ...prev, [id]: value }));
+    }
   };
 
   const handleUpdateUserProgress = async (
@@ -258,22 +297,30 @@ function Profile() {
         return;
       }
 
-      const v = applyConstraints(updateUserProgressForm);
-      // cek aturan bisnis sekali lagi
-      if (v.submitCount > v.totalAssigned) {
-        toast.error("Submit tidak boleh melebihi Total Assigned");
+      // Normalisasi berdasar aturan terbaru
+      const v0 = applyConstraints(updateUserProgressForm);
+
+      // (opsional) cek negatif — mestinya sudah aman oleh clamp
+      if (v0.submitCount < 0 || v0.approvedCount < 0 || v0.rejectedCount < 0) {
+        toast.error("Angka tidak valid.");
+        return;
+      }
+
+      if (!isListing && v0.submitCount > v0.totalAssigned) {
+        toast.error("Jumlah Submit tidak boleh melebihi Total Sampel Petugas");
         return;
       }
 
       await updateUserSurveyProgress({
         variables: {
-          userProgressId: v.userProgressId,
+          userProgressId: v0.userProgressId,
           input: {
-            totalAssigned: Number(v.totalAssigned),
-            submitCount: Number(v.submitCount),
-            approvedCount: Number(v.approvedCount),
-            rejectedCount: Number(v.rejectedCount),
+            totalAssigned: Number(v0.totalAssigned),
+            submitCount: Number(v0.submitCount),
+            approvedCount: Number(v0.approvedCount),
+            rejectedCount: Number(v0.rejectedCount),
             lastUpdated: new Date().toISOString(),
+            districtId: v0.districtId,
           },
         },
       });
@@ -286,10 +333,41 @@ function Profile() {
     }
   };
 
+  const handleRefresh = async () => {
+    try {
+      setRefreshing(true);
+
+      // refetch semua observable queries yang masih aktif (kalau ada)
+      await client.reFetchObservableQueries?.();
+
+      // tarik ulang progres user dari server (bypass cache)
+      if (user?.id) {
+        await fetchUserProgress({
+          variables: { userId: user.id },
+          fetchPolicy: "network-only",
+        });
+      }
+
+      toast.success("Data profil & progres telah di-refresh");
+    } catch (e) {
+      console.error("Refresh error:", e);
+      toast.error("Gagal me-refresh data");
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
     <div className="px-8 py-4 space-y-4 font-Poppins">
-      <div className="bg-orange-50 rounded-lg p-2 font-bold text-xl flex justify-between shadow-md">
-        Profil Diri
+      <div className="bg-orange-50 rounded-lg p-2 font-bold text-xl flex justify-between items-center shadow-md">
+        <span>Profil Diri</span>
+        <button
+          onClick={handleRefresh}
+          disabled={refreshing || upLoading}
+          className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm hover:bg-blue-700 transition font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          {refreshing ? "Refreshing..." : "Refresh"}
+        </button>
       </div>
       <div className="bg-orange-50 rounded-lg p-4 shadow-md space-y-8">
         <div className="flex items-center gap-4">
@@ -434,6 +512,16 @@ function Profile() {
                 </option>
               ))}
             </select>
+            {updateUserProgressForm.subSurveyActivityId && (
+              <p className="mt-1 text-xs">
+                Tipe kegiatan:{" "}
+                <span
+                  className={`px-2 py-0.5 rounded ${isListing ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"}`}
+                >
+                  {isListing ? "Listing" : "Non-Listing"}
+                </span>
+              </p>
+            )}
           </div>
 
           <div className="flex gap-4 flex-wrap">
@@ -442,7 +530,7 @@ function Profile() {
                 htmlFor="totalAssigned"
                 className="block text-sm font-bold mb-2"
               >
-                Total Assigned
+                {isListing ? "Total Listing Petugas" : "Total Sampel Petugas"}
               </label>
               <input
                 type="number"
@@ -451,6 +539,20 @@ function Profile() {
                 readOnly
                 className="w-full px-3 py-3 border rounded-md bg-white text-center text-2xl cursor-default focus:outline-none"
               />
+              <p className="mt-1 text-xs text-gray-600">
+                {isListing ? (
+                  <>
+                    Karena <b>Jenis Kegiatan Listing</b>,{" "}
+                    <b>Total Listing Petugas</b> otomatis sama dengan{" "}
+                    <b>Jumlah Submit, Approved, dan Rejected</b>.
+                  </>
+                ) : (
+                  <>
+                    Total Sampel Petugas adalah kuota kerja yang tidak boleh
+                    dilampaui.
+                  </>
+                )}
+              </p>
             </div>
 
             <div className="flex-1 min-w-[220px]">
@@ -458,7 +560,7 @@ function Profile() {
                 htmlFor="submitCount"
                 className="block text-sm font-bold mb-2"
               >
-                Submit Count
+                Jumlah Submit Oleh Petugas
               </label>
               <div className="flex items-center gap-2">
                 <button
@@ -499,7 +601,7 @@ function Profile() {
                 htmlFor="approvedCount"
                 className="block text-sm font-bold mb-2"
               >
-                Approved Count
+                Jumlah Approved Oleh PML
               </label>
               <div className="flex items-center gap-2">
                 <button
@@ -542,7 +644,7 @@ function Profile() {
                 htmlFor="rejectedCount"
                 className="block text-sm font-bold mb-2"
               >
-                Rejected Count
+                Jumlah Rejected Oleh PML
               </label>
               <div className="flex items-center gap-2">
                 <button

@@ -6,6 +6,7 @@ export const GET_USER_PROGRESS_BY_SUBSURVEY_ID = gql`
       id
       userId
       subSurveyActivityId
+      districtId
       totalAssigned
       submitCount
       approvedCount
@@ -23,6 +24,7 @@ export const GET_USER_PROGRESS_BY_SUBSURVEY_ID = gql`
       district {
         id
         name
+        city
       }
     }
   }

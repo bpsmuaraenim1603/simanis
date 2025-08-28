@@ -135,6 +135,15 @@ export class SubSurveyProgressType {
 
   @Field(() => Int)
   rejectedCount: number;
+
+  @Field(() => String)
+  sampleType: string;
+
+  @Field(() => String)
+  activityType: string;
+
+  @Field(() => [String], { nullable: true })
+  district?: string[];
 }
 
 @ObjectType()

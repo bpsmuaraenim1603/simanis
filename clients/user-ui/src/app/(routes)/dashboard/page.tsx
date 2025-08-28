@@ -494,16 +494,17 @@ function Dashboard() {
                   !selectedSubSurveyId ||
                   progress.subSurveyActivity.id === selectedSubSurveyId
               )
-              .map((progress) => {
+              .map((progress, idx) => {
                 const percent =
                   progress.totalAssigned > 0
                     ? Math.round(
                         (progress.submitCount / progress.totalAssigned) * 100
                       )
                     : 0;
+                  const key = `${progress.user.id}-${progress.subSurveyActivity.id}-${idx}`;
 
                 return (
-                  <div key={progress.user.id} className="space-y-1">
+                  <div key={key} className="space-y-1">
                     <div className="flex justify-between font-semibold text-sm">
                       <span>{progress.user.name}</span>
                       <span>{percent}%</span>

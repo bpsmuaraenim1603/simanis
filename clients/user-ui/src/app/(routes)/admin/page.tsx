@@ -1,7 +1,12 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useLazyQuery, useMutation, useQuery } from "@apollo/client";
+import {
+  useApolloClient,
+  useLazyQuery,
+  useMutation,
+  useQuery,
+} from "@apollo/client";
 import toast from "react-hot-toast";
 import styles from "@/src/utils/style";
 import { ADD_SURVEY_ACTIVITY } from "@/src/graphql/actions/add-surveyact.action";
@@ -147,6 +152,9 @@ function Admin() {
     setMode("add");
   }, [section]);
 
+  const client = useApolloClient();
+  const [refreshing, setRefreshing] = useState(false);
+
   /* ---------- State Form (SAMA seperti punyamu) ---------- */
   const [formStateF1, setFormStateF1] = useState({ name: "", slug: "" });
   const [updateStateF1, setUpdateStateF1] = useState({
@@ -199,10 +207,15 @@ function Admin() {
     approvedCount: 0,
     rejectedCount: 0,
     lastUpdated: "",
+    districtId: "",
   });
 
   /* ---------- Queries & Mutations (SAMA) ---------- */
-  const { data, loading } = useQuery(GET_ALL_SURVEY_ACTIVITIES);
+  const {
+    data,
+    loading,
+    refetch: refetchSurveyActs,
+  } = useQuery(GET_ALL_SURVEY_ACTIVITIES);
 
   const [fetchSubForSubSurveys, { data: SubSurveydata }] = useLazyQuery(
     GET_ALL_SUB_SURVEY_ACTIVITIES
@@ -214,8 +227,9 @@ function Admin() {
     GET_ALL_SUB_SURVEY_ACTIVITIES
   );
 
-  const { data: userData } = useQuery(GET_ALL_USERS);
-  const { data: districtData } = useQuery(GET_ALL_DISTRICT);
+  const { data: userData, refetch: refetchUsers } = useQuery(GET_ALL_USERS);
+  const { data: districtData, refetch: refetchDistricts } =
+    useQuery(GET_ALL_DISTRICT);
 
   const [fetchUserProgress, { data: userProgressData }] = useLazyQuery(
     GET_USER_PROGRESS_BY_SUBSURVEY_ID
@@ -287,6 +301,7 @@ function Admin() {
       }
       await addSurveyActivity({ variables: { input: { ...formStateF1 } } });
       toast.success("Data Tim berhasil ditambahkan!");
+      handleRefresh();
       setFormStateF1({ name: "", slug: "" });
     } catch (err: any) {
       toast.error("Gagal menambah Data Tim.");
@@ -323,6 +338,7 @@ function Admin() {
         },
       });
       toast.success("Kegiatan Survey berhasil ditambahkan!");
+      handleRefresh();
       setFormStateF2({
         name: "",
         slug: "",
@@ -351,6 +367,7 @@ function Admin() {
         variables: { surveyActivityId, input: { name, slug } },
       });
       toast.success("Tim berhasil diupdate!");
+      handleRefresh();
       setUpdateStateF1({ surveyActivityId: "", name: "", slug: "" });
     } catch (err) {
       toast.error("Gagal perbarui Tim.");
@@ -399,10 +416,12 @@ function Admin() {
             endDate: new Date(endDate),
             targetSample: parseInt(targetSample.toString(), 10),
             sampleType,
+            activityType,
           },
         },
       });
       toast.success("Kegiatan berhasil diupdate!");
+      handleRefresh();
       setUpdateStateF2({
         subSurveyActivityId: "",
         name: "",
@@ -474,6 +493,7 @@ function Admin() {
         },
       });
       toast.success("UserProgress berhasil ditambahkan!");
+      handleRefresh();
       setUserProgressForm({
         surveyActivityId: "",
         subSurveyActivityId: "",
@@ -502,7 +522,16 @@ function Admin() {
         const others = sumAllAssignedForUpdate - currentAssigned;
         const allowedMax = Math.max(0, target - others);
 
-        if (Number(updateUserProgressForm.totalAssigned) > allowedMax) {
+        // === Override saat Listing ===
+        const intendedTotalAssigned = isListingUpdate
+          ? Number(updateUserProgressForm.submitCount ?? 0)
+          : Number(updateUserProgressForm.totalAssigned ?? 0);
+
+        const cappedTotalAssigned = updateUserProgressForm.subSurveyActivityId
+          ? Math.min(Math.max(0, intendedTotalAssigned), allowedMax)
+          : Math.max(0, intendedTotalAssigned);
+
+        if (intendedTotalAssigned > allowedMax) {
           toast.error(
             `Alokasi melebihi batas untuk petugas ini (${allowedMax}).`
           );
@@ -512,23 +541,30 @@ function Admin() {
           toast.error("Tidak ada sisa sampel yang dapat dialokasikan.");
           return;
         }
+
+        await updateUserSurveyProgress({
+          variables: {
+            userProgressId: updateUserProgressForm.userProgressId,
+            input: {
+              totalAssigned: cappedTotalAssigned,
+              submitCount: Number(updateUserProgressForm.submitCount),
+              approvedCount: Number(updateUserProgressForm.approvedCount),
+              rejectedCount: Number(updateUserProgressForm.rejectedCount),
+              lastUpdated: new Date(
+                updateUserProgressForm.lastUpdated
+              ).toISOString(),
+              districtId: updateUserProgressForm.districtId,
+            },
+          },
+        });
+      } else {
+        // kalau belum pilih subSurveyActivityId, cegah submit
+        toast.error("Pilih kegiatan survei terlebih dahulu.");
+        return;
       }
 
-      await updateUserSurveyProgress({
-        variables: {
-          userProgressId: updateUserProgressForm.userProgressId,
-          input: {
-            totalAssigned: Number(updateUserProgressForm.totalAssigned),
-            submitCount: Number(updateUserProgressForm.submitCount),
-            approvedCount: Number(updateUserProgressForm.approvedCount),
-            rejectedCount: Number(updateUserProgressForm.rejectedCount),
-            lastUpdated: new Date(
-              updateUserProgressForm.lastUpdated
-            ).toISOString(),
-          },
-        },
-      });
       toast.success("Petugas berhasil diupdate!");
+      handleRefresh();
       setUpdateUserProgressForm({
         userProgressId: "",
         subSurveyActivityId: "",
@@ -539,10 +575,85 @@ function Admin() {
         approvedCount: 0,
         rejectedCount: 0,
         lastUpdated: "",
+        districtId: "",
       });
     } catch (err) {
       toast.error("Gagal perbarui petugas");
       console.error(err);
+    }
+  };
+
+  const handleRefresh = async () => {
+    try {
+      setRefreshing(true);
+
+      // 1) refetch semua observable queries aktif (bila ada)
+      await client.reFetchObservableQueries?.();
+
+      // 2) refetch query utama yang dipakai di halaman
+      await Promise.all([
+        refetchSurveyActs(),
+        refetchUsers(),
+        refetchDistricts(),
+      ]);
+
+      // 3) rerun lazy-queries sesuai selection saat ini (kalau ada valuenya)
+      const lazyJobs: Promise<any>[] = [];
+
+      if (updateStateF2.surveyActivityId) {
+        lazyJobs.push(
+          fetchSubForSubSurveys({
+            variables: { surveyActivityId: updateStateF2.surveyActivityId },
+            fetchPolicy: "network-only",
+          })
+        );
+      }
+      if (userProgressForm.surveyActivityId) {
+        lazyJobs.push(
+          fetchSubForSubmitUP({
+            variables: { surveyActivityId: userProgressForm.surveyActivityId },
+            fetchPolicy: "network-only",
+          })
+        );
+      }
+      if (updateUserProgressForm.surveyActivityId) {
+        lazyJobs.push(
+          fetchSubForUpdateUP({
+            variables: {
+              surveyActivityId: updateUserProgressForm.surveyActivityId,
+            },
+            fetchPolicy: "network-only",
+          })
+        );
+      }
+      if (updateUserProgressForm.subSurveyActivityId) {
+        lazyJobs.push(
+          fetchUserProgress({
+            variables: {
+              subSurveyActivityId: updateUserProgressForm.subSurveyActivityId,
+            },
+            fetchPolicy: "network-only",
+          })
+        );
+      }
+      if (userProgressForm.subSurveyActivityId) {
+        lazyJobs.push(
+          fetchUserProgress({
+            variables: {
+              subSurveyActivityId: userProgressForm.subSurveyActivityId,
+            },
+            fetchPolicy: "network-only",
+          })
+        );
+      }
+
+      if (lazyJobs.length) await Promise.all(lazyJobs);
+
+    } catch (e) {
+      console.error("Refresh error:", e);
+      toast.error("Gagal refresh data");
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -628,14 +739,12 @@ function Admin() {
     if (up) {
       setUpdateUserProgressForm((prev) => ({
         ...prev,
-        // opsional: sinkronkan subSurveyActivityId kalau mau
-        // subSurveyActivityId: up.subSurveyActivityId ?? prev.subSurveyActivityId,
         totalAssigned: Number(up.totalAssigned ?? 0),
         submitCount: Number(up.submitCount ?? 0),
         approvedCount: Number(up.approvedCount ?? 0),
         rejectedCount: Number(up.rejectedCount ?? 0),
-        // tampilkan tanggal di input date; kalau bukan date input, ganti sesuai kebutuhan
         lastUpdated: toDateInput(up.lastUpdated),
+        districtId: up.districtId ?? "",
       }));
     } else {
       // kosongkan bila pilihan direset
@@ -646,12 +755,12 @@ function Admin() {
         approvedCount: 0,
         rejectedCount: 0,
         lastUpdated: "",
+        districtId: "",
       }));
     }
   }, [updateUserProgressForm.userProgressId, upMap]);
 
   useEffect(() => {
-    // kamu sudah memanggil fetchUserProgress di efek lain; cukup reset pilihan id-nya
     setUpdateUserProgressForm((prev) => ({ ...prev, userProgressId: "" }));
   }, [updateUserProgressForm.subSurveyActivityId]);
 
@@ -682,7 +791,6 @@ function Admin() {
     );
   }, [SubmitUPData, userProgressForm.subSurveyActivityId]);
 
-  // total yang sudah dialokasikan ke semua petugas pada sub-kegiatan tsb
   const assignedSumForAdd = React.useMemo(() => {
     const list = userProgressData?.userProgressBySubSurveyActivityId ?? [];
     return list.reduce(
@@ -702,6 +810,9 @@ function Admin() {
         s.id === updateUserProgressForm.subSurveyActivityId
     );
   }, [UpdateUPData, updateUserProgressForm.subSurveyActivityId]);
+
+  const isListingUpdate =
+    (selectedSubForUpdate?.activityType ?? "") === "Listing";
 
   const upListForUpdate: UserProgress[] =
     userProgressData?.userProgressBySubSurveyActivityId ?? [];
@@ -733,6 +844,26 @@ function Admin() {
     return new Set(existingUPForAdd.map((up) => up.userId));
   }, [existingUPForAdd]);
 
+  useEffect(() => {
+    if (isListingUpdate) {
+      // ikut submitCount, tapi tetap dihormati allowedMaxForUpdate
+      const submit = Number(updateUserProgressForm.submitCount ?? 0);
+      const capped = updateUserProgressForm.subSurveyActivityId
+        ? Math.min(Math.max(0, submit), allowedMaxForUpdate)
+        : Math.max(0, submit);
+
+      setUpdateUserProgressForm((prev) => ({
+        ...prev,
+        totalAssigned: capped,
+      }));
+    }
+  }, [
+    isListingUpdate,
+    updateUserProgressForm.submitCount,
+    allowedMaxForUpdate,
+    updateUserProgressForm.subSurveyActivityId,
+  ]);
+
   /* ===================== UI ===================== */
   return (
     <div className="px-8 py-6 space-y-4 font-Poppins">
@@ -758,6 +889,13 @@ function Admin() {
           onChange={setMode}
         />
         {loading && <span className="text-xs text-gray-500">Memuat data…</span>}
+        <button
+          onClick={() => {handleRefresh(); toast.success("Data telah di-refresh");}}
+          disabled={refreshing}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition font-semibold"
+        >
+          {refreshing ? "Refreshing..." : "Refresh"}
+        </button>
       </div>
 
       {/* ---------- TIM ---------- */}
@@ -774,6 +912,7 @@ function Admin() {
                 id="name"
                 value={formStateF1.name}
                 onChange={handleChangeF1}
+                placeholder="Contoh: Tim Sensus Penduduk"
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
@@ -784,6 +923,7 @@ function Admin() {
               <input
                 type="text"
                 id="slug"
+                placeholder="Contoh: tim-sensus-penduduk"
                 value={formStateF1.slug}
                 onChange={handleChangeF1}
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -829,7 +969,7 @@ function Admin() {
               <input
                 type="text"
                 id="name"
-                placeholder="Nama baru"
+                placeholder="Contoh: Tim Sensus Penduduk"
                 value={updateStateF1.name}
                 onChange={handleChangeUpdateF1}
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -842,7 +982,7 @@ function Admin() {
               <input
                 type="text"
                 id="slug"
-                placeholder="Slug baru"
+                placeholder="Contoh: tim-sensus-penduduk"
                 value={updateStateF1.slug}
                 onChange={handleChangeUpdateF1}
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -872,6 +1012,7 @@ function Admin() {
                 id="name"
                 value={formStateF2.name}
                 onChange={handleChangeF2}
+                placeholder="Contoh: Sensus Penduduk 2020"
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
@@ -882,6 +1023,7 @@ function Admin() {
               <input
                 type="text"
                 id="slug"
+                placeholder="Contoh: sensus-penduduk-2020"
                 value={formStateF2.slug}
                 onChange={handleChangeF2}
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -965,6 +1107,7 @@ function Admin() {
                 id="sampleType"
                 value={formStateF2.sampleType}
                 onChange={handleChangeF2}
+                placeholder="Contoh: Rumah Tangga, SLS, dll"
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
@@ -1052,7 +1195,7 @@ function Admin() {
               <input
                 type="text"
                 id="name"
-                placeholder="Nama baru"
+                placeholder="Contoh: Sensus Penduduk 2020"
                 value={updateStateF2.name}
                 onChange={handleChangeUpdateF2}
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -1065,7 +1208,7 @@ function Admin() {
               <input
                 type="text"
                 id="slug"
-                placeholder="Slug baru"
+                placeholder="Contoh: sensus-penduduk-2020"
                 value={updateStateF2.slug}
                 onChange={handleChangeUpdateF2}
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -1125,6 +1268,7 @@ function Admin() {
                 id="sampleType"
                 value={updateStateF2.sampleType}
                 onChange={handleChangeUpdateF2}
+                placeholder="Contoh: Rumah Tangga, SLS, dll"
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
@@ -1135,13 +1279,16 @@ function Admin() {
               >
                 Jenis Kegiatan
               </label>
-              <input
-                type="text"
+              <select
                 id="activityType"
                 value={updateStateF2.activityType}
                 onChange={handleChangeUpdateF2}
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
+              >
+                <option value="">-- Pilih Jenis Kegiatan --</option>
+                <option value="Listing">Listing</option>
+                <option value="Pencacahan">Pencacahan</option>
+              </select>
             </div>
             <button
               type="submit"
@@ -1220,19 +1367,16 @@ function Admin() {
                 value={userProgressForm.userId}
                 onChange={handleChangeUserProgress}
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                disabled={!userProgressForm.subSurveyActivityId}
               >
                 <option value="">
-                  {userProgressForm.subSurveyActivityId
-                    ? "-- Pilih Pengguna --"
-                    : "Pilih Kegiatan dulu"}
+                  -- Pilih Petugas --
                 </option>
 
                 {userData?.getUsers?.map((user: User) => {
                   const alreadyUsed = usedUserIdsForAdd.has(user.id);
 
                   if (alreadyUsed) return null;
-                  
+
                   return (
                     <option key={user.id} value={user.id}>
                       {user.name} - {user.email}
@@ -1270,24 +1414,33 @@ function Admin() {
                 }
                 value={userProgressForm.totalAssigned}
                 onChange={(e) => {
+                  if (isListingUpdate) return; // saat Listing, abaikan input manual
                   const raw = Number(e.target.value);
-                  const capped = userProgressForm.subSurveyActivityId
-                    ? Math.min(Math.max(0, raw), remainingQuotaForAdd)
+                  const capped = updateUserProgressForm.subSurveyActivityId
+                    ? Math.min(Math.max(0, raw), allowedMaxForUpdate)
                     : Math.max(0, raw);
-                  setUserProgressForm((prev) => ({
+                  setUpdateUserProgressForm((prev) => ({
                     ...prev,
                     totalAssigned: capped,
                   }));
                 }}
+                disabled={isListingUpdate}
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               />
-              {/* ⬇️ hint validasi */}
-              {userProgressForm.subSurveyActivityId && (
-                <p className="mt-1 text-xs text-gray-600">
-                  Maksimal alokasi untuk petugas ini:{" "}
-                  <b>{remainingQuotaForAdd}</b>
-                </p>
-              )}
+              <p className="mt-1 text-xs text-gray-600">
+                {isListingUpdate ? (
+                  <>
+                    Karena <b>Jenis Kegiatan = Listing</b>, <b>Total Sampel</b>{" "}
+                    otomatis mengikuti <b>Jumlah Submit</b> (maks{" "}
+                    {allowedMaxForUpdate}).
+                  </>
+                ) : (
+                  <>
+                    Maksimal alokasi terbaru untuk petugas ini:{" "}
+                    <b>{allowedMaxForUpdate}</b>
+                  </>
+                )}
+              </p>
             </div>
             <div>
               <label
@@ -1299,7 +1452,7 @@ function Admin() {
               <input
                 type="number"
                 id="submitCount"
-                placeholder="Submit Count"
+                placeholder="Jumlah Submit"
                 value={userProgressForm.submitCount}
                 onChange={handleChangeUserProgress}
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -1315,7 +1468,7 @@ function Admin() {
               <input
                 type="number"
                 id="approvedCount"
-                placeholder="Approved Count"
+                placeholder="Jumlah Approved"
                 value={userProgressForm.approvedCount}
                 onChange={handleChangeUserProgress}
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -1331,7 +1484,7 @@ function Admin() {
               <input
                 type="number"
                 id="rejectedCount"
-                placeholder="Rejected Count"
+                placeholder="Jumlah Rejected"
                 value={userProgressForm.rejectedCount}
                 onChange={handleChangeUserProgress}
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -1537,6 +1690,26 @@ function Admin() {
                 onChange={handleChangeUpdateUserProgress}
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               />
+            </div>
+            <div>
+              <label htmlFor="districtId" className="block text-sm font-bold">
+                Kecamatan
+              </label>
+              <select
+                id="districtId"
+                value={updateUserProgressForm.districtId}
+                onChange={handleChangeUpdateUserProgress}
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              >
+                <option value="">-- Pilih Kecamatan --</option>
+                {districtData?.getAllSurveyDistrict?.map(
+                  (district: District) => (
+                    <option key={district.id} value={district.id}>
+                      {district.name}
+                    </option>
+                  )
+                )}
+              </select>
             </div>
             <button
               type="submit"

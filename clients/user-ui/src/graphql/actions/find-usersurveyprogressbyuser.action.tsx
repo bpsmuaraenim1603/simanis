@@ -18,6 +18,7 @@ export const GET_USER_PROGRESS_BY_USER_ID = gql`
       subSurveyActivity {
         id
         name
+        activityType
       }
       district {
         id
