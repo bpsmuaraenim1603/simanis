@@ -88,6 +88,51 @@ function SPJ() {
 
   const { user } = useUser();
 
+  // === Tambahan: state & handler upload ke Google Drive ===
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handleUpload = async () => {
+    try {
+      if (!file) {
+        toast.error("Pilih file dulu ya.");
+        return;
+      }
+      if (!input.subSurveyActivityId) {
+        toast.error("Pilih Kegiatan terlebih dahulu.");
+        return;
+      }
+      setUploading(true);
+
+      const fd = new FormData();
+      fd.append("file", file);
+      // gunakan ID kegiatan agar penamaan rapi di Drive
+      fd.append("spjId", input.subSurveyActivityId);
+
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/uploads/spj-drive`,
+        {
+          method: "POST",
+          body: fd,
+        }
+      );
+
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(t || `Upload gagal (${res.status})`);
+      }
+
+      const data = await res.json();
+      // Drive mengembalikan webViewLink → simpan sebagai eviDocumentUrl
+      setInput((prev) => ({ ...prev, eviDocumentUrl: data.webViewLink }));
+      toast.success("File berhasil diupload ke Google Drive!");
+    } catch (err: any) {
+      toast.error(err?.message || "Gagal upload file");
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
@@ -229,8 +274,8 @@ function SPJ() {
                 spj.submitState === "Disetujui"
                   ? "bg-green-100 text-green-700"
                   : spj.submitState === "Ditolak"
-                  ? "bg-red-100 text-red-700"
-                  : "bg-yellow-100 text-yellow-700"
+                    ? "bg-red-100 text-red-700"
+                    : "bg-yellow-100 text-yellow-700"
               }`}
                     >
                       {spj?.submitState}
@@ -299,6 +344,35 @@ function SPJ() {
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
+            {/* Upload bukti (Google Drive) */}
+            <div className="space-y-2">
+              <input
+                type="file"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                className="w-full"
+              />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleUpload}
+                  disabled={uploading || !file}
+                  className="px-3 py-2 bg-sky-600 text-white rounded disabled:opacity-60"
+                >
+                  {uploading ? "Mengunggah…" : "Upload Bukti"}
+                </button>
+
+                {input.eviDocumentUrl && (
+                  <a
+                    href={input.eviDocumentUrl}
+                    target="_blank"
+                    className="text-blue-600 underline break-all"
+                  >
+                    Lihat Bukti
+                  </a>
+                )}
+              </div>
+            </div>
+
             <button
               type="submit"
               disabled={loading}
@@ -362,8 +436,8 @@ function SPJ() {
                     selectedSPJ.submitState === "Disetujui"
                       ? "bg-green-100 text-green-700"
                       : selectedSPJ.submitState === "Ditolak"
-                      ? "bg-red-100 text-red-700"
-                      : "bg-yellow-100 text-yellow-700"
+                        ? "bg-red-100 text-red-700"
+                        : "bg-yellow-100 text-yellow-700"
                   }`}
                 >
                   {selectedSPJ.submitState}
