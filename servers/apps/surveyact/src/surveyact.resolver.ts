@@ -38,9 +38,15 @@ import {
   UpdateUserProgressDTO,
 } from './dto/surveyact.dto';
 import { User } from 'apps/users/src/entities/users.entity';
-import { IssueStatus, JobLetter, SubmitSPJ, UserProgress } from '@prisma/client';
+import {
+  IssueStatus,
+  JobLetter,
+  SubmitSPJ,
+  UserProgress,
+} from '@prisma/client';
 import { UserType } from 'apps/users/src/types/users.types';
 import { NotFoundException } from '@nestjs/common';
+import { FileUpload, GraphQLUpload } from 'graphql-upload-ts';
 
 @Resolver(() => SurveyActivityType)
 export class SurveyActivityResolver {
@@ -174,8 +180,13 @@ export class SurveyActivityResolver {
   }
 
   @Mutation(() => SubmitSPJType)
-  async createSPJ(@Args('input') input: CreateSPJDTO): Promise<SubmitSPJType> {
-    return this.service.createSPJ(input);
+  async createSPJ(
+    @Args('input') input: CreateSPJDTO,
+    @Args({ name: 'file', type: () => GraphQLUpload, nullable: true })
+    file?: Promise<FileUpload>,
+  ) {
+    const upload = file ? await file : undefined;
+    return this.service.createSPJ(input, upload);
   }
 
   @Query(() => [SubmitSPJType])

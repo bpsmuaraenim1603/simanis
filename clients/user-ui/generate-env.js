@@ -1,6 +1,7 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { env } = require("process");
 
 // Dapatkan IP lokal
 const interfaces = os.networkInterfaces();
@@ -37,6 +38,7 @@ function setEnvValue(content, key, value) {
 // Update variabel di .env
 envContent = setEnvValue(envContent, "NEXT_PUBLIC_USER_SERVER_URI", `http://${localIp}:4001/graphql`);
 envContent = setEnvValue(envContent, "NEXT_PUBLIC_SURVEYACT_SERVER_URI", `http://${localIp}:4002/graphql`);
+envContent = setEnvValue(envContent, "NEXT_PUBLIC_API_URL", `http://${localIp}:4002`);
 
 // Simpan ulang ke .env
 fs.writeFileSync(envPath, envContent.trim() + "\n", "utf8");

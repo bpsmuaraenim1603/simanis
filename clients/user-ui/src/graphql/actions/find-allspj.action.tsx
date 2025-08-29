@@ -1,4 +1,4 @@
-"use client"
+"use client";
 import { DocumentNode, gql } from "@apollo/client";
 
 export const GET_ALL_SPJ: DocumentNode = gql`
@@ -11,7 +11,8 @@ export const GET_ALL_SPJ: DocumentNode = gql`
       submitDate
       approveDate
       verifyNote
-      eviDocumentUrl
+      eviDocumentPath
+      eviDocumentSignedUrl
       user {
         id
         name

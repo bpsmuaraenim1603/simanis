@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
   CreateContentIssueDto,
@@ -24,6 +28,33 @@ import {
   SubSurveyActivityType,
   SubSurveyProgressType,
 } from './types/surveyact.types';
+import { FileUpload } from 'graphql-upload-ts';
+import { randomUUID } from 'node:crypto';
+import path from 'node:path';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!, // server only
+);
+
+function getExtLower(name?: string | null) {
+  if (!name) return '';
+  const i = name.lastIndexOf('.');
+  return i >= 0 ? name.slice(i).toLowerCase() : '';
+}
+function pickContentType(ext: string, mime?: string | null) {
+  const m = (mime || '').toLowerCase();
+  if (m && m !== 'application/octet-stream') return m;
+  switch (ext) {
+    case '.pdf':
+      return 'application/pdf';
+    case '.png':
+      return 'image/png';
+    default:
+      return 'image/jpeg';
+  }
+}
 
 @Injectable()
 export class SurveyActivityService {
@@ -222,14 +253,88 @@ export class SurveyActivityService {
     return this.prisma.district.findMany();
   }
 
-  async createSPJ(input: CreateSPJDTO): Promise<SubmitSPJ> {
-    return this.prisma.submitSPJ.create({
-      data: {
-        userId: input.userId,
-        subSurveyActivityId: input.subSurveyActivityId,
-        eviDocumentUrl: input.eviDocumentUrl || null,
-      },
-    });
+  async createSPJ(input: CreateSPJDTO, file?: FileUpload): Promise<SubmitSPJ> {
+    let eviDocumentPath: string | null = null;
+    let eviOriginalName: string | null = null;
+    let eviMimeType: string | null = null;
+    let eviSize: number | null = null;
+
+    // === Hanya proses upload jika argumen "file" memang dikirim dan bukan null ===
+    if (file) {
+      const { filename, mimetype, createReadStream } = file;
+
+      // ---- Validasi ext ∨ mime (tanpa modul 'path') ----
+      const ext = getExtLower(filename);
+      const allowedExt = new Set(['.pdf', '.jpg', '.jpeg', '.png']);
+      const allowedMime = new Set([
+        'application/pdf',
+        'application/x-pdf',
+        'application/acrobat',
+        'application/vnd.adobe.pdf',
+        'image/jpeg',
+        'image/jpg',
+        'image/png',
+        'application/octet-stream', // beberapa browser, termasuk Edge/Windows
+      ]);
+
+      const mimeOk = allowedMime.has((mimetype || '').toLowerCase());
+      const extOk = allowedExt.has(ext);
+      console.log('[UPLOAD]', {
+        filename: file?.filename,
+        mimetype: file?.mimetype,
+      });
+
+      if (!extOk && !mimeOk) {
+        throw new BadRequestException(
+          'Tipe file tidak diizinkan. Hanya PDF/JPG/PNG.',
+        );
+      }
+
+      const contentType = pickContentType(ext, mimetype);
+      const key = `spj/${input.subSurveyActivityId}/${input.userId}/${randomUUID()}${ext}`;
+
+      // (opsional) kalau mau hitung size, bisa pipe ke counter; kalau tidak, langsung upload:
+      const stream = createReadStream();
+      const { error } = await supabase.storage
+        .from('spj-docs')
+        .upload(key, stream, { contentType, duplex: 'half' as any });
+      if (error)
+        throw new BadRequestException(
+          'Gagal upload ke Storage: ' + error.message,
+        );
+
+      eviDocumentPath = key;
+      eviOriginalName = filename || null;
+      eviMimeType = contentType;
+    }
+
+    try {
+      return await this.prisma.submitSPJ.create({
+        data: {
+          userId: input.userId,
+          subSurveyActivityId: input.subSurveyActivityId,
+          verifyNote: input.verifyNote ?? undefined,
+          eviDocumentPath: eviDocumentPath ?? undefined,
+          eviOriginalName: eviOriginalName ?? undefined,
+          eviMimeType: eviMimeType ?? undefined,
+          eviSize: eviSize ?? undefined,
+        },
+      });
+    } catch (dbErr) {
+      if (eviDocumentPath) {
+        await supabase.storage.from('spj-docs').remove([eviDocumentPath]);
+      }
+      throw dbErr;
+    }
+  }
+
+  async getSPJSignedUrl(pathOrNull: string | null) {
+    if (!pathOrNull) return null;
+    const { data, error } = await supabase.storage
+      .from('spj-docs')
+      .createSignedUrl(pathOrNull, 60 * 60 * 6); // 6 jam
+    if (error) return null;
+    return data.signedUrl;
   }
 
   async getAllSPJ() {
@@ -426,7 +531,9 @@ export class SurveyActivityService {
           ? {
               OR: [
                 { content: { contains: search, mode: 'insensitive' } },
-                { reporter: { name: { contains: search, mode: 'insensitive' } } },
+                {
+                  reporter: { name: { contains: search, mode: 'insensitive' } },
+                },
               ],
             }
           : {}),

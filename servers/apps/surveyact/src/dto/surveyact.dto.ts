@@ -1,6 +1,12 @@
 import { InputType, Field, ID, registerEnumType } from '@nestjs/graphql';
 import { AgreeState, IssueStatus, StatusST } from '@prisma/client';
-import { IsDateString, IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
+import {
+  IsDateString,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+} from 'class-validator';
 
 registerEnumType(AgreeState, {
   name: 'AgreeState', // ini akan muncul di GraphQL schema
@@ -8,7 +14,7 @@ registerEnumType(AgreeState, {
 
 registerEnumType(StatusST, {
   name: 'StatusST',
-})
+});
 
 @InputType()
 export class CreateSurveyActivityDTO {
@@ -75,7 +81,7 @@ export class UpdateSubSurveyActivityDTO {
   surveyActivityId: string;
 
   @Field()
-  startDate: Date;  
+  startDate: Date;
 
   @Field()
   endDate: Date;
@@ -145,7 +151,7 @@ export class CreateDistrictDTO {
 
   @Field()
   name: string;
-} 
+}
 
 @InputType()
 export class CreateSPJDTO {
@@ -158,9 +164,7 @@ export class CreateSPJDTO {
   subSurveyActivityId: string;
 
   @Field({ nullable: true })
-  @IsOptional()
-  @IsString()
-  eviDocumentUrl?: string;
+  verifyNote?: string;
 }
 
 @InputType()
@@ -174,7 +178,7 @@ export class UpdateSPJStatusDTO {
   @Field({ nullable: true })
   verifyNote?: string;
 
-  @Field({ nullable: true})
+  @Field({ nullable: true })
   @IsOptional()
   @IsDateString()
   approveDate?: string;
@@ -226,7 +230,7 @@ export class CreateContentIssueDto {
   @IsString()
   content: string;
 
-  @Field(()=> ID)
+  @Field(() => ID)
   @IsUUID()
   reporterId: string;
 
@@ -276,7 +280,7 @@ export class updateIssueCommentDto {
   @Field(() => ID)
   @IsUUID()
   id: string;
-  
+
   @Field()
   @IsString()
   message: string;

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useMutation, useQuery } from "@apollo/client";
 import { ADD_SPJ } from "@/src/graphql/actions/add-spj.action";
 import { GET_ALL_SPJ } from "@/src/graphql/actions/find-allspj.action";
@@ -12,6 +12,7 @@ import toast from "react-hot-toast";
 import useUser from "@/src/hooks/useUser";
 
 function SPJ() {
+  // ==== Types ====
   type User = {
     id: string;
     name: string;
@@ -33,15 +34,17 @@ function SPJ() {
     targetSample: number;
   };
 
+  // Diselaraskan dengan schema terbaru (path + signed url dari backend)
   type SPJ = {
     id: string;
     userId: string;
     subSurveyActivityId: string;
     submitState: string;
     submitDate: string;
-    approveDate: string;
-    eviDocumentUrl: string;
-    verifyNote: string;
+    approveDate: string | null;
+    verifyNote: string | null;
+    eviDocumentPath: string | null;
+    eviDocumentSignedUrl?: string | null; // virtual field (opsional di TS)
   };
 
   type SPJWithUserNSubSurvey = SPJ & {
@@ -55,11 +58,13 @@ function SPJ() {
     };
   };
 
+  // ==== Local state ====
   const [input, setInput] = useState({
     userId: "",
     subSurveyActivityId: "",
-    eviDocumentUrl: "",
+    verifyNote: "", // opsional, kirim hanya jika ada
   });
+  const [file, setFile] = useState<File | null>(null);
 
   const [update, setUpdate] = useState({
     id: "",
@@ -77,66 +82,32 @@ function SPJ() {
   );
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const [createSPJ, { loading, data, error }] = useMutation(ADD_SPJ);
-  const [
-    updateStatus,
-    { loading: newloading, data: newData, error: newError },
-  ] = useMutation(UPDATE_SPJ_STATUS);
+  // ==== GQL hooks ====
+  const [createSPJ, { loading }] = useMutation(ADD_SPJ, {
+    refetchQueries: [{ query: GET_ALL_SPJ }],
+  });
+  const [updateStatus, { loading: newloading }] = useMutation(
+    UPDATE_SPJ_STATUS,
+    {
+      refetchQueries: [{ query: GET_ALL_SPJ }],
+    }
+  );
   const { data: userData } = useQuery(GET_ALL_USERS);
   const { data: subSurveyData } = useQuery(GET_ALL_OF_SUB_SURVEY_ACTIVITIES);
   const { data: SPJData } = useQuery(GET_ALL_SPJ);
 
   const { user } = useUser();
 
-  // === Tambahan: state & handler upload ke Google Drive ===
-  const [file, setFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-
-  const handleUpload = async () => {
-    try {
-      if (!file) {
-        toast.error("Pilih file dulu ya.");
-        return;
-      }
-      if (!input.subSurveyActivityId) {
-        toast.error("Pilih Kegiatan terlebih dahulu.");
-        return;
-      }
-      setUploading(true);
-
-      const fd = new FormData();
-      fd.append("file", file);
-      // gunakan ID kegiatan agar penamaan rapi di Drive
-      fd.append("spjId", input.subSurveyActivityId);
-
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/uploads/spj-drive`,
-        {
-          method: "POST",
-          body: fd,
-        }
-      );
-
-      if (!res.ok) {
-        const t = await res.text();
-        throw new Error(t || `Upload gagal (${res.status})`);
-      }
-
-      const data = await res.json();
-      // Drive mengembalikan webViewLink → simpan sebagai eviDocumentUrl
-      setInput((prev) => ({ ...prev, eviDocumentUrl: data.webViewLink }));
-      toast.success("File berhasil diupload ke Google Drive!");
-    } catch (err: any) {
-      toast.error(err?.message || "Gagal upload file");
-    } finally {
-      setUploading(false);
-    }
-  };
-
+  // ==== Handlers ====
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
     setInput({ ...input, [e.target.id]: e.target.value });
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] || null;
+    setFile(f);
   };
 
   const handleChangeUpdate = (
@@ -152,40 +123,65 @@ function SPJ() {
         toast.error("Semua field wajib diisi!");
         return;
       }
-      await createSPJ({ variables: { input } });
+      console.log(file instanceof File, file?.name, file?.type);
+      
+      // Kirim input + file (multipart)
+      await createSPJ({
+        variables: {
+          input: {
+            userId: input.userId,
+            subSurveyActivityId: input.subSurveyActivityId,
+            verifyNote: input.verifyNote || undefined,
+          },
+          file, // apollo-upload-client akan mengirim multipart jika ini berupa File/null
+        },
+      });
       toast.success("Pengajuan Honor berhasil ditambahkan!");
       setInput({
         userId: "",
         subSurveyActivityId: "",
-        eviDocumentUrl: "",
+        verifyNote: "",
       });
+      setFile(null);
     } catch (error) {
       toast.error("Gagal menambahkan SPJ!");
+      console.error(error);
     }
   };
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      if (!update.id || !update.status || !update.verifyNote) {
+      if (!update.id || !update.status) {
         toast.error("Semua field wajib diisi!");
         return;
       }
 
-      await updateStatus({ variables: { input: update } });
+      await updateStatus({
+        variables: {
+          input: {
+            id: update.id,
+            status: update.status,
+            verifyNote: update.verifyNote || undefined,
+          },
+        },
+      });
       toast.success("Status Pengajuan Honor berhasil diperbarui!");
-      setUpdate({ id: "", status: "", verifyNote: "" });
+      setUpdate({ id: "", status: "Disetujui", verifyNote: "" });
     } catch (error) {
       toast.error("Gagal memperbarui Status Pengajuan Honor!");
       console.error(error);
     }
   };
 
+  // ==== UI ====
   return (
     <div className="px-8 py-4 space-y-4 font-Poppins">
       <div className="bg-orange-50 rounded-lg p-2 font-bold text-xl flex justify-between shadow-md">
         Pengajuan Honor
       </div>
+
+      {/* Filter */}
       <div className="bg-orange-50 rounded-lg p-2 font-bold text-xl shadow-md space-y-5">
         <div>Filter SPJ</div>
         <div className="flex justify-between space-x-14 text-sm">
@@ -225,7 +221,10 @@ function SPJ() {
           </div>
         </div>
       </div>
+
       <div className="font-bold text-xl">Monitoring Pengajuan Honor</div>
+
+      {/* Tabel */}
       <div className="relative shadow-md">
         <table className="table-fixed w-full text-sm text-left text-gray-500">
           <thead className="text-gray-700 bg-orange-50 block w-full sm:rounded-t-lg">
@@ -274,8 +273,8 @@ function SPJ() {
                 spj.submitState === "Disetujui"
                   ? "bg-green-100 text-green-700"
                   : spj.submitState === "Ditolak"
-                    ? "bg-red-100 text-red-700"
-                    : "bg-yellow-100 text-yellow-700"
+                  ? "bg-red-100 text-red-700"
+                  : "bg-yellow-100 text-yellow-700"
               }`}
                     >
                       {spj?.submitState}
@@ -286,6 +285,10 @@ function SPJ() {
                       onClick={() => {
                         setSelectedSPJ(spj);
                         setIsModalOpen(true);
+                        setUpdate((u) => ({
+                          ...u,
+                          id: spj.id,
+                        }));
                       }}
                       className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
                     >
@@ -297,6 +300,7 @@ function SPJ() {
           </tbody>
         </table>
       </div>
+
       {/* Form Pengajuan Honor */}
       {user?.role === "Admin" && (
         <div className="bg-orange-50 rounded-lg p-4 shadow-md">
@@ -334,43 +338,32 @@ function SPJ() {
                 )}
               </select>
             </div>
+
+            {/* Catatan opsional */}
             <div>
-              <input
-                type="text"
-                id="eviDocumentUrl"
-                placeholder="Link Bukti Pengajuan Honor"
-                value={input.eviDocumentUrl}
+              <textarea
+                id="verifyNote"
+                placeholder="Catatan (opsional)"
+                value={input.verifyNote}
                 onChange={handleChange}
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
-            {/* Upload bukti (Google Drive) */}
-            <div className="space-y-2">
+
+            {/* File upload */}
+            <div>
               <input
                 type="file"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                className="w-full"
+                id="file"
+                accept=".pdf,image/*"
+                onChange={handleFileChange}
+                className="block w-full text-sm text-gray-900 file:mr-4 file:py-2 file:px-4 
+                  file:rounded file:border-0 file:text-sm file:font-semibold
+                  file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
               />
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleUpload}
-                  disabled={uploading || !file}
-                  className="px-3 py-2 bg-sky-600 text-white rounded disabled:opacity-60"
-                >
-                  {uploading ? "Mengunggah…" : "Upload Bukti"}
-                </button>
-
-                {input.eviDocumentUrl && (
-                  <a
-                    href={input.eviDocumentUrl}
-                    target="_blank"
-                    className="text-blue-600 underline break-all"
-                  >
-                    Lihat Bukti
-                  </a>
-                )}
-              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Format: PDF/JPG/PNG. Maks 20MB.
+              </p>
             </div>
 
             <button
@@ -383,29 +376,32 @@ function SPJ() {
           </form>
         </div>
       )}
+
+      {/* Modal Detail */}
       {isModalOpen && selectedSPJ && (
         <div
           className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center overflow-y-auto py-6"
           role="dialog"
           aria-modal="true"
         >
-          {/* Card modal */}
           <div className="bg-white w-[90%] max-w-lg rounded-lg shadow-lg max-h-[90vh] flex flex-col">
-            {/* Header (tetap di atas) */}
             <div className="flex justify-between items-center px-6 py-4 border-b shrink-0">
               <h2 className="text-xl font-bold">Detail SPJ</h2>
-              <p>
+              {selectedSPJ.eviDocumentSignedUrl ? (
                 <a
                   target="_blank"
-                  href={selectedSPJ.eviDocumentUrl}
+                  href={selectedSPJ.eviDocumentSignedUrl}
                   className="bg-blue-500 text-white px-2 py-1 rounded-md"
                 >
                   Lihat Bukti
                 </a>
-              </p>
+              ) : (
+                <span className="text-xs text-gray-500">
+                  (Bukti belum tersedia)
+                </span>
+              )}
             </div>
 
-            {/* Body (bagian ini yang scroll) */}
             <div className="p-6 space-y-3 overflow-y-auto">
               <p>
                 <strong>Nama Petugas:</strong> {selectedSPJ.user?.name || "-"}
@@ -421,7 +417,8 @@ function SPJ() {
                 <strong>Submit Date:</strong> {selectedSPJ.submitDate || "-"}
               </p>
               <p>
-                <strong>Approve Date:</strong> {selectedSPJ.approveDate || "-"}
+                <strong>Approve Date:</strong>{" "}
+                {selectedSPJ.approveDate || "-"}
               </p>
               <p>
                 <strong>Catatan:</strong> {selectedSPJ.verifyNote || "-"}
@@ -436,8 +433,8 @@ function SPJ() {
                     selectedSPJ.submitState === "Disetujui"
                       ? "bg-green-100 text-green-700"
                       : selectedSPJ.submitState === "Ditolak"
-                        ? "bg-red-100 text-red-700"
-                        : "bg-yellow-100 text-yellow-700"
+                      ? "bg-red-100 text-red-700"
+                      : "bg-yellow-100 text-yellow-700"
                   }`}
                 >
                   {selectedSPJ.submitState}
@@ -505,7 +502,6 @@ function SPJ() {
               )}
             </div>
 
-            {/* Footer (tetap di bawah) */}
             <div className="flex justify-end gap-2 px-6 py-4 border-t shrink-0">
               <button
                 onClick={() => {

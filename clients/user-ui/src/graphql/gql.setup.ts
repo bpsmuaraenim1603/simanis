@@ -5,15 +5,30 @@ import {
   InMemoryCache,
   split,
 } from "@apollo/client";
+import { setContext } from '@apollo/client/link/context';
+import { createUploadLink } from "apollo-upload-client";
 import { getMainDefinition } from "@apollo/client/utilities";
 import Cookies from "js-cookie";
 
-const userLink = createHttpLink({
+const auth = setContext((operation, prev) => ({
+  headers: {
+    ...prev.headers,
+    // TOKEN kalau ada:
+    accesstoken: typeof window !== 'undefined' ? localStorage.getItem('access_token') ?? '' : '',
+    refreshtoken: typeof window !== 'undefined' ? localStorage.getItem('refresh_token') ?? '' : '',
+    // >>> KUNCI ANTI-CSRF UNTUK multipart:
+    'apollo-require-preflight': 'true',
+    // (opsional sekaligus) beri operation name:
+    'x-apollo-operation-name': operation.operationName || 'unknown',
+  },
+}));
+
+const userLink = createUploadLink({
   uri: process.env.NEXT_PUBLIC_USER_SERVER_URI, // 4001
-});
-const surveyLink = createHttpLink({
+}) as any;
+const surveyLink = createUploadLink({
   uri: process.env.NEXT_PUBLIC_SURVEYACT_SERVER_URI, // 4002
-});
+}) as any;
 
 // Split link berdasarkan nama mutation/query
 const splitLink = split(

@@ -186,7 +186,10 @@ model SubmitSPJ {
   submitDate          DateTime          @default(now())
   approveDate         DateTime?
   verifyNote          String?
-  eviDocumentUrl      String?
+  eviDocumentPath     String? // e.g., spj/<subSurveyActivityId>/<userId>/<uuid>.pdf
+  eviOriginalName     String?
+  eviMimeType         String?
+  eviSize             Int?
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
 }

@@ -1,4 +1,4 @@
-import { ObjectType, Field, ID, Int, registerEnumType } from '@nestjs/graphql';
+import { ObjectType, Field, ID, Int, registerEnumType, GraphQLISODateTime } from '@nestjs/graphql';
 import { AgreeState, IssueStatus, StatusST } from '@prisma/client';
 import { UserType } from 'apps/users/src/types/users.types';
 
@@ -8,7 +8,7 @@ registerEnumType(AgreeState, {
 
 registerEnumType(StatusST, {
   name: 'StatusST',
-})
+});
 
 registerEnumType(IssueStatus, {
   name: 'IssueStatus', // akan muncul di GraphQL schema
@@ -149,37 +149,53 @@ export class SubSurveyProgressType {
 @ObjectType()
 export class SubmitSPJType {
   @Field(() => ID)
-  id: string;
+  id!: string;
+
+  @Field(() => String)
+  userId!: string;
 
   @Field(() => UserType, { nullable: true })
   user?: UserType;
 
-  @Field(() => ID)
-  userId: string;
+  @Field(() => String)
+  subSurveyActivityId!: string;
 
   @Field(() => SubSurveyActivityType)
   subSurveyActivity?: SubSurveyActivityType;
 
-  @Field(() => ID)
-  subSurveyActivityId: string;
+  @Field(() => String, { nullable: true })
+  verifyNote!: string | null;
 
-  @Field(() => AgreeState)
-  submitState: AgreeState;
+  @Field(() => String)
+  submitState!: string;
 
-  @Field(() => Date, { nullable: true })
-  submitDate: Date | null;
+  @Field(() => GraphQLISODateTime)
+  submitDate!: Date;
 
-  @Field(() => Date, { nullable: true })
-  approveDate: Date | null;
+  @Field(() => GraphQLISODateTime, { nullable: true })
+  approveDate!: Date | null;
 
   @Field(() => String, { nullable: true })
-  verifyNote: string | null;
+  eviDocumentPath!: string | null;
 
   @Field(() => String, { nullable: true })
-  eviDocumentUrl: string | null;
+  eviOriginalName!: string | null;
 
-  @Field()
-  createdAt: Date;
+  @Field(() => String, { nullable: true })
+  eviMimeType!: string | null;
+
+  @Field(() => Number, { nullable: true })
+  eviSize!: number | null;
+
+  // VIRTUAL FIELD → optional di TS supaya objek Prisma masih assignable
+  @Field(() => String, { nullable: true })
+  eviDocumentSignedUrl?: string | null;
+
+  @Field(() => GraphQLISODateTime, { nullable: true })
+  createdAt!: Date | null;
+
+  @Field(() => GraphQLISODateTime, { nullable: true })
+  updatedAt!: Date | null;
 }
 
 @ObjectType()
@@ -189,7 +205,7 @@ export class JobLetterType {
 
   @Field(() => UserType, { nullable: true })
   user?: UserType;
-  
+
   @Field(() => ID)
   userId: string;
 
