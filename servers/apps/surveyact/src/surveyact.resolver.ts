@@ -204,8 +204,11 @@ export class SurveyActivityResolver {
   @Mutation(() => JobLetterType)
   async createJobLetter(
     @Args('input') input: CreateJobLetterDTO,
+    @Args({ name: 'file', type: () => GraphQLUpload, nullable: true })
+    file?: Promise<FileUpload>,
   ): Promise<JobLetterType> {
-    return this.service.createJobLetter(input);
+    const upload = file ? await file : undefined;
+    return this.service.createJobLetter(input, upload);
   }
 
   @Query(() => [JobLetterType])

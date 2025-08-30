@@ -1,4 +1,11 @@
-import { ObjectType, Field, ID, Int, registerEnumType, GraphQLISODateTime } from '@nestjs/graphql';
+import {
+  ObjectType,
+  Field,
+  ID,
+  Int,
+  registerEnumType,
+  GraphQLISODateTime,
+} from '@nestjs/graphql';
 import { AgreeState, IssueStatus, StatusST } from '@prisma/client';
 import { UserType } from 'apps/users/src/types/users.types';
 
@@ -201,43 +208,52 @@ export class SubmitSPJType {
 @ObjectType()
 export class JobLetterType {
   @Field(() => ID)
-  id: string;
+  id!: string;
+
+  @Field(() => String)
+  userId!: string;
+
+  @Field(() => String)
+  subSurveyActivityId!: string;
+
+  @Field(() => String)
+  region!: string;
+
+  @Field(() => GraphQLISODateTime)
+  submitDate!: Date | null;
+
+  @Field(() => String)
+  agreeState!: string;
+
+  @Field(() => String, { nullable: true })
+  rejectNote!: string | null;
+  
+  @Field(() => GraphQLISODateTime, { nullable: true })
+  approveDate!: Date | null;
+
+  @Field(() => String, { nullable: true })
+  eviLetterPath!: string | null;
+  
+  @Field(() => String, { nullable: true })
+  eviLetterSignedUrl?: string | null;
+
+  @Field(() => String, { nullable: true })
+  eviFieldUrl!: string | null;
+  
+  @Field(() => String, { nullable: true })
+  eviSTUrl!: string | null;
 
   @Field(() => UserType, { nullable: true })
   user?: UserType;
-
-  @Field(() => ID)
-  userId: string;
-
-  @Field(() => SubSurveyActivityType)
+  
+  @Field(() => SubSurveyActivityType, { nullable: true })
   subSurveyActivity?: SubSurveyActivityType;
 
-  @Field(() => ID)
-  subSurveyActivityId: string;
-
-  @Field()
-  region: string;
-
-  @Field(() => Date, { nullable: true })
-  submitDate: Date | null;
-
-  @Field(() => AgreeState)
-  agreeState: AgreeState;
-
-  @Field(() => Date, { nullable: true })
-  approveDate: Date | null;
-
-  @Field(() => String, { nullable: true })
-  rejectNote: string | null;
-
-  @Field(() => String, { nullable: true })
-  eviFieldUrl: string | null;
-
-  @Field(() => String, { nullable: true })
-  eviSTUrl: string | null;
-
-  @Field()
-  createdAt: Date;
+  @Field(() => GraphQLISODateTime, { nullable: true })
+  createdAt!: Date | null;
+  
+  @Field(() => GraphQLISODateTime, { nullable: true })
+  updatedAt!: Date | null;
 }
 
 @ObjectType()

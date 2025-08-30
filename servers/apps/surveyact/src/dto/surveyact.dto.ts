@@ -1,4 +1,4 @@
-import { InputType, Field, ID, registerEnumType } from '@nestjs/graphql';
+import { InputType, Field, ID, registerEnumType, GraphQLISODateTime } from '@nestjs/graphql';
 import { AgreeState, IssueStatus, StatusST } from '@prisma/client';
 import {
   IsDateString,
@@ -198,18 +198,16 @@ export class CreateJobLetterDTO {
   @IsString()
   region: string;
 
-  @Field({ nullable: true })
-  @IsOptional()
-  @IsDateString()
-  submitDate?: string;
+  @Field(() => GraphQLISODateTime)
+  submitDate: string;
 
   @Field({ nullable: true })
   @IsString()
-  eviFieldUrl: string;
+  eviFieldUrl?: string;
 
   @Field({ nullable: true })
   @IsString()
-  eviSTUrl: string;
+  eviSTUrl?: string;
 }
 
 @InputType()

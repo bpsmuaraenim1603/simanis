@@ -1,7 +1,7 @@
-import { gql, useQuery } from "@apollo/client";
+import { gql } from "@apollo/client";
 
-export const GET_ALL_JOB_LETTERS = gql`
-  query GetJobLetters {
+export const GET_ALL_JOBLETTERS = gql`
+  query GetAllJobLetters {
     getAllJobLetters {
       id
       userId
@@ -9,10 +9,10 @@ export const GET_ALL_JOB_LETTERS = gql`
       region
       submitDate
       agreeState
-      approveDate
       rejectNote
-      eviFieldUrl
-      eviSTUrl
+      approveDate
+      eviLetterPath
+      eviLetterSignedUrl
       user {
         id
         name

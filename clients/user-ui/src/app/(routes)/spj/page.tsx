@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@apollo/client";
 import { ADD_SPJ } from "@/src/graphql/actions/add-spj.action";
 import { GET_ALL_SPJ } from "@/src/graphql/actions/find-allspj.action";
@@ -10,18 +10,17 @@ import { GET_ALL_USERS } from "@/src/graphql/actions/find-allusers.action";
 import { GET_ALL_OF_SUB_SURVEY_ACTIVITIES } from "@/src/graphql/actions/find-realallsubsurvey.action";
 import toast from "react-hot-toast";
 import useUser from "@/src/hooks/useUser";
+import { GET_USER_PROGRESS_BY_SUBSURVEY_ID } from "@/src/graphql/actions/find-usersurveyprogress.action";
 
 function SPJ() {
   // ==== Types ====
-  type User = {
+  type District = { id: string; name?: string; city?: string };
+
+  type UserProgressForSelect = {
     id: string;
-    name: string;
-    email: string;
-    password: string;
-    role: string;
-    address: string;
-    phone_number: string;
-    updatedAt: string;
+    userId: string;
+    district?: District | null;
+    user?: { id: string; name: string } | null;
   };
 
   type SubSurveyActivity = {
@@ -95,12 +94,22 @@ function SPJ() {
   const { data: userData } = useQuery(GET_ALL_USERS);
   const { data: subSurveyData } = useQuery(GET_ALL_OF_SUB_SURVEY_ACTIVITIES);
   const { data: SPJData } = useQuery(GET_ALL_SPJ);
+  const { data: userProgressData, loading: loadingPetugas } = useQuery(
+    GET_USER_PROGRESS_BY_SUBSURVEY_ID,
+    {
+      variables: { subSurveyActivityId: input.subSurveyActivityId },
+      skip: !input.subSurveyActivityId, // jangan query kalau belum pilih kegiatan
+      fetchPolicy: "cache-and-network",
+    }
+  );
 
   const { user } = useUser();
 
   // ==== Handlers ====
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+    >
   ) => {
     setInput({ ...input, [e.target.id]: e.target.value });
   };
@@ -124,7 +133,7 @@ function SPJ() {
         return;
       }
       console.log(file instanceof File, file?.name, file?.type);
-      
+
       // Kirim input + file (multipart)
       await createSPJ({
         variables: {
@@ -166,6 +175,7 @@ function SPJ() {
           },
         },
       });
+      setIsModalOpen(false);
       toast.success("Status Pengajuan Honor berhasil diperbarui!");
       setUpdate({ id: "", status: "Disetujui", verifyNote: "" });
     } catch (error) {
@@ -173,6 +183,16 @@ function SPJ() {
       console.error(error);
     }
   };
+
+  useEffect(() => {
+    setInput((prev) => ({ ...prev, userId: "" }));
+  }, [input.subSurveyActivityId]);
+
+  // Ambil user unik dari hasil userProgress
+  const petugasOptions: UserProgressForSelect[] = useMemo(
+    () => userProgressData?.userProgressBySubSurveyActivityId ?? [],
+    [userProgressData]
+  );
 
   // ==== UI ====
   return (
@@ -273,8 +293,8 @@ function SPJ() {
                 spj.submitState === "Disetujui"
                   ? "bg-green-100 text-green-700"
                   : spj.submitState === "Ditolak"
-                  ? "bg-red-100 text-red-700"
-                  : "bg-yellow-100 text-yellow-700"
+                    ? "bg-red-100 text-red-700"
+                    : "bg-yellow-100 text-yellow-700"
               }`}
                     >
                       {spj?.submitState}
@@ -307,21 +327,9 @@ function SPJ() {
           <h1 className="text-2xl font-bold mb-4">Form Pengajuan Honor</h1>
           <form onSubmit={handleSubmit} className="space-y-4 ">
             <div>
-              <select
-                id="userId"
-                value={input.userId}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              >
-                <option value="">-- Pilih Pengguna --</option>
-                {userData?.getUsers?.map((user: User) => (
-                  <option key={user.id} value={user.id}>
-                    {user.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
+              <label className="block text-sm mb-1 font-semibold">
+                Kegiatan Survei
+              </label>
               <select
                 id="subSurveyActivityId"
                 value={input.subSurveyActivityId}
@@ -338,9 +346,41 @@ function SPJ() {
                 )}
               </select>
             </div>
+            <div>
+              <label className="block text-sm mb-1 font-semibold">
+                Petugas
+              </label>
+              <select
+                id="userId"
+                value={input.userId}
+                onChange={handleChange}
+                disabled={!input.subSurveyActivityId || loadingPetugas}
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-gray-100"
+              >
+                {!input.subSurveyActivityId ? (
+                  <option value="">-- Pilih Kegiatan terlebih dahulu --</option>
+                ) : loadingPetugas ? (
+                  <option value="">Memuat daftar petugas…</option>
+                ) : petugasOptions.length === 0 ? (
+                  <option value="">Tidak ada petugas untuk kegiatan ini</option>
+                ) : (
+                  <>
+                    <option value="">-- Pilih Petugas --</option>
+                    {petugasOptions.map((u) => (
+                      <option key={u.id} value={u.userId}>
+                        {u.user?.name || u.userId}
+                      </option>
+                    ))}
+                  </>
+                )}
+              </select>
+            </div>
 
             {/* Catatan opsional */}
             <div>
+              <label className="block text-sm mb-1 font-semibold">
+                Catatan
+              </label>
               <textarea
                 id="verifyNote"
                 placeholder="Catatan (opsional)"
@@ -357,12 +397,12 @@ function SPJ() {
                 id="file"
                 accept=".pdf,image/*"
                 onChange={handleFileChange}
-                className="block w-full text-sm text-gray-900 file:mr-4 file:py-2 file:px-4 
-                  file:rounded file:border-0 file:text-sm file:font-semibold
-                  file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                className="block w-full text-sm text-gray-900 file:mr-4 file:py-2 file:px-4
+                  file:rounded-md file:border-gray-500 file:text-sm file:font-semibold
+                  file:bg-white file:text-black hover:file:bg-gray-100"
               />
               <p className="text-xs text-gray-500 mt-1">
-                Format: PDF/JPG/PNG. Maks 20MB.
+                Format: PDF/JPG/PNG. Maks 1MB.
               </p>
             </div>
 
@@ -391,7 +431,7 @@ function SPJ() {
                 <a
                   target="_blank"
                   href={selectedSPJ.eviDocumentSignedUrl}
-                  className="bg-blue-500 text-white px-2 py-1 rounded-md"
+                  className="bg-blue-500 text-white px-4 py-2 rounded-md"
                 >
                   Lihat Bukti
                 </a>
@@ -417,8 +457,7 @@ function SPJ() {
                 <strong>Submit Date:</strong> {selectedSPJ.submitDate || "-"}
               </p>
               <p>
-                <strong>Approve Date:</strong>{" "}
-                {selectedSPJ.approveDate || "-"}
+                <strong>Approve Date:</strong> {selectedSPJ.approveDate || "-"}
               </p>
               <p>
                 <strong>Catatan:</strong> {selectedSPJ.verifyNote || "-"}
@@ -433,8 +472,8 @@ function SPJ() {
                     selectedSPJ.submitState === "Disetujui"
                       ? "bg-green-100 text-green-700"
                       : selectedSPJ.submitState === "Ditolak"
-                      ? "bg-red-100 text-red-700"
-                      : "bg-yellow-100 text-yellow-700"
+                        ? "bg-red-100 text-red-700"
+                        : "bg-yellow-100 text-yellow-700"
                   }`}
                 >
                   {selectedSPJ.submitState}
@@ -491,28 +530,32 @@ function SPJ() {
                     />
                   </div>
 
-                  <button
-                    type="submit"
-                    disabled={newloading}
-                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
-                  >
-                    {newloading ? "Menyimpan..." : "Simpan Perubahan"}
-                  </button>
+                  <div className="flex justify-between pt-4">
+                    <button
+                      type="submit"
+                      disabled={newloading}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+                    >
+                      {newloading ? "Menyimpan..." : "Update Status"}
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setIsModalOpen(false);
+                        setSelectedSPJ(null);
+                        setUpdate({
+                          id: "",
+                          status: "Disetujui",
+                          verifyNote: "",
+                        });
+                      }}
+                      className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+                    >
+                      Tutup
+                    </button>
+                  </div>
                 </form>
               )}
-            </div>
-
-            <div className="flex justify-end gap-2 px-6 py-4 border-t shrink-0">
-              <button
-                onClick={() => {
-                  setIsModalOpen(false);
-                  setSelectedSPJ(null);
-                  setUpdate({ id: "", status: "Disetujui", verifyNote: "" });
-                }}
-                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-              >
-                Tutup
-              </button>
             </div>
           </div>
         </div>

@@ -30,7 +30,6 @@ import {
 } from './types/surveyact.types';
 import { FileUpload } from 'graphql-upload-ts';
 import { randomUUID } from 'node:crypto';
-import path from 'node:path';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -355,15 +354,87 @@ export class SurveyActivityService {
     });
   }
 
-  async createJobLetter(input: CreateJobLetterDTO): Promise<JobLetter> {
+  async getJobLetterSignedUrl(path: string | null) {
+    if (!path) return null;
+    const { data, error } = await supabase.storage
+      .from('jobletter-docs')
+      .createSignedUrl(path, 60 * 60); // 1 jam
+    if (error) return null;
+    return data?.signedUrl ?? null;
+  }
+
+  async createJobLetter(
+    input: CreateJobLetterDTO,
+    file?: FileUpload,
+  ): Promise<JobLetter> {
+    let eviLetterPath: string | null = null;
+    let eviLetterOriginalName: string | null = null;
+    let eviLetterMimeType: string | null = null;
+    let eviLetterSize: number | null = null; // optional
+
+    if (file) {
+      const { filename, mimetype, createReadStream } = file;
+
+      // pastikan bucket ada
+      const { data: b } = await supabase.storage.getBucket('jobletter-docs');
+      if (!b) throw new BadRequestException('Bucket belum tersedia: ' + 'jobletter-docs');
+
+      // validasi tipe (longgar: ext ∨ mime)
+      const ext = getExtLower(filename);
+      const allowedExt = new Set(['.pdf', '.jpg', '.jpeg', '.png']);
+      const allowedMime = new Set([
+        'application/pdf',
+        'application/x-pdf',
+        'application/acrobat',
+        'application/vnd.adobe.pdf',
+        'image/jpeg',
+        'image/jpg',
+        'image/png',
+        'application/octet-stream',
+      ]);
+      if (
+        !allowedExt.has(ext) &&
+        !allowedMime.has((mimetype || '').toLowerCase())
+      ) {
+        throw new BadRequestException(
+          'Tipe file tidak diizinkan. Hanya PDF/JPG/PNG.',
+        );
+      }
+
+      const contentType = pickContentType(ext, mimetype);
+      const key = `jobletter/${input.subSurveyActivityId}/${input.userId}/${randomUUID()}${ext}`;
+
+      const stream = createReadStream();
+      const { error } = await supabase.storage
+        .from('jobletter-docs')
+        .upload(key, stream, { contentType, duplex: 'half' as any });
+      if (error)
+        throw new BadRequestException(
+          'Gagal upload ke Storage: ' + error.message,
+        );
+
+      eviLetterPath = key;
+      eviLetterOriginalName = filename || null;
+      eviLetterMimeType = contentType;
+      // eviLetterSize: kalau mau hitung, pipe dulu ke counter; kalau tidak, biarkan null
+    }
+
     return this.prisma.jobLetter.create({
       data: {
         userId: input.userId,
         subSurveyActivityId: input.subSurveyActivityId,
         region: input.region,
-        eviFieldUrl: input.eviFieldUrl,
-        eviSTUrl: input.eviSTUrl,
         submitDate: input.submitDate,
+
+        // legacy terserah diisi atau tidak:
+        eviFieldUrl: input.eviFieldUrl ?? undefined,
+        eviSTUrl: input.eviSTUrl ?? undefined,
+
+        // NEW
+        eviLetterPath: eviLetterPath ?? undefined,
+        eviLetterOriginalName: eviLetterOriginalName ?? undefined,
+        eviLetterMimeType: eviLetterMimeType ?? undefined,
+        eviLetterSize: eviLetterSize ?? undefined,
       },
     });
   }

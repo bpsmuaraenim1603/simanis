@@ -8,13 +8,12 @@ import {
   ApolloFederationDriverConfig,
 } from '@nestjs/apollo';
 import { HttpModule } from '@nestjs/axios';
-import { FilesModule } from './files/files.module';
 import { SubmitSPJResolver } from './submit-spj.resolver';
 import { GraphQLUpload } from 'graphql-upload-ts';
+import { JobLetterResolver } from './jobletter.resolver';
 
 @Module({
   imports: [
-    FilesModule,
     HttpModule,
     GraphQLModule.forRoot<ApolloFederationDriverConfig>({
       driver: ApolloFederationDriver,
@@ -30,6 +29,7 @@ import { GraphQLUpload } from 'graphql-upload-ts';
   providers: [
     SurveyActivityService,
     SubmitSPJResolver,
+    JobLetterResolver,
     SurveyActivityResolver,
     PrismaService,
   ],
