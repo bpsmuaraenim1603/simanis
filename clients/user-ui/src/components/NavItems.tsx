@@ -69,6 +69,17 @@ const NavItems = ({ isMinimized = false }: { isMinimized?: boolean }) => {
           },
         ]
       : []),
+    ...(user?.role === "Supervisor"
+      ? [
+          {
+            title: "Supervisor",
+            hovertitle: "Supervisor",
+            url: "/supervisor",
+            logo: User,
+            style: "border-b-2 border-white pb-2",
+          },
+        ]
+      : []),
     {
       title: "KEGIATAN LAPANGAN",
       url: "#kegiatanlapangan",

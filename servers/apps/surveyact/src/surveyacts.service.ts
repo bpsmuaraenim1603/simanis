@@ -201,9 +201,10 @@ export class SurveyActivityService {
     return this.prisma.userProgress.findMany({
       where: { subSurveyActivityId },
       include: {
-        user: true, // Include user data if needed
+        user: true,
         subSurveyActivity: true,
         district: true,
+        supervisor: true,
       },
     });
   }
@@ -212,9 +213,10 @@ export class SurveyActivityService {
     return this.prisma.userProgress.findMany({
       where: { userId },
       include: {
-        user: true, // Include user data if needed
+        user: true,
         subSurveyActivity: true,
         district: true,
+        supervisor: true,
       },
     });
   }
@@ -222,8 +224,22 @@ export class SurveyActivityService {
   async getAllUserSurveyProgress() {
     return this.prisma.userProgress.findMany({
       include: {
-        user: true, // Include user data if needed
+        user: true,
         subSurveyActivity: true,
+        district: true,
+        supervisor: true,
+      },
+    });
+  }
+
+  async getAllUserSurveyProgressBySVID(superVisorId: string) {
+    return this.prisma.userProgress.findMany({
+      where: { superVisorId },
+      include: {
+        user: true,
+        subSurveyActivity: true,
+        district: true,
+        supervisor: true,
       },
     });
   }

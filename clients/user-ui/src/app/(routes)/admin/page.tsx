@@ -186,6 +186,7 @@ function Admin() {
 
   const [userProgressForm, setUserProgressForm] = useState({
     userId: "",
+    superVisorId: "",
     subSurveyActivityId: "",
     surveyActivityId: "",
     totalAssigned: 0,
@@ -481,6 +482,7 @@ function Admin() {
         variables: {
           input: {
             userId: userProgressForm.userId,
+            superVisorId: userProgressForm.superVisorId,
             subSurveyActivityId: userProgressForm.subSurveyActivityId,
             totalAssigned: Number(userProgressForm.totalAssigned),
             submitCount: Number(userProgressForm.submitCount),
@@ -503,6 +505,7 @@ function Admin() {
         rejectedCount: 0,
         lastUpdated: "",
         districtId: "",
+        superVisorId: "",
       });
     } catch (err) {
       toast.error("Gagal tambah user progress");
@@ -647,7 +650,6 @@ function Admin() {
       }
 
       if (lazyJobs.length) await Promise.all(lazyJobs);
-
     } catch (e) {
       console.error("Refresh error:", e);
       toast.error("Gagal refresh data");
@@ -843,6 +845,27 @@ function Admin() {
     return new Set(existingUPForAdd.map((up) => up.userId));
   }, [existingUPForAdd]);
 
+  const supervisors: User[] = React.useMemo(
+    () =>
+      (userData?.getUsers ?? []).filter((u: User) => u.role === "Supervisor"),
+    [userData]
+  );
+
+  const admins: User[] = React.useMemo(
+    () =>
+      (userData?.getUsers ?? []).filter((u: User) => u.role === "Admin"),
+    [userData]
+  );
+
+  const enumeratorsForAdd: User[] = React.useMemo(
+    () =>
+      (userData?.getUsers ?? [])
+        .filter((u: User) => u.role !== "Supervisor")
+        .filter((u: User) => u.role !== "Admin")
+        .filter((u: User) => !usedUserIdsForAdd.has(u.id)),
+    [userData, usedUserIdsForAdd]
+  );
+
   useEffect(() => {
     if (isListingUpdate) {
       // ikut submitCount, tapi tetap dihormati allowedMaxForUpdate
@@ -889,7 +912,10 @@ function Admin() {
         />
         {loading && <span className="text-xs text-gray-500">Memuat data…</span>}
         <button
-          onClick={() => {handleRefresh(); toast.success("Data telah di-refresh");}}
+          onClick={() => {
+            handleRefresh();
+            toast.success("Data telah di-refresh");
+          }}
           disabled={refreshing}
           className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition font-semibold"
         >
@@ -1358,6 +1384,30 @@ function Admin() {
               )}
             </div>
             <div>
+              <label
+                htmlFor="superVisorId"
+                className="block text-sm font-bold mb-2"
+              >
+                Pengawas
+              </label>
+              <select
+                id="superVisorId"
+                value={userProgressForm.superVisorId}
+                onChange={handleChangeUserProgress}
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              >
+                <option value="">-- Pilih Pengawas --</option>
+                {supervisors.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.name} - {user.email}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-600">
+                Hanya menampilkan akun dengan peran <b>supervisor</b>.
+              </p>
+            </div>
+            <div>
               <label htmlFor="userId" className="block text-sm font-bold mb-2">
                 Petugas
               </label>
@@ -1367,21 +1417,12 @@ function Admin() {
                 onChange={handleChangeUserProgress}
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               >
-                <option value="">
-                  -- Pilih Petugas --
-                </option>
-
-                {userData?.getUsers?.map((user: User) => {
-                  const alreadyUsed = usedUserIdsForAdd.has(user.id);
-
-                  if (alreadyUsed) return null;
-
-                  return (
-                    <option key={user.id} value={user.id}>
-                      {user.name} - {user.email}
-                    </option>
-                  );
-                })}
+                <option value="">-- Pilih Petugas --</option>
+                {enumeratorsForAdd.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.name} - {user.email}
+                  </option>
+                ))}
               </select>
 
               {/* Info bila semua user sudah terdaftar */}
@@ -1413,12 +1454,11 @@ function Admin() {
                 }
                 value={userProgressForm.totalAssigned}
                 onChange={(e) => {
-                  if (isListingUpdate) return; // saat Listing, abaikan input manual
                   const raw = Number(e.target.value);
-                  const capped = updateUserProgressForm.subSurveyActivityId
-                    ? Math.min(Math.max(0, raw), allowedMaxForUpdate)
+                  const capped = userProgressForm.subSurveyActivityId
+                    ? Math.min(Math.max(0, raw), remainingQuotaForAdd)
                     : Math.max(0, raw);
-                  setUpdateUserProgressForm((prev) => ({
+                  setUserProgressForm((prev) => ({
                     ...prev,
                     totalAssigned: capped,
                   }));

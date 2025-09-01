@@ -87,6 +87,12 @@ export class UserProgressType {
   userId: string;
 
   @Field(() => ID)
+  superVisorId: string;
+
+  @Field(() => UserType, { nullable: true })
+  superVisor?: UserType;
+
+  @Field(() => ID)
   subSurveyActivityId: string;
 
   @Field(() => SubSurveyActivityType, { nullable: true })

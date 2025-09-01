@@ -87,13 +87,15 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  UserProgress UserProgress[]
-  JobLetter    JobLetter[]
-  SubmitSPJ    SubmitSPJ[]
+  UPUser    UserProgress[] @relation("UserProgress_User")
+  JobLetter JobLetter[]
+  SubmitSPJ SubmitSPJ[]
 
   IssueComment IssueComment[]
 
   ContentIssue ContentIssue[]
+
+  UpSuperVisor UserProgress[] @relation("UserProgress_Supervisor")
 }
 
 // model Issue {
@@ -139,7 +141,9 @@ model IssueComment {
 model UserProgress {
   id                  String             @id @default(uuid())
   userId              String
-  user                User               @relation(fields: [userId], references: [id])
+  user                User               @relation("UserProgress_User", fields: [userId], references: [id])
+  superVisorId        String?
+  supervisor          User?              @relation("UserProgress_Supervisor", fields: [superVisorId], references: [id])
   subSurveyActivityId String?
   subSurveyActivity   SubSurveyActivity? @relation(fields: [subSurveyActivityId], references: [id])
   totalAssigned       Int                @default(0)

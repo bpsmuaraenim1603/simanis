@@ -105,6 +105,9 @@ export class CreateUserProgressDTO {
   userId: string;
 
   @Field()
+  superVisorId: string;
+
+  @Field()
   totalAssigned: number;
 
   @Field()

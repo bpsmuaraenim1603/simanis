@@ -157,6 +157,11 @@ export class SurveyActivityResolver {
   }
 
   @Query(() => [UserProgressType])
+  async userProgressSurveyBySupervisorId(@Args('superVisorId') superVisorId: string) {
+    return this.service.getAllUserSurveyProgressBySVID(superVisorId);
+  }
+
+  @Query(() => [UserProgressType])
   async allUserSurveyProgress() {
     return this.service.getAllUserSurveyProgress();
   }
