@@ -120,7 +120,6 @@ function SubTabs<T extends string>({
               onClick={() => onChange(t.key)}
               className="relative px-4 py-2 text-sm font-medium rounded-lg focus:outline-none select-none"
             >
-              {/* Pill putih yang bergerak antar tab */}
               {active && (
                 <motion.span
                   layoutId="subtab-pill" // kunci animasi

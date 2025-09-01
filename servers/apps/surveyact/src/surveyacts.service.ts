@@ -377,7 +377,10 @@ export class SurveyActivityService {
 
       // pastikan bucket ada
       const { data: b } = await supabase.storage.getBucket('jobletter-docs');
-      if (!b) throw new BadRequestException('Bucket belum tersedia: ' + 'jobletter-docs');
+      if (!b)
+        throw new BadRequestException(
+          'Bucket belum tersedia: ' + 'jobletter-docs',
+        );
 
       // validasi tipe (longgar: ext ∨ mime)
       const ext = getExtLower(filename);
@@ -602,8 +605,11 @@ export class SurveyActivityService {
           ? {
               OR: [
                 { content: { contains: search, mode: 'insensitive' } },
+                // ✅ untuk relasi 1–1 gunakan 'is'
                 {
-                  reporter: { name: { contains: search, mode: 'insensitive' } },
+                  reporter: {
+                    is: { name: { contains: search, mode: 'insensitive' } },
+                  },
                 },
               ],
             }
@@ -615,7 +621,12 @@ export class SurveyActivityService {
       include: {
         reporter: true,
         subSurveyActivity: true,
-        _count: { select: { IssueComment: true } },
+        // ✅ kirim array komentar + user
+        IssueComment: {
+          include: { user: true },
+          orderBy: { createdAt: 'asc' },
+        },
+        _count: { select: { IssueComment: true } }, // opsional, kalau mau tetap punya count cepat
       },
     });
   }
