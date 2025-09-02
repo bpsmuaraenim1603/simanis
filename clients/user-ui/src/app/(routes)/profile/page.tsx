@@ -687,7 +687,7 @@ function Profile() {
             className={`${styles.button} my-2 text-white`}
             disabled={!updateUserProgressForm.userProgressId}
           >
-            Update Progress
+            Simpan Perubahan
           </button>
         </form>
       </div>

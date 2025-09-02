@@ -11,7 +11,7 @@ export const GET_REAL_ALL_SUB_SURVEY_PROGRESS = gql`
       approvedCount
       rejectedCount
       subSurveyActivityId
-      Name
+      name
     }
   }
 `;

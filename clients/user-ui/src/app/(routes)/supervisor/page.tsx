@@ -13,6 +13,7 @@ import { GET_ALL_SURVEY_ACTIVITIES } from "@/src/graphql/actions/find-allsurveya
 import { GET_ALL_SUB_SURVEY_ACTIVITIES } from "@/src/graphql/actions/find-allsubsurveyact.action";
 import { GET_USER_PROGRESS_BY_SUBSURVEY_ID } from "@/src/graphql/actions/find-usersurveyprogress.action";
 import { UPDATE_USER_PROGRESS } from "@/src/graphql/actions/update-userprogress.action";
+import styles from "@/src/utils/style";
 
 // ==== Types singkat ====
 type SurveyActivity = { id: string; name: string };
@@ -311,7 +312,7 @@ export default function SupervisorManagePage() {
   const disabled = saLoading || subsLoading || upLoading;
 
   return (
-    <div className="px-6 py-6 space-y-4 font-Poppins">
+    <div className="px-8 py-6 space-y-4 font-Poppins">
       <div className="bg-orange-50 rounded-lg p-3 shadow flex items-center justify-between">
         <h1 className="text-lg font-bold">Panel Pengawas</h1>
         {(saLoading || subsLoading || upLoading) && (
@@ -450,7 +451,7 @@ export default function SupervisorManagePage() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                className="px-3 py-2 border rounded-md"
+                className="px-3 py-2 border rounded-md font-bold bg-red-500 text-white hover:bg-red-600"
                 onClick={() => step("submitCount", -1)}
               >
                 -
@@ -462,7 +463,7 @@ export default function SupervisorManagePage() {
               />
               <button
                 type="button"
-                className="px-3 py-2 border rounded-md"
+                className="px-3 py-2 border rounded-md font-bold bg-green-500 text-white hover:bg-green-600"
                 onClick={() => step("submitCount", +1)}
               >
                 +
@@ -475,7 +476,7 @@ export default function SupervisorManagePage() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                className="px-3 py-2 border rounded-md"
+                className="px-3 py-2 border rounded-md font-bold bg-red-500 text-white hover:bg-red-600"
                 onClick={() => step("approvedCount", -1)}
               >
                 -
@@ -487,7 +488,7 @@ export default function SupervisorManagePage() {
               />
               <button
                 type="button"
-                className="px-3 py-2 border rounded-md"
+                className="px-3 py-2 border rounded-md font-bold bg-green-500 text-white hover:bg-green-600"
                 onClick={() => step("approvedCount", +1)}
               >
                 +
@@ -500,7 +501,7 @@ export default function SupervisorManagePage() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                className="px-3 py-2 border rounded-md"
+                className="px-3 py-2 border rounded-md font-bold bg-red-500 text-white hover:bg-red-600"
                 onClick={() => step("rejectedCount", -1)}
               >
                 -
@@ -512,7 +513,7 @@ export default function SupervisorManagePage() {
               />
               <button
                 type="button"
-                className="px-3 py-2 border rounded-md"
+                className="px-3 py-2 border rounded-md font-bold bg-green-500 text-white hover:bg-green-600"
                 onClick={() => step("rejectedCount", +1)}
               >
                 +
@@ -537,13 +538,12 @@ export default function SupervisorManagePage() {
 
         <button
           disabled={!form.userProgressId || saving}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold disabled:opacity-60"
+          className={`${styles.button} my-2 text-white`}
         >
           {saving ? "Menyimpan..." : "Simpan Perubahan"}
         </button>
       </form>
 
-      {/* Ringkasan sub-kegiatan */}
       <div className="bg-white rounded-xl p-4 shadow">
         <h3 className="text-base font-bold mb-2">
           Ringkasan Kegiatan (mengacu dropdown Petugas)

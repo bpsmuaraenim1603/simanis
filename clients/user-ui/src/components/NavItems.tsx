@@ -58,7 +58,18 @@ const NavItems = ({ isMinimized = false }: { isMinimized?: boolean }) => {
       style: "border-b-2 border-t-2 border-white py-2",
       logo: House,
     },
-    ...(user?.role === "Admin"
+    ...(user?.role === "Superadmin"
+      ? [
+          {
+            title: "Super Admin",
+            hovertitle: "Super Admin",
+            url: "/superadmin",
+            logo: User,
+            style: "border-b-2 border-white pb-2",
+          },
+        ]
+      : []),
+    ...(user?.role === "Admin" || user?.role === "Superadmin"
       ? [
           {
             title: "Admin",
@@ -69,7 +80,7 @@ const NavItems = ({ isMinimized = false }: { isMinimized?: boolean }) => {
           },
         ]
       : []),
-    ...(user?.role === "Supervisor"
+    ...(user?.role === "Supervisor" || user?.role === "Superadmin"
       ? [
           {
             title: "Supervisor",

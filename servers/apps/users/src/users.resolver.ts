@@ -15,6 +15,7 @@ import {
   ForgotPasswordDto,
   RegisterDto,
   ResetPasswordDto,
+  UpdateRoleDto,
   UpdateUserDto,
 } from './dto/users.dto';
 import { User } from './entities/users.entity';
@@ -107,5 +108,14 @@ export class UsersResolver {
         role: 'User',
       },
     });
+  }
+
+  @Mutation(() => User)
+  @UseGuards(AuthGuard)
+  async editUserRole(
+    @Args('userId') userId: string,
+    @Args('updateRole') updateRole: UpdateRoleDto,
+  ): Promise<User> {
+    return this.usersService.editUserRole(userId, updateRole);
   }
 }

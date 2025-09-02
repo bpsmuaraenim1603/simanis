@@ -181,6 +181,8 @@ export default function Issue() {
     return groups;
   }, [filteredIssues]);
 
+  const groupedEntries = useMemo(() => Object.entries(grouped), [grouped]);
+
   const toggleTable = (key: string) =>
     setIsMinimized((prev) => ({ ...prev, [key]: !prev[key] }));
 
@@ -294,300 +296,329 @@ export default function Issue() {
                 </td>
               </tr>
             ) : (
-              Object.entries(grouped).map(([activityName, items]) => {
-                const minimized = isMinimized[activityName] ?? false;
+              <>
+                {groupedEntries.length === 0 && (
+                  <tr className="table w-full table-fixed">
+                    <td
+                      colSpan={4}
+                      className="px-6 py-6 text-center text-gray-500"
+                    >
+                      {searchTerm || activityId || statusFilter ? (
+                        <>
+                          Tidak ada isu yang cocok dengan filter/pencarian saat
+                          ini.
+                        </>
+                      ) : (
+                        "Belum ada isu/kendala yang dilaporkan."
+                      )}
+                    </td>
+                  </tr>
+                )}
+                {groupedEntries.map(([activityName, items]) => {
+                  const minimized = isMinimized[activityName] ?? false;
 
-                return (
-                  <React.Fragment key={activityName}>
-                    {/* Header Group */}
-                    <tr className="bg-gray-100 border-b border-gray-300 table w-full table-fixed">
-                      <td
-                        colSpan={3}
-                        className="px-6 py-2 font-bold text-gray-800"
-                      >
-                        {activityName}
-                      </td>
-                      <td className="px-6 py-2 text-gray-600">
-                        <div className="flex justify-end">
-                          <button onClick={() => toggleTable(activityName)}>
-                            {minimized || isCloseTable ? (
-                              <svg width="16" height="16" viewBox="0 0 24 24">
-                                <path
-                                  fill="currentColor"
-                                  d="m7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6l-6 6z"
-                                />
-                              </svg>
-                            ) : (
-                              <svg width="16" height="16" viewBox="0 0 24 24">
-                                <path
-                                  fill="currentColor"
-                                  d="m7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6l-6-6z"
-                                />
-                              </svg>
-                            )}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                  return (
+                    <React.Fragment key={activityName}>
+                      {/* Header Group */}
+                      <tr className="bg-gray-100 border-b border-gray-300 table w-full table-fixed">
+                        <td
+                          colSpan={3}
+                          className="px-6 py-2 font-bold text-gray-800"
+                        >
+                          {activityName}
+                        </td>
+                        <td className="px-6 py-2 text-gray-600">
+                          <div className="flex justify-end">
+                            <button onClick={() => toggleTable(activityName)}>
+                              {minimized || isCloseTable ? (
+                                <svg width="16" height="16" viewBox="0 0 24 24">
+                                  <path
+                                    fill="currentColor"
+                                    d="m7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6l-6 6z"
+                                  />
+                                </svg>
+                              ) : (
+                                <svg width="16" height="16" viewBox="0 0 24 24">
+                                  <path
+                                    fill="currentColor"
+                                    d="m7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6l-6-6z"
+                                  />
+                                </svg>
+                              )}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
 
-                    {/* Rows */}
-                    <AnimatePresence>
-                      {minimized || isCloseTable
-                        ? null
-                        : items.map((it) => {
-                            const opened = openIssueId === it.id;
+                      {/* Rows */}
+                      <AnimatePresence>
+                        {minimized || isCloseTable
+                          ? null
+                          : items.map((it) => {
+                              const opened = openIssueId === it.id;
 
-                            return (
-                              <React.Fragment key={it.id}>
-                                <tr className="bg-white border-b border-gray-200 table w-full table-fixed">
-                                  {/* Kegiatan Survei (isi kendala) */}
-                                  <td
-                                    scope="row"
-                                    className="px-12 py-4 font-medium text-gray-900 whitespace-pre-wrap align-top"
-                                  >
-                                    <motion.div
-                                      initial={{ height: 0, opacity: 0 }}
-                                      animate={{ height: "auto", opacity: 1 }}
-                                      exit={{ height: 0, opacity: 0 }}
-                                      transition={{ duration: 0.1 }}
+                              return (
+                                <React.Fragment key={it.id}>
+                                  <tr className="bg-white border-b border-gray-200 table w-full table-fixed">
+                                    {/* Kegiatan Survei (isi kendala) */}
+                                    <td
+                                      scope="row"
+                                      className="px-12 py-4 font-medium text-gray-900 whitespace-pre-wrap align-top"
                                     >
-                                      <div className="text-gray-800">
-                                        {it.content || "(tanpa isi)"}
-                                      </div>
-                                      <div className="text-xs text-gray-500 mt-1">
-                                        {formatID(it.id)} • Pelapor:{" "}
-                                        {it.reporter?.name || "-"}
-                                      </div>
-                                    </motion.div>
-                                  </td>
-
-                                  {/* Tanggal */}
-                                  <td className="px-6 pt-6 align-top">
-                                    <motion.div
-                                      initial={{ height: 0, opacity: 0 }}
-                                      animate={{ height: "auto", opacity: 1 }}
-                                      exit={{ height: 0, opacity: 0 }}
-                                      transition={{ duration: 0.1 }}
-                                    >
-                                      {fmtDate(it.createdAt)}
-                                    </motion.div>
-                                  </td>
-
-                                  {/* Keterangan (status & komentar ringkas) */}
-                                  <td className="px-6 py-3 align-top">
-                                    <motion.div
-                                      initial={{ height: 0, opacity: 0 }}
-                                      animate={{ height: "auto", opacity: 1 }}
-                                      exit={{ height: 0, opacity: 0 }}
-                                      transition={{ duration: 0.1 }}
-                                      className="space-y-2"
-                                    >
-                                      {/* Status */}
-                                      <div className="inline-flex items-center gap-2">
-                                        <span className="text-xs font-semibold text-gray-600">
-                                          Status:
-                                        </span>
-                                        <span
-                                          className={[
-                                            "px-2 py-0.5 rounded-md text-xs font-bold",
-                                            it.issueStatus === "Resolved"
-                                              ? "bg-green-100 text-green-700"
-                                              : it.issueStatus === "InProgress"
-                                                ? "bg-yellow-100 text-yellow-700"
-                                                : "bg-gray-100 text-gray-700",
-                                          ].join(" ")}
-                                        >
-                                          {it.issueStatus === "Waiting"
-                                            ? "Menunggu"
-                                            : it.issueStatus === "InProgress"
-                                              ? "Sedang Diproses"
-                                              : it.issueStatus === "Resolved"
-                                                ? "Selesai"
-                                                : it.issueStatus || "-"}
-                                        </span>
-                                      </div>
-
-                                      {/* Ringkasan jumlah komentar */}
-                                      <div className="text-xs text-gray-600">
-                                        Komentar:{" "}
-                                        <span className="font-semibold">
-                                          {it.IssueComment?.length ?? 0}
-                                        </span>
-                                      </div>
-                                    </motion.div>
-                                  </td>
-
-                                  {/* Aksi */}
-                                  <td className="px-6 pt-5 text-right align-top">
-                                    <motion.div
-                                      initial={{ height: 0, opacity: 0 }}
-                                      animate={{ height: "auto", opacity: 1 }}
-                                      exit={{ height: 0, opacity: 0 }}
-                                      transition={{ duration: 0.1 }}
-                                    >
-                                      <button
-                                        onClick={() =>
-                                          onToggleCommentPanel(it.id)
-                                        }
-                                        className="font-medium text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded text-sm"
+                                      <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: "auto", opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.1 }}
                                       >
-                                        {opened ? "Tutup" : "Masukkan Komentar"}
-                                      </button>
-                                    </motion.div>
-                                  </td>
-                                </tr>
+                                        <div className="text-gray-800">
+                                          {it.content || "(tanpa isi)"}
+                                        </div>
+                                        <div className="text-xs text-gray-500 mt-1">
+                                          {formatID(it.id)} • Pelapor:{" "}
+                                          {it.reporter?.name || "-"}
+                                        </div>
+                                      </motion.div>
+                                    </td>
 
-                                {/* Panel Komentar + Form (inline) */}
-                                <tr className="table w-full table-fixed">
-                                  <td colSpan={4} className="px-6 pt-2 pb-4">
-                                    <AnimatePresence>
-                                      {opened && (
-                                        <motion.div
-                                          initial={{ height: 0, opacity: 0 }}
-                                          animate={{
-                                            height: "auto",
-                                            opacity: 1,
-                                          }}
-                                          exit={{ height: 0, opacity: 0 }}
-                                          transition={{ duration: 0.15 }}
-                                          className="rounded-md border border-gray-200 p-4 bg-gray-50"
+                                    {/* Tanggal */}
+                                    <td className="px-6 pt-6 align-top">
+                                      <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: "auto", opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.1 }}
+                                      >
+                                        {fmtDate(it.createdAt)}
+                                      </motion.div>
+                                    </td>
+
+                                    {/* Keterangan (status & komentar ringkas) */}
+                                    <td className="px-6 py-3 align-top">
+                                      <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: "auto", opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.1 }}
+                                        className="space-y-2"
+                                      >
+                                        {/* Status */}
+                                        <div className="inline-flex items-center gap-2">
+                                          <span className="text-xs font-semibold text-gray-600">
+                                            Status:
+                                          </span>
+                                          <span
+                                            className={[
+                                              "px-2 py-0.5 rounded-md text-xs font-bold",
+                                              it.issueStatus === "Resolved"
+                                                ? "bg-green-100 text-green-700"
+                                                : it.issueStatus ===
+                                                    "InProgress"
+                                                  ? "bg-yellow-100 text-yellow-700"
+                                                  : "bg-gray-100 text-gray-700",
+                                            ].join(" ")}
+                                          >
+                                            {it.issueStatus === "Waiting"
+                                              ? "Menunggu"
+                                              : it.issueStatus === "InProgress"
+                                                ? "Sedang Diproses"
+                                                : it.issueStatus === "Resolved"
+                                                  ? "Selesai"
+                                                  : it.issueStatus || "-"}
+                                          </span>
+                                        </div>
+
+                                        {/* Ringkasan jumlah komentar */}
+                                        <div className="text-xs text-gray-600">
+                                          Komentar:{" "}
+                                          <span className="font-semibold">
+                                            {it.IssueComment?.length ?? 0}
+                                          </span>
+                                        </div>
+                                      </motion.div>
+                                    </td>
+
+                                    {/* Aksi */}
+                                    <td className="px-6 pt-5 text-right align-top">
+                                      <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: "auto", opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.1 }}
+                                      >
+                                        <button
+                                          onClick={() =>
+                                            onToggleCommentPanel(it.id)
+                                          }
+                                          className="font-medium text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded text-sm"
                                         >
-                                          {/* Komentar terkait (editable) */}
-                                          <div className="space-y-1">
-                                            <div className="text-sm font-semibold text-gray-600">
-                                              Komentar (
-                                              {it.IssueComment?.length ?? 0})
-                                            </div>
+                                          {opened
+                                            ? "Tutup"
+                                            : "Masukkan Komentar"}
+                                        </button>
+                                      </motion.div>
+                                    </td>
+                                  </tr>
 
-                                            <ul className="ml-0 pt-4 space-y-2">
-                                              {(it.IssueComment ?? []).map(
-                                                (c) => (
-                                                  <li
-                                                    key={c.id}
-                                                    className="text-sm bg-slate-200 rounded-md text-gray-700 p-2"
-                                                  >
-                                                    {editCommentId === c.id ? (
-                                                      <div className="border rounded-md p-2 bg-white">
-                                                        <textarea
-                                                          value={editDraft}
-                                                          onChange={(e) =>
-                                                            setEditDraft(
-                                                              e.target.value
-                                                            )
-                                                          }
-                                                          className="w-full border px-3 py-2 rounded bg-white min-h-[80px]"
-                                                          placeholder="Perbarui komentar…"
-                                                        />
-                                                        <div className="flex gap-2 justify-end mt-2">
-                                                          <button
-                                                            onClick={() =>
-                                                              onSubmitEdit(it)
+                                  {/* Panel Komentar + Form (inline) */}
+                                  <tr className="table w-full table-fixed">
+                                    <td colSpan={4} className="px-6 pt-2 pb-4">
+                                      <AnimatePresence>
+                                        {opened && (
+                                          <motion.div
+                                            initial={{ height: 0, opacity: 0 }}
+                                            animate={{
+                                              height: "auto",
+                                              opacity: 1,
+                                            }}
+                                            exit={{ height: 0, opacity: 0 }}
+                                            transition={{ duration: 0.15 }}
+                                            className="rounded-md border border-gray-200 p-4 bg-gray-50"
+                                          >
+                                            {/* Komentar terkait (editable) */}
+                                            <div className="space-y-1">
+                                              <div className="text-sm font-semibold text-gray-600">
+                                                Komentar (
+                                                {it.IssueComment?.length ?? 0})
+                                              </div>
+
+                                              <ul className="ml-0 pt-4 space-y-2">
+                                                {(it.IssueComment ?? []).map(
+                                                  (c) => (
+                                                    <li
+                                                      key={c.id}
+                                                      className="text-sm bg-slate-200 rounded-md text-gray-700 p-2"
+                                                    >
+                                                      {editCommentId ===
+                                                      c.id ? (
+                                                        <div className="border rounded-md p-2 bg-white">
+                                                          <textarea
+                                                            value={editDraft}
+                                                            onChange={(e) =>
+                                                              setEditDraft(
+                                                                e.target.value
+                                                              )
                                                             }
-                                                            disabled={
-                                                              updatingComment ||
-                                                              !editDraft.trim()
-                                                            }
-                                                            className="bg-blue-600 text-white px-3 py-1.5 rounded disabled:opacity-60"
-                                                          >
-                                                            {updatingComment
-                                                              ? "Menyimpan..."
-                                                              : "Simpan"}
-                                                          </button>
-                                                          <button
-                                                            onClick={
-                                                              onCancelEdit
-                                                            }
-                                                            className="bg-gray-200 text-gray-700 px-3 py-1.5 rounded"
-                                                          >
-                                                            Batal
-                                                          </button>
+                                                            className="w-full border px-3 py-2 rounded bg-white min-h-[80px]"
+                                                            placeholder="Perbarui komentar…"
+                                                          />
+                                                          <div className="flex gap-2 justify-end mt-2">
+                                                            <button
+                                                              onClick={() =>
+                                                                onSubmitEdit(it)
+                                                              }
+                                                              disabled={
+                                                                updatingComment ||
+                                                                !editDraft.trim()
+                                                              }
+                                                              className="bg-blue-600 text-white px-3 py-1.5 rounded disabled:opacity-60"
+                                                            >
+                                                              {updatingComment
+                                                                ? "Menyimpan..."
+                                                                : "Simpan"}
+                                                            </button>
+                                                            <button
+                                                              onClick={
+                                                                onCancelEdit
+                                                              }
+                                                              className="bg-gray-200 text-gray-700 px-3 py-1.5 rounded"
+                                                            >
+                                                              Batal
+                                                            </button>
+                                                          </div>
                                                         </div>
-                                                      </div>
-                                                    ) : (
-                                                      <div className="flex items-start justify-between gap-2">
-                                                        <div>
-                                                          <span className={`font-semibold ${c.user?.id === user?.id && "text-blue-600"}`}>
-                                                            {c.user?.name ??
-                                                              "Anon"}
-                                                            :
-                                                          </span>{" "}
-                                                          {c.message}{" "}
-                                                          <span className="text-xs text-gray-400">
-                                                            (
-                                                            {fmtDate(
-                                                              c.createdAt
-                                                            )}
-                                                            )
-                                                          </span>
+                                                      ) : (
+                                                        <div className="flex items-start justify-between gap-2">
+                                                          <div>
+                                                            <span
+                                                              className={`font-semibold ${c.user?.id === user?.id && "text-blue-600"}`}
+                                                            >
+                                                              {c.user?.name ??
+                                                                "Anon"}
+                                                              :
+                                                            </span>{" "}
+                                                            {c.message}{" "}
+                                                            <span className="text-xs text-gray-400">
+                                                              (
+                                                              {fmtDate(
+                                                                c.createdAt
+                                                              )}
+                                                              )
+                                                            </span>
+                                                          </div>
+                                                          {c.user?.id ===
+                                                            user?.id && (
+                                                            <button
+                                                              onClick={() =>
+                                                                onEditComment(c)
+                                                              }
+                                                              className="text-blue-600 hover:underline whitespace-nowrap"
+                                                            >
+                                                              Ubah
+                                                            </button>
+                                                          )}
                                                         </div>
-                                                        {c.user?.id ===
-                                                          user?.id && (
-                                                          <button
-                                                            onClick={() =>
-                                                              onEditComment(c)
-                                                            }
-                                                            className="text-blue-600 hover:underline whitespace-nowrap"
-                                                          >
-                                                            Ubah
-                                                          </button>
-                                                        )}
-                                                      </div>
-                                                    )}
+                                                      )}
+                                                    </li>
+                                                  )
+                                                )}
+
+                                                {(it.IssueComment ?? [])
+                                                  .length === 0 && (
+                                                  <li className="text-xs text-gray-400 italic">
+                                                    Belum ada komentar
                                                   </li>
-                                                )
-                                              )}
-
-                                              {(it.IssueComment ?? [])
-                                                .length === 0 && (
-                                                <li className="text-xs text-gray-400 italic">
-                                                  Belum ada komentar
-                                                </li>
-                                              )}
-                                            </ul>
-                                          </div>
-
-                                          {/* Form komentar */}
-                                          <div className="space-y-2 pt-4">
-                                            <label className="text-sm font-semibold text-gray-700">
-                                              Tambah Komentar
-                                            </label>
-                                            <textarea
-                                              value={commentDraft}
-                                              onChange={(e) =>
-                                                setCommentDraft(e.target.value)
-                                              }
-                                              placeholder="Tulis komentar..."
-                                              className="w-full border px-3 py-2 rounded bg-white min-h-[90px]"
-                                            />
-                                            <div className="flex justify-end">
-                                              <button
-                                                onClick={() =>
-                                                  handleSubmitCommentInline(it)
-                                                }
-                                                disabled={
-                                                  commenting ||
-                                                  !commentDraft.trim()
-                                                }
-                                                className="bg-green-600 text-white px-4 py-2 rounded disabled:opacity-60"
-                                              >
-                                                {commenting
-                                                  ? "Mengirim..."
-                                                  : "Kirim"}
-                                              </button>
+                                                )}
+                                              </ul>
                                             </div>
-                                          </div>
-                                        </motion.div>
-                                      )}
-                                    </AnimatePresence>
-                                  </td>
-                                </tr>
-                              </React.Fragment>
-                            );
-                          })}
-                    </AnimatePresence>
-                  </React.Fragment>
-                );
-              })
+
+                                            {/* Form komentar */}
+                                            <div className="space-y-2 pt-4">
+                                              <label className="text-sm font-semibold text-gray-700">
+                                                Tambah Komentar
+                                              </label>
+                                              <textarea
+                                                value={commentDraft}
+                                                onChange={(e) =>
+                                                  setCommentDraft(
+                                                    e.target.value
+                                                  )
+                                                }
+                                                placeholder="Tulis komentar..."
+                                                className="w-full border px-3 py-2 rounded bg-white min-h-[90px]"
+                                              />
+                                              <div className="flex justify-end">
+                                                <button
+                                                  onClick={() =>
+                                                    handleSubmitCommentInline(
+                                                      it
+                                                    )
+                                                  }
+                                                  disabled={
+                                                    commenting ||
+                                                    !commentDraft.trim()
+                                                  }
+                                                  className="bg-green-600 text-white px-4 py-2 rounded disabled:opacity-60"
+                                                >
+                                                  {commenting
+                                                    ? "Mengirim..."
+                                                    : "Kirim"}
+                                                </button>
+                                              </div>
+                                            </div>
+                                          </motion.div>
+                                        )}
+                                      </AnimatePresence>
+                                    </td>
+                                  </tr>
+                                </React.Fragment>
+                              );
+                            })}
+                      </AnimatePresence>
+                    </React.Fragment>
+                  );
+                })}
+              </>
             )}
           </tbody>
 

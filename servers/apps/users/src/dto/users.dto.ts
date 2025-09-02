@@ -107,3 +107,12 @@ export class UpdateUserDto {
   @Field({ nullable: true })
   address?: string;
 }
+
+@InputType()
+export class UpdateRoleDto {
+  @Field({ nullable: false })
+  name?: string;
+
+  @Field(() => Role, { nullable: false })
+  role?: Role;
+}

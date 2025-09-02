@@ -479,54 +479,41 @@ export class SurveyActivityService {
   }
 
   async getAllSubSurveyProgress(): Promise<SubSurveyProgressType[]> {
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
     const subSurveys = await this.prisma.subSurveyActivity.findMany({
-      where: {
-        startDate: {
-          gte: startOfMonth,
-          lte: endOfMonth,
-        },
-      },
-      include: {
-        UserProgress: true,
-      },
+      include: { UserProgress: true },
+      orderBy: { startDate: 'asc' },
     });
 
-    const result = subSurveys.map((subSurvey) => {
-      const totalPetugas = subSurvey.UserProgress.length;
-      const submitCount = subSurvey.UserProgress.reduce(
-        (acc, p) => acc + p.submitCount,
+    return subSurveys.map((s) => {
+      const totalPetugas = s.UserProgress.length;
+      const submitCount = s.UserProgress.reduce(
+        (a, p) => a + (p.submitCount ?? 0),
         0,
       );
-      const approvedCount = subSurvey.UserProgress.reduce(
-        (acc, p) => acc + p.approvedCount,
+      const approvedCount = s.UserProgress.reduce(
+        (a, p) => a + (p.approvedCount ?? 0),
         0,
       );
-      const rejectedCount = subSurvey.UserProgress.reduce(
-        (acc, p) => acc + p.rejectedCount,
+      const rejectedCount = s.UserProgress.reduce(
+        (a, p) => a + (p.rejectedCount ?? 0),
         0,
       );
-      const Name = subSurvey.name;
-      const SubSurveyId = subSurvey.id;
 
       return {
-        startDate: subSurvey.startDate,
-        endDate: subSurvey.endDate,
-        targetSample: subSurvey.targetSample,
-        sampleType: subSurvey.sampleType,
-        activityType: subSurvey.activityType,
+        name: s.name,
+        subSurveyActivityId: s.id,
+        startDate: s.startDate,
+        endDate: s.endDate,
+        targetSample: s.targetSample ?? 0,
+        sampleType: s.sampleType,
+        activityType: s.activityType,
         totalPetugas,
         submitCount,
         approvedCount,
         rejectedCount,
-        Name,
-        subSurveyActivityId: SubSurveyId,
+        district: undefined, // isi nanti kalau ada
       };
     });
-
-    return result;
   }
 
   async getMonthlySurveyStats() {

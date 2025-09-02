@@ -7,6 +7,7 @@ import {
   LoginDto,
   RegisterDto,
   ResetPasswordDto,
+  UpdateRoleDto,
   UpdateUserDto,
 } from './dto/users.dto';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -282,6 +283,16 @@ export class UsersService {
   async findById(id: string): Promise<User | null> {
     return this.prisma.user.findUnique({
       where: { id },
+    });
+  }
+
+  async editUserRole(userId: string, updateRole: UpdateRoleDto): Promise<User> {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        name: updateRole.name,
+        role: updateRole.role,
+      },
     });
   }
 }

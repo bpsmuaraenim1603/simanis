@@ -194,6 +194,20 @@ function SPJ() {
     [userProgressData]
   );
 
+  const filteredSPJ = useMemo(() => {
+    const rows: SPJWithUserNSubSurvey[] = SPJData?.getAllSPJ ?? [];
+    return rows.filter((spj) => {
+      // jika bukan Admin: hanya tampilkan milik user sendiri
+      if (user?.role !== "Admin" && user?.role !== "SuperAdmin" && spj.userId !== user?.id) return false;
+      const matchesJenis =
+        !filter.jenisSurvei ||
+        spj.subSurveyActivity?.name === filter.jenisSurvei;
+      const matchesPengajuan =
+        !filter.statusPengajuan || spj.submitState === filter.statusPengajuan;
+      return matchesJenis && matchesPengajuan;
+    });
+  }, [SPJData, user, filter]);
+
   // ==== UI ====
   return (
     <div className="px-8 py-4 space-y-4 font-Poppins">
@@ -264,31 +278,37 @@ function SPJ() {
             </tr>
           </thead>
           <tbody className="block max-h-96 overflow-y-auto w-full">
-            {SPJData?.getAllSPJ
-              ?.filter((spj: SPJWithUserNSubSurvey) => {
-                if (user?.role !== "Admin" && spj.userId !== user?.id) {
-                  return false;
-                }
-                const matchesJenis =
-                  !filter.jenisSurvei ||
-                  spj.subSurveyActivity?.name === filter.jenisSurvei;
-                const matchesPengajuan =
-                  !filter.statusPengajuan ||
-                  spj.submitState === filter.statusPengajuan;
-                return matchesJenis && matchesPengajuan;
-              })
-              .map((spj: SPJWithUserNSubSurvey) => (
-                <tr
-                  key={spj.id}
-                  className="table w-full table-fixed bg-white border-b text-black font-semibold"
-                >
-                  <td className="px-6 py-4">{spj?.user?.name || "-"}</td>
-                  <td className="px-6 py-4">
-                    {spj?.subSurveyActivity?.name || "-"}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`inline-block px-2 py-1 text-sm font-medium rounded
+            {/* Loading */}
+            {!SPJData && (
+              <tr className="table w-full table-fixed">
+                <td colSpan={4} className="px-6 py-6 text-center">
+                  Memuat data…
+                </td>
+              </tr>
+            )}
+            {/* Empty state */}
+            {SPJData && filteredSPJ.length === 0 && (
+              <tr className="table w-full table-fixed">
+                <td colSpan={4} className="px-6 py-6 text-center text-gray-500">
+                  {filter.jenisSurvei || filter.statusPengajuan
+                    ? "Tidak ada pengajuan yang cocok dengan filter saat ini."
+                    : "Belum ada pengajuan honor."}
+                </td>
+              </tr>
+            )}
+            {/* Rows */}
+            {filteredSPJ.map((spj: SPJWithUserNSubSurvey) => (
+              <tr
+                key={spj.id}
+                className="table w-full table-fixed bg-white border-b text-black font-semibold"
+              >
+                <td className="px-6 py-4">{spj?.user?.name || "-"}</td>
+                <td className="px-6 py-4">
+                  {spj?.subSurveyActivity?.name || "-"}
+                </td>
+                <td className="px-6 py-4">
+                  <span
+                    className={`inline-block px-2 py-1 text-sm font-medium rounded
               ${
                 spj.submitState === "Disetujui"
                   ? "bg-green-100 text-green-700"
@@ -296,33 +316,33 @@ function SPJ() {
                     ? "bg-red-100 text-red-700"
                     : "bg-yellow-100 text-yellow-700"
               }`}
-                    >
-                      {spj?.submitState}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button
-                      onClick={() => {
-                        setSelectedSPJ(spj);
-                        setIsModalOpen(true);
-                        setUpdate((u) => ({
-                          ...u,
-                          id: spj.id,
-                        }));
-                      }}
-                      className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
-                    >
-                      Lihat Detail
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                  >
+                    {spj?.submitState}
+                  </span>
+                </td>
+                <td className="px-6 py-4 text-right">
+                  <button
+                    onClick={() => {
+                      setSelectedSPJ(spj);
+                      setIsModalOpen(true);
+                      setUpdate((u) => ({
+                        ...u,
+                        id: spj.id,
+                      }));
+                    }}
+                    className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+                  >
+                    Lihat Detail
+                  </button>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
 
       {/* Form Pengajuan Honor */}
-      {user?.role === "Admin" && (
+      {user?.role === "Admin" || user?.role === "Superadmin" && (
         <div className="bg-orange-50 rounded-lg p-4 shadow-md">
           <h1 className="text-2xl font-bold mb-4">Form Pengajuan Honor</h1>
           <form onSubmit={handleSubmit} className="space-y-4 ">
@@ -480,7 +500,7 @@ function SPJ() {
                 </span>
               </div>
 
-              {user?.role === "Admin" && (
+              {user?.role === "Admin" || user?.role === "SuperAdmin" && (
                 <form
                   onSubmit={handleUpdate}
                   className="space-y-3 pt-4 border-t mt-4"

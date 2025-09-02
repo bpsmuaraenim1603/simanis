@@ -196,6 +196,20 @@ export default function Partners() {
     }
   };
 
+  const filteredJobLetters = useMemo(() => {
+    const rows: JobLetterWithUserNSubSurvey[] =
+      dataJobLetter?.getAllJobLetters ?? [];
+    return rows.filter((jl) => {
+      if (user?.role !== "Admin" && jl.userId !== user?.id) return false;
+      const byWilayah = !filter.wilayah || jl.region === filter.wilayah;
+      const bySurvei =
+        !filter.survei || jl.subSurveyActivity?.name?.includes(filter.survei);
+      const byStatus =
+        !filter.statusPengajuan || jl.agreeState === filter.statusPengajuan;
+      return byWilayah && bySurvei && byStatus;
+    });
+  }, [dataJobLetter, user, filter]);
+
   return (
     <div className="px-8 py-4 space-y-4 font-Poppins">
       <div className="bg-orange-50 rounded-lg p-2 font-bold text-xl flex justify-between shadow-md">
@@ -269,82 +283,90 @@ export default function Partners() {
               </tr>
             </thead>
             <tbody className="block max-h-96 overflow-y-auto w-full">
-              {dataJobLetter?.getAllJobLetters
-                ?.filter((jl: JobLetterWithUserNSubSurvey) => {
-                  if (user?.role !== "Admin" && jl.userId !== user?.id)
-                    return false;
-                  const matchesRegion =
-                    !filter.wilayah || jl.region === filter.wilayah;
-                  const matchesSurvei =
-                    !filter.survei ||
-                    jl.subSurveyActivity?.name?.includes(filter.survei);
-                  const matchesStatus =
-                    !filter.statusPengajuan ||
-                    jl.agreeState === filter.statusPengajuan;
-                  return matchesRegion && matchesSurvei && matchesStatus;
-                })
-                .map((jl: JobLetterWithUserNSubSurvey) => (
-                  <tr
-                    key={jl.id}
-                    className="table w-full table-fixed bg-white text-black"
+              {/* Loading */}
+              {!dataJobLetter && (
+                <tr className="table w-full table-fixed">
+                  <td colSpan={6} className="px-6 py-6 text-center">
+                    Memuat data…
+                  </td>
+                </tr>
+              )}
+              {/* Empty state */}
+              {dataJobLetter && filteredJobLetters.length === 0 && (
+                <tr className="table w-full table-fixed">
+                  <td
+                    colSpan={6}
+                    className="px-6 py-6 text-center text-gray-500"
                   >
-                    <td className="px-6 py-3 font-semibold">
-                      {jl.user?.name ?? "-"}
-                    </td>
-                    <td className="px-6 py-3 font-semibold">{jl.region}</td>
-                    <td className="px-6 py-3 font-semibold">
-                      {jl.subSurveyActivity?.name ?? "-"}
-                    </td>
-                    <td className="px-6 py-3">
-                      {jl.submitDate ? (
-                        <div>
-                          <span className="inline-block px-2 py-1 text-sm font-medium text-green-700 bg-green-100 rounded-xl">
-                            Diserahkan
-                          </span>
-                          <br />
-                          <span>{jl.submitDate.split("T")[0]}</span>
-                        </div>
-                      ) : (
-                        <div>
-                          <span className="inline-block px-2 py-1 text-sm font-medium text-yellow-700 bg-yellow-100 rounded-xl">
-                            Belum Diserahkan
-                          </span>
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-3">
+                    {filter.wilayah || filter.survei || filter.statusPengajuan
+                      ? "Tidak ada surat tugas yang cocok dengan filter saat ini."
+                      : "Belum ada surat tugas."}
+                  </td>
+                </tr>
+              )}
+              {/* Rows */}
+              {filteredJobLetters.map((jl: JobLetterWithUserNSubSurvey) => (
+                <tr
+                  key={jl.id}
+                  className="table w-full table-fixed bg-white text-black"
+                >
+                  <td className="px-6 py-3 font-semibold">
+                    {jl.user?.name ?? "-"}
+                  </td>
+                  <td className="px-6 py-3 font-semibold">{jl.region}</td>
+                  <td className="px-6 py-3 font-semibold">
+                    {jl.subSurveyActivity?.name ?? "-"}
+                  </td>
+                  <td className="px-6 py-3">
+                    {jl.submitDate ? (
                       <div>
-                        {jl.agreeState === "Disetujui" ? (
-                          <span className="inline-block px-2 py-1 text-sm font-medium text-green-700 bg-green-100 rounded-xl">
-                            Disetujui
-                          </span>
-                        ) : jl.agreeState === "Ditolak" ? (
-                          <span className="inline-block px-2 py-1 text-sm font-medium text-red-700 bg-red-100 rounded-xl">
-                            Ditolak
-                          </span>
-                        ) : (
-                          <span className="inline-block px-2 py-1 text-sm font-medium text-yellow-700 bg-yellow-100 rounded-xl">
-                            Menunggu
-                          </span>
-                        )}
+                        <span className="inline-block px-2 py-1 text-sm font-medium text-green-700 bg-green-100 rounded-xl">
+                          Diserahkan
+                        </span>
                         <br />
-                        <span>{jl.approveDate?.split?.("T")?.[0] ?? ""}</span>
+                        <span>{jl.submitDate.split("T")[0]}</span>
                       </div>
-                    </td>
-                    <td className="px-6 py-3 text-right flex items-center gap-2 justify-end">
-                      <button
-                        onClick={() => {
-                          setSelectedJobLetter(jl);
-                          setUpdate((prev) => ({ ...prev, id: jl.id }));
-                          setIsModalOpen(true);
-                        }}
-                        className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
-                      >
-                        Lihat Detail
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                    ) : (
+                      <div>
+                        <span className="inline-block px-2 py-1 text-sm font-medium text-yellow-700 bg-yellow-100 rounded-xl">
+                          Belum Diserahkan
+                        </span>
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-6 py-3">
+                    <div>
+                      {jl.agreeState === "Disetujui" ? (
+                        <span className="inline-block px-2 py-1 text-sm font-medium text-green-700 bg-green-100 rounded-xl">
+                          Disetujui
+                        </span>
+                      ) : jl.agreeState === "Ditolak" ? (
+                        <span className="inline-block px-2 py-1 text-sm font-medium text-red-700 bg-red-100 rounded-xl">
+                          Ditolak
+                        </span>
+                      ) : (
+                        <span className="inline-block px-2 py-1 text-sm font-medium text-yellow-700 bg-yellow-100 rounded-xl">
+                          Menunggu
+                        </span>
+                      )}
+                      <br />
+                      <span>{jl.approveDate?.split?.("T")?.[0] ?? ""}</span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-3 text-right flex items-center gap-2 justify-end">
+                    <button
+                      onClick={() => {
+                        setSelectedJobLetter(jl);
+                        setUpdate((prev) => ({ ...prev, id: jl.id }));
+                        setIsModalOpen(true);
+                      }}
+                      className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+                    >
+                      Lihat Detail
+                    </button>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

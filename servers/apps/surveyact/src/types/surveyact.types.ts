@@ -123,7 +123,7 @@ export class UserProgressType {
 @ObjectType()
 export class SubSurveyProgressType {
   @Field(() => String)
-  Name: string;
+  name: string;
 
   @Field(() => ID)
   subSurveyActivityId: string;

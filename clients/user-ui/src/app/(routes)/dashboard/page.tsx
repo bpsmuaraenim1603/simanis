@@ -1,6 +1,6 @@
 "use client";
 import axios from "axios";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery } from "@apollo/client";
@@ -59,7 +59,7 @@ function Dashboard() {
     submitCount: number;
     approvedCount: number;
     rejectedCount: number;
-    Name: string;
+    name: string;
     subSurveyActivityId: string;
   };
 
@@ -103,11 +103,14 @@ function Dashboard() {
     allUserSurveyProgress: UserProgress[];
   }>(GET_REAL_ALL_USER_PROGRESS);
 
-  const filteredProgress = surveyPogressData?.getAllSubSurveyProgress.filter(
-    (item) =>
-      !selectedSurvey ||
-      item.Name.toLowerCase().includes(selectedSurvey.toLowerCase())
-  );
+  const filteredProgress = useMemo(() => {
+    const rows = surveyPogressData?.getAllSubSurveyProgress ?? [];
+    return rows.filter((item) =>
+      !selectedSurvey
+        ? true
+        : (item.name || "").toLowerCase().includes(selectedSurvey.toLowerCase())
+    );
+  }, [surveyPogressData, selectedSurvey]);
 
   const subSurveyOptions = [
     ...new Map(
@@ -180,6 +183,18 @@ function Dashboard() {
     return isTitleMatch || isThisSurvey || isInfoMatch;
   });
 
+  const groupedEntries = useMemo(() => {
+    const groups = filteredEvents.reduce<Record<string, CalendarEvent[]>>(
+      (acc, ev) => {
+        const key = ev.surveyEvent;
+        (acc[key] ||= []).push(ev);
+        return acc;
+      },
+      {}
+    );
+    return Object.entries(groups);
+  }, [filteredEvents]);
+
   useEffect(() => {
     const groupedEvents = filteredEvents.reduce<
       Record<string, CalendarEvent[]>
@@ -239,17 +254,23 @@ function Dashboard() {
             </tr>
           </thead>
           <tbody className="block max-h-96 overflow-y-auto w-full">
-            {Object.entries(
-              filteredEvents.reduce<Record<string, CalendarEvent[]>>(
-                (groups, event) => {
-                  const key = event.surveyEvent;
-                  if (!groups[key]) groups[key] = [];
-                  groups[key].push(event);
-                  return groups;
-                },
-                {}
-              )
-            ).map(([surveyEvent, events]) => {
+            {/* Empty state: tidak ada data / hasil pencarian */}
+            {groupedEntries.length === 0 ? (
+              <tr className="table w-full">
+                <td colSpan={4} className="px-6 py-6 text-center text-gray-500">
+                  {searchTerm ? (
+                    <>
+                      Tidak ada kegiatan yang cocok untuk "
+                      <span className="font-semibold">{searchTerm}</span>"
+                    </>
+                  ) : (
+                    "Belum ada jadwal kegiatan."
+                  )}
+                </td>
+              </tr>
+            ) : null}
+
+            {groupedEntries.map(([surveyEvent, events]) => {
               events.sort(
                 (a, b) =>
                   new Date(a.start).getTime() - new Date(b.start).getTime()
@@ -440,9 +461,9 @@ function Dashboard() {
               <option value="">Semua</option>
               {[
                 ...new Set(
-                  surveyPogressData?.getAllSubSurveyProgress.map(
-                    (item: SubSurveyProgress) => item.Name
-                  )
+                  (surveyPogressData?.getAllSubSurveyProgress ?? [])
+                    .map((item: SubSurveyProgress) => item.name)
+                    .filter(Boolean)
                 ),
               ].map((name) => (
                 <option key={name} value={name}>
@@ -452,22 +473,32 @@ function Dashboard() {
             </select>
           </div>
 
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart
-              data={filteredProgress}
-              margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="Name" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="targetSample" fill="#f97316" name="Target Sampel" />
-              <Bar dataKey="submitCount" fill="#3b82f6" name="Submit Sampel" />
-              <Bar dataKey="approvedCount" fill="#22c55e" name="Approved" />
-              <Bar dataKey="rejectedCount" fill="#ef4444" name="Rejected" />
-            </BarChart>
-          </ResponsiveContainer>
+          <div style={{ width: "100%", height: 300 }}>
+            <ResponsiveContainer>
+              <BarChart
+                data={filteredProgress}
+                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Bar
+                  dataKey="targetSample"
+                  fill="#f97316"
+                  name="Target Sampel"
+                />
+                <Bar
+                  dataKey="submitCount"
+                  fill="#3b82f6"
+                  name="Submit Sampel"
+                />
+                <Bar dataKey="approvedCount" fill="#22c55e" name="Approved" />
+                <Bar dataKey="rejectedCount" fill="#ef4444" name="Rejected" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
 
         {/* Bagian kanan: Pencapaian Petugas */}
@@ -501,7 +532,7 @@ function Dashboard() {
                         (progress.submitCount / progress.totalAssigned) * 100
                       )
                     : 0;
-                  const key = `${progress.user.id}-${progress.subSurveyActivity.id}-${idx}`;
+                const key = `${progress.user.id}-${progress.subSurveyActivity.id}-${idx}`;
 
                 return (
                   <div key={key} className="space-y-1">
