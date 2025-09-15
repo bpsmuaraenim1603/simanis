@@ -6,7 +6,11 @@ import {
   registerEnumType,
   GraphQLISODateTime,
 } from '@nestjs/graphql';
-import { AgreeState, IssueStatus, StatusST } from '@prisma/client';
+import {
+  AgreeState,
+  IssueStatus,
+  StatusST,
+} from '@prisma/client';
 import { UserType } from 'apps/users/src/types/users.types';
 
 registerEnumType(AgreeState, {
@@ -200,7 +204,6 @@ export class SubmitSPJType {
   @Field(() => Number, { nullable: true })
   eviSize!: number | null;
 
-  // VIRTUAL FIELD → optional di TS supaya objek Prisma masih assignable
   @Field(() => String, { nullable: true })
   eviDocumentSignedUrl?: string | null;
 
@@ -233,31 +236,31 @@ export class JobLetterType {
 
   @Field(() => String, { nullable: true })
   rejectNote!: string | null;
-  
+
   @Field(() => GraphQLISODateTime, { nullable: true })
   approveDate!: Date | null;
 
   @Field(() => String, { nullable: true })
   eviLetterPath!: string | null;
-  
+
   @Field(() => String, { nullable: true })
   eviLetterSignedUrl?: string | null;
 
   @Field(() => String, { nullable: true })
   eviFieldUrl!: string | null;
-  
+
   @Field(() => String, { nullable: true })
   eviSTUrl!: string | null;
 
   @Field(() => UserType, { nullable: true })
   user?: UserType;
-  
+
   @Field(() => SubSurveyActivityType, { nullable: true })
   subSurveyActivity?: SubSurveyActivityType;
 
   @Field(() => GraphQLISODateTime, { nullable: true })
   createdAt!: Date | null;
-  
+
   @Field(() => GraphQLISODateTime, { nullable: true })
   updatedAt!: Date | null;
 }

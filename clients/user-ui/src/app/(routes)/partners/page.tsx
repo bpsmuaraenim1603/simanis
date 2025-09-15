@@ -200,7 +200,7 @@ export default function Partners() {
     const rows: JobLetterWithUserNSubSurvey[] =
       dataJobLetter?.getAllJobLetters ?? [];
     return rows.filter((jl) => {
-      if (user?.role !== "Admin" && jl.userId !== user?.id) return false;
+      if (user?.role !== "Admin" && user?.role !== "Superadmin" && jl.userId !== user?.id) return false;
       const byWilayah = !filter.wilayah || jl.region === filter.wilayah;
       const bySurvei =
         !filter.survei || jl.subSurveyActivity?.name?.includes(filter.survei);

@@ -21,7 +21,12 @@ import {
   UpdateSurveyActivityDTO,
   UpdateUserProgressDTO,
 } from './dto/surveyact.dto';
-import { IssueStatus, JobLetter, SubmitSPJ, User } from '@prisma/client';
+import {
+  IssueStatus,
+  JobLetter,
+  SubmitSPJ,
+  User
+} from '@prisma/client';
 import { HttpService } from '@nestjs/axios';
 import { lastValueFrom } from 'rxjs';
 import {
@@ -152,7 +157,7 @@ export class SurveyActivityService {
 
   async getUser(userId: string) {
     const response$ = this.httpService.get(
-      `http://localhost:4001/users/${userId}`,
+      `https://localhost:4001/users/${userId}`,
     );
     const response = await lastValueFrom(response$);
     return response.data;

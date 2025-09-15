@@ -198,7 +198,7 @@ function SPJ() {
     const rows: SPJWithUserNSubSurvey[] = SPJData?.getAllSPJ ?? [];
     return rows.filter((spj) => {
       // jika bukan Admin: hanya tampilkan milik user sendiri
-      if (user?.role !== "Admin" && user?.role !== "SuperAdmin" && spj.userId !== user?.id) return false;
+      if (user?.role !== "Admin" && user?.role !== "Superadmin" && spj.userId !== user?.id) return false;
       const matchesJenis =
         !filter.jenisSurvei ||
         spj.subSurveyActivity?.name === filter.jenisSurvei;

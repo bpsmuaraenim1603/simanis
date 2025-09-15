@@ -37,6 +37,34 @@ enum AgreeState {
   Ditolak
 }
 
+enum NotificationType {
+  SUBMIT_SPJ_CREATED
+  SUBMIT_SPJ_APPROVED
+  SUBMIT_SPJ_REJECTED
+  JOB_LETTER_APPROVED
+  JOB_LETTER_REJECTED
+  ISSUE_COMMENT_ADDED
+  CONTENT_ISSUE_CREATED
+  SUBSURVEY_START_SOON
+  SUBSURVEY_END_SOON
+  // tambah sesuai kebutuhan
+}
+
+enum TargetType {
+  SUBMIT_SPJ
+  JOB_LETTER
+  CONTENT_ISSUE
+  ISSUE_COMMENT
+  SUBSURVEY_ACTIVITY
+  USER_PROGRESS
+}
+
+enum Channel {
+  IN_APP
+  EMAIL
+  WHATSAPP
+}
+
 model Avatar {
   id       String @id @default(uuid())
   publicId String
@@ -96,6 +124,10 @@ model User {
   ContentIssue ContentIssue[]
 
   UpSuperVisor UserProgress[] @relation("UserProgress_Supervisor")
+
+  NotificationR Notification[] @relation("Notification_Recipient")
+
+  NotificationA Notification[] @relation("Notification_Actor")
 }
 
 // model Issue {
@@ -200,6 +232,24 @@ model SubmitSPJ {
   eviSize             Int?
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
+}
+
+model Notification {
+  id          String           @id @default(uuid())
+  recipientId String
+  recipient   User             @relation("Notification_Recipient", fields: [recipientId], references: [id])
+  actorId     String?
+  actor       User?            @relation("Notification_Actor", fields: [actorId], references: [id])
+  type        NotificationType
+  targetType  TargetType
+  targetId    String
+  title       String
+  body        String?
+  metadata    Json?
+  channel     Channel          @default(IN_APP) // IN_APP/EMAIL/WHATSAPP, dll (opsional)
+  isRead      Boolean          @default(false)
+  readAt      DateTime?
+  createdAt   DateTime         @default(now())
 }
 
 // name,email,password,role,phone_number,address, 

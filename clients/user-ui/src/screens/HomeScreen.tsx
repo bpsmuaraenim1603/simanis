@@ -13,7 +13,7 @@ function HomeScreen() {
       </div>
       <div className='bg-orange-500 w-full min-h-screen flex justify-between py-[100px] px-[100px]'>
         <div className='px-4 py-20 space-y-8'>
-            <h1 className='text-white text-4xl font-semibold font-Poppins'>Selamat Datang di Aplikasi SIMANIS!</h1>
+            <h1 className='text-white text-4xl font-semibold font-Poppins'>Selamat Datang di SIMANIS!</h1>
             <span className='text-white text-xl font-Poppins'>Sistem Integrasi Monitoring Administrasi dan Teknis</span>
             <a type="submit" href="https://muaraenimkab.bps.go.id/" target="_blank" className='flex flex-row items-center justify-center py-3 px-6 rounded-lg cursor-pointer bg-orange-900 shadow-md min-h-[45px] w-[150px] text-[16px] text-white font-Poppins font-semibold'>Contact Us</a>
         </div>

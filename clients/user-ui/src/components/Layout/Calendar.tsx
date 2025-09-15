@@ -78,7 +78,7 @@ export default function Calendar() {
     submitCount: number;
     approvedCount: number;
     rejectedCount: number;
-    Name: string;
+    name: string;
     subSurveyActivityId: string;
   };
 
@@ -538,7 +538,7 @@ export default function Calendar() {
                             {[
                               ...new Set(
                                 surveyPogressData?.getAllSubSurveyProgress.map(
-                                  (item: SubSurveyProgress) => item.Name
+                                  (item: SubSurveyProgress) => item.name
                                 )
                               ),
                             ].map((name) => (

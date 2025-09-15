@@ -9,7 +9,7 @@ import { UPDATE_ROLE } from "@/src/graphql/actions/update-role.action";
 /**
  * ===== Utilities & constants (no re-creation on each render) =====
  */
-const ROLE_OPTIONS = [{label: "Super Admin", value: "SuperAdmin"}, {label: "Admin", value: "Admin"}, {label: "Supervisor", value: "Supervisor"}, {label: "User", value: "User"}] as const;
+const ROLE_OPTIONS = [{label: "Super Admin", value: "Superadmin"}, {label: "Admin", value: "Admin"}, {label: "Supervisor", value: "Supervisor"}, {label: "User", value: "User"}] as const;
 const pretty = (s?: string | null) =>
   (s ?? "")
     .replaceAll("_", " ")
@@ -80,7 +80,7 @@ export default function SuperAdminManagePage() {
       try {
         setUpdating((u) => ({ ...u, [user.id]: true }));
         await updateRole({
-          variables: { userId: user.id, updateRole: { role: newRole } },
+          variables: { userId: user.id, updateRole: { name: user.name, role: newRole } },
         });
         setPending((p) => {
           const { [user.id]: _, ...rest } = p;
