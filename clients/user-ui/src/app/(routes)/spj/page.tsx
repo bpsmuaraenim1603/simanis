@@ -12,118 +12,90 @@ import toast from "react-hot-toast";
 import useUser from "@/src/hooks/useUser";
 import { GET_USER_PROGRESS_BY_SUBSURVEY_ID } from "@/src/graphql/actions/find-usersurveyprogress.action";
 
+type District = { id: string; name?: string; city?: string };
+type UserProgressForSelect = {
+  id: string;
+  userId: string;
+  district?: District | null;
+  user?: { id: string; name: string } | null;
+};
+type SubSurveyActivity = {
+  id: string;
+  name: string;
+  slug: string;
+  surveyActivityId: string;
+  startDate: string;
+  endDate: string;
+  targetSample: number;
+};
+
+type SPJ = {
+  id: string;
+  userId: string;
+  subSurveyActivityId: string;
+  submitState: string;
+  submitDate: string;
+  approveDate: string | null;
+  verifyNote: string | null;
+  eviDocumentPath: string | null;
+  eviDocumentSignedUrl?: string | null;
+};
+type SPJWithUserNSubSurvey = SPJ & {
+  user?: { id: string; name: string };
+  subSurveyActivity?: { id: string; name: string };
+};
+
 function SPJ() {
-  // ==== Types ====
-  type District = { id: string; name?: string; city?: string };
-
-  type UserProgressForSelect = {
-    id: string;
-    userId: string;
-    district?: District | null;
-    user?: { id: string; name: string } | null;
-  };
-
-  type SubSurveyActivity = {
-    id: string;
-    name: string;
-    slug: string;
-    surveyActivityId: string;
-    startDate: string;
-    endDate: string;
-    targetSample: number;
-  };
-
-  // Diselaraskan dengan schema terbaru (path + signed url dari backend)
-  type SPJ = {
-    id: string;
-    userId: string;
-    subSurveyActivityId: string;
-    submitState: string;
-    submitDate: string;
-    approveDate: string | null;
-    verifyNote: string | null;
-    eviDocumentPath: string | null;
-    eviDocumentSignedUrl?: string | null; // virtual field (opsional di TS)
-  };
-
-  type SPJWithUserNSubSurvey = SPJ & {
-    user?: {
-      id: string;
-      name: string;
-    };
-    subSurveyActivity?: {
-      id: string;
-      name: string;
-    };
-  };
-
-  // ==== Local state ====
   const [input, setInput] = useState({
     userId: "",
     subSurveyActivityId: "",
-    verifyNote: "", // opsional, kirim hanya jika ada
+    verifyNote: "",
   });
   const [file, setFile] = useState<File | null>(null);
-
   const [update, setUpdate] = useState({
     id: "",
     status: "Disetujui",
     verifyNote: "",
   });
-
   const [filter, setFilter] = useState({
     jenisSurvei: "",
     statusPengajuan: "",
   });
-
   const [selectedSPJ, setSelectedSPJ] = useState<SPJWithUserNSubSurvey | null>(
     null
   );
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // ==== GQL hooks ====
   const [createSPJ, { loading }] = useMutation(ADD_SPJ, {
     refetchQueries: [{ query: GET_ALL_SPJ }],
   });
   const [updateStatus, { loading: newloading }] = useMutation(
     UPDATE_SPJ_STATUS,
-    {
-      refetchQueries: [{ query: GET_ALL_SPJ }],
-    }
+    { refetchQueries: [{ query: GET_ALL_SPJ }] }
   );
-  const { data: userData } = useQuery(GET_ALL_USERS);
+  useQuery(GET_ALL_USERS); // dipakai untuk konsistensi cache (opsional)
   const { data: subSurveyData } = useQuery(GET_ALL_OF_SUB_SURVEY_ACTIVITIES);
   const { data: SPJData } = useQuery(GET_ALL_SPJ);
   const { data: userProgressData, loading: loadingPetugas } = useQuery(
     GET_USER_PROGRESS_BY_SUBSURVEY_ID,
     {
       variables: { subSurveyActivityId: input.subSurveyActivityId },
-      skip: !input.subSurveyActivityId, // jangan query kalau belum pilih kegiatan
+      skip: !input.subSurveyActivityId,
       fetchPolicy: "cache-and-network",
     }
   );
-
   const { user } = useUser();
 
-  // ==== Handlers ====
   const handleChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
     >
-  ) => {
-    setInput({ ...input, [e.target.id]: e.target.value });
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0] || null;
-    setFile(f);
-  };
-
+  ) => setInput({ ...input, [e.target.id]: e.target.value });
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setFile(e.target.files?.[0] || null);
   const handleChangeUpdate = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => {
-    setUpdate({ ...update, [e.target.id]: e.target.value });
-  };
+  ) => setUpdate({ ...update, [e.target.id]: e.target.value });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,9 +104,6 @@ function SPJ() {
         toast.error("Semua field wajib diisi!");
         return;
       }
-      console.log(file instanceof File, file?.name, file?.type);
-
-      // Kirim input + file (multipart)
       await createSPJ({
         variables: {
           input: {
@@ -142,19 +111,14 @@ function SPJ() {
             subSurveyActivityId: input.subSurveyActivityId,
             verifyNote: input.verifyNote || undefined,
           },
-          file, // apollo-upload-client akan mengirim multipart jika ini berupa File/null
+          file,
         },
       });
       toast.success("Pengajuan Honor berhasil ditambahkan!");
-      setInput({
-        userId: "",
-        subSurveyActivityId: "",
-        verifyNote: "",
-      });
+      setInput({ userId: "", subSurveyActivityId: "", verifyNote: "" });
       setFile(null);
     } catch (error) {
       toast.error("Gagal menambahkan SPJ!");
-      console.error(error);
     }
   };
 
@@ -165,7 +129,6 @@ function SPJ() {
         toast.error("Semua field wajib diisi!");
         return;
       }
-
       await updateStatus({
         variables: {
           input: {
@@ -178,9 +141,8 @@ function SPJ() {
       setIsModalOpen(false);
       toast.success("Status Pengajuan Honor berhasil diperbarui!");
       setUpdate({ id: "", status: "Disetujui", verifyNote: "" });
-    } catch (error) {
+    } catch {
       toast.error("Gagal memperbarui Status Pengajuan Honor!");
-      console.error(error);
     }
   };
 
@@ -188,7 +150,6 @@ function SPJ() {
     setInput((prev) => ({ ...prev, userId: "" }));
   }, [input.subSurveyActivityId]);
 
-  // Ambil user unik dari hasil userProgress
   const petugasOptions: UserProgressForSelect[] = useMemo(
     () => userProgressData?.userProgressBySubSurveyActivityId ?? [],
     [userProgressData]
@@ -197,8 +158,12 @@ function SPJ() {
   const filteredSPJ = useMemo(() => {
     const rows: SPJWithUserNSubSurvey[] = SPJData?.getAllSPJ ?? [];
     return rows.filter((spj) => {
-      // jika bukan Admin: hanya tampilkan milik user sendiri
-      if (user?.role !== "Admin" && user?.role !== "Superadmin" && spj.userId !== user?.id) return false;
+      if (
+        user?.role !== "Admin" &&
+        user?.role !== "Superadmin" &&
+        spj.userId !== user?.id
+      )
+        return false;
       const matchesJenis =
         !filter.jenisSurvei ||
         spj.subSurveyActivity?.name === filter.jenisSurvei;
@@ -208,25 +173,26 @@ function SPJ() {
     });
   }, [SPJData, user, filter]);
 
-  // ==== UI ====
   return (
-    <div className="px-8 py-4 space-y-4 font-Poppins">
-      <div className="bg-orange-50 rounded-lg p-2 font-bold text-xl flex justify-between shadow-md">
+    <div className="max-w-screen-xl mx-auto px-3 sm:px-6 md:px-8 py-4 space-y-4 font-Poppins">
+      <div className="bg-orange-50 rounded-lg p-3 md:p-4 font-bold text-lg md:text-xl shadow-md">
         Pengajuan Honor
       </div>
 
       {/* Filter */}
-      <div className="bg-orange-50 rounded-lg p-2 font-bold text-xl shadow-md space-y-5">
-        <div>Filter SPJ</div>
-        <div className="flex justify-between space-x-14 text-sm">
-          <div className="w-full">
-            Jenis Survei
+      <div className="bg-white rounded-lg p-4 shadow space-y-3">
+        <p className="font-semibold">Filter SPJ</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Jenis Survei
+            </label>
             <select
               id="jenisSurvei"
               onChange={(e) =>
                 setFilter({ ...filter, jenisSurvei: e.target.value })
               }
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              className="w-full px-3 py-2 border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">-- Pilih Jenis Survei --</option>
               {subSurveyData?.allSubSurveyActivities?.map(
@@ -238,14 +204,16 @@ function SPJ() {
               )}
             </select>
           </div>
-          <div className="w-full">
-            Status Pengajuan
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Status Pengajuan
+            </label>
             <select
               id="statusPengajuan"
               onChange={(e) =>
                 setFilter({ ...filter, statusPengajuan: e.target.value })
               }
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              className="w-full px-3 py-2 border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">-- Pilih Status Pengajuan --</option>
               <option value="Menunggu">Menunggu</option>
@@ -256,39 +224,29 @@ function SPJ() {
         </div>
       </div>
 
-      <div className="font-bold text-xl">Monitoring Pengajuan Honor</div>
+      <div className="font-bold text-lg">Monitoring Pengajuan Honor</div>
 
-      {/* Tabel */}
-      <div className="relative shadow-md">
-        <table className="table-fixed w-full text-sm text-left text-gray-500">
-          <thead className="text-gray-700 bg-orange-50 block w-full sm:rounded-t-lg">
-            <tr className="table w-full table-fixed">
-              <th scope="col" className="px-6 py-3 uppercase">
-                <div className="flex items-center">Nama Petugas</div>
-              </th>
-              <th scope="col" className="px-6 py-3 uppercase">
-                <div className="flex items-center">Kegiatan Survei</div>
-              </th>
-              <th scope="col" className="px-6 py-3 uppercase">
-                <div className="flex items-center">Status Pengajuan</div>
-              </th>
-              <th scope="col" className="px-6 py-3 uppercase flex justify-end">
-                <div className="flex items-center">Aksi</div>
-              </th>
+      {/* Tabel (desktop) */}
+      <div className="hidden sm:block relative shadow-md rounded-lg overflow-hidden">
+        <table className="min-w-[720px] w-full text-sm text-left text-gray-600">
+          <thead className="text-gray-700 bg-gray-200">
+            <tr>
+              <th className="px-6 py-3 uppercase">Nama Petugas</th>
+              <th className="px-6 py-3 uppercase">Kegiatan Survei</th>
+              <th className="px-6 py-3 uppercase">Status Pengajuan</th>
+              <th className="px-6 py-3 uppercase text-right">Aksi</th>
             </tr>
           </thead>
-          <tbody className="block max-h-96 overflow-y-auto w-full">
-            {/* Loading */}
+          <tbody className="bg-white">
             {!SPJData && (
-              <tr className="table w-full table-fixed">
+              <tr>
                 <td colSpan={4} className="px-6 py-6 text-center">
                   Memuat data…
                 </td>
               </tr>
             )}
-            {/* Empty state */}
             {SPJData && filteredSPJ.length === 0 && (
-              <tr className="table w-full table-fixed">
+              <tr>
                 <td colSpan={4} className="px-6 py-6 text-center text-gray-500">
                   {filter.jenisSurvei || filter.statusPengajuan
                     ? "Tidak ada pengajuan yang cocok dengan filter saat ini."
@@ -296,28 +254,26 @@ function SPJ() {
                 </td>
               </tr>
             )}
-            {/* Rows */}
-            {filteredSPJ.map((spj: SPJWithUserNSubSurvey) => (
-              <tr
-                key={spj.id}
-                className="table w-full table-fixed bg-white border-b text-black font-semibold"
-              >
-                <td className="px-6 py-4">{spj?.user?.name || "-"}</td>
+            {filteredSPJ.map((spj) => (
+              <tr key={spj.id} className="border-t">
+                <td className="px-6 py-4 font-semibold text-gray-900">
+                  {spj.user?.name || "-"}
+                </td>
                 <td className="px-6 py-4">
-                  {spj?.subSurveyActivity?.name || "-"}
+                  {spj.subSurveyActivity?.name || "-"}
                 </td>
                 <td className="px-6 py-4">
                   <span
-                    className={`inline-block px-2 py-1 text-sm font-medium rounded
-              ${
-                spj.submitState === "Disetujui"
-                  ? "bg-green-100 text-green-700"
-                  : spj.submitState === "Ditolak"
-                    ? "bg-red-100 text-red-700"
-                    : "bg-yellow-100 text-yellow-700"
-              }`}
+                    className={`inline-block px-2 py-1 text-xs font-semibold rounded
+                    ${
+                      spj.submitState === "Disetujui"
+                        ? "bg-green-100 text-green-700"
+                        : spj.submitState === "Ditolak"
+                          ? "bg-red-100 text-red-700"
+                          : "bg-yellow-100 text-yellow-700"
+                    }`}
                   >
-                    {spj?.submitState}
+                    {spj.submitState}
                   </span>
                 </td>
                 <td className="px-6 py-4 text-right">
@@ -325,12 +281,9 @@ function SPJ() {
                     onClick={() => {
                       setSelectedSPJ(spj);
                       setIsModalOpen(true);
-                      setUpdate((u) => ({
-                        ...u,
-                        id: spj.id,
-                      }));
+                      setUpdate((u) => ({ ...u, id: spj.id }));
                     }}
-                    className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+                    className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
                   >
                     Lihat Detail
                   </button>
@@ -341,20 +294,73 @@ function SPJ() {
         </table>
       </div>
 
-      {/* Form Pengajuan Honor */}
-      {user?.role === "Admin" || user?.role === "Superadmin" && (
-        <div className="bg-orange-50 rounded-lg p-4 shadow-md">
-          <h1 className="text-2xl font-bold mb-4">Form Pengajuan Honor</h1>
-          <form onSubmit={handleSubmit} className="space-y-4 ">
+      {/* Kartu (mobile) */}
+      <div className="sm:hidden space-y-3">
+        {!SPJData ? (
+          <div className="bg-white rounded-lg p-3 shadow text-center">
+            Memuat data…
+          </div>
+        ) : filteredSPJ.length === 0 ? (
+          <div className="bg-white rounded-lg p-3 shadow text-center text-gray-500">
+            {filter.jenisSurvei || filter.statusPengajuan
+              ? "Tidak ada pengajuan yang cocok dengan filter saat ini."
+              : "Belum ada pengajuan honor."}
+          </div>
+        ) : (
+          filteredSPJ.map((spj) => (
+            <div key={spj.id} className="bg-white rounded-lg p-3 shadow">
+              <div className="flex justify-between gap-2">
+                <div>
+                  <p className="font-semibold">{spj.user?.name || "-"}</p>
+                  <p className="text-xs text-gray-600">
+                    {spj.subSurveyActivity?.name || "-"}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setSelectedSPJ(spj);
+                    setIsModalOpen(true);
+                    setUpdate((u) => ({ ...u, id: spj.id }));
+                  }}
+                  className="px-3 py-1 bg-blue-600 text-white rounded text-sm"
+                >
+                  Detail
+                </button>
+              </div>
+              <div className="mt-2 text-sm">
+                <span className="text-gray-500 mr-1">Status:</span>
+                <span
+                  className={`px-2 py-0.5 rounded text-xs font-semibold
+                  ${
+                    spj.submitState === "Disetujui"
+                      ? "bg-green-100 text-green-700"
+                      : spj.submitState === "Ditolak"
+                        ? "bg-red-100 text-red-700"
+                        : "bg-yellow-100 text-yellow-700"
+                  }`}
+                >
+                  {spj.submitState}
+                </span>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Form (hanya Admin/Superadmin) */}
+      {(user?.role === "Admin" || user?.role === "Superadmin") && (
+        <div className="bg-white rounded-lg p-4 shadow">
+          <h2 className="text-lg font-bold mb-3">Form Pengajuan Honor</h2>
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm mb-1 font-semibold">
+              <label className="block text-sm font-semibold mb-1">
                 Kegiatan Survei
               </label>
               <select
                 id="subSurveyActivityId"
                 value={input.subSurveyActivityId}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full px-3 py-2 border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">-- Pilih Kegiatan --</option>
                 {subSurveyData?.allSubSurveyActivities?.map(
@@ -367,7 +373,7 @@ function SPJ() {
               </select>
             </div>
             <div>
-              <label className="block text-sm mb-1 font-semibold">
+              <label className="block text-sm font-semibold mb-1">
                 Petugas
               </label>
               <select
@@ -375,7 +381,7 @@ function SPJ() {
                 value={input.userId}
                 onChange={handleChange}
                 disabled={!input.subSurveyActivityId || loadingPetugas}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-gray-100"
+                className="w-full px-3 py-2 border rounded-md bg-white disabled:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {!input.subSurveyActivityId ? (
                   <option value="">-- Pilih Kegiatan terlebih dahulu --</option>
@@ -395,10 +401,8 @@ function SPJ() {
                 )}
               </select>
             </div>
-
-            {/* Catatan opsional */}
             <div>
-              <label className="block text-sm mb-1 font-semibold">
+              <label className="block text-sm font-semibold mb-1">
                 Catatan
               </label>
               <textarea
@@ -406,11 +410,9 @@ function SPJ() {
                 placeholder="Catatan (opsional)"
                 value={input.verifyNote}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full px-3 py-2 border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-
-            {/* File upload */}
             <div>
               <input
                 type="file"
@@ -418,14 +420,13 @@ function SPJ() {
                 accept=".pdf,image/*"
                 onChange={handleFileChange}
                 className="block w-full text-sm text-gray-900 file:mr-4 file:py-2 file:px-4
-                  file:rounded-md file:border-gray-500 file:text-sm file:font-semibold
-                  file:bg-white file:text-black hover:file:bg-gray-100"
+                           file:rounded-md file:border-gray-500 file:text-sm file:font-semibold
+                           file:bg-white file:text-black hover:file:bg-gray-100"
               />
               <p className="text-xs text-gray-500 mt-1">
                 Format: PDF/JPG/PNG. Maks 1MB.
               </p>
             </div>
-
             <button
               type="submit"
               disabled={loading}
@@ -440,18 +441,18 @@ function SPJ() {
       {/* Modal Detail */}
       {isModalOpen && selectedSPJ && (
         <div
-          className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center overflow-y-auto py-6"
+          className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center overflow-y-auto py-20"
           role="dialog"
           aria-modal="true"
         >
-          <div className="bg-white w-[90%] max-w-lg rounded-lg shadow-lg max-h-[90vh] flex flex-col">
-            <div className="flex justify-between items-center px-6 py-4 border-b shrink-0">
-              <h2 className="text-xl font-bold">Detail SPJ</h2>
+          <div className="bg-white w-[92%] sm:w-[560px] rounded-lg shadow-lg max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center px-4 sm:px-6 py-4 border-b">
+              <h2 className="text-lg sm:text-xl font-bold">Detail SPJ</h2>
               {selectedSPJ.eviDocumentSignedUrl ? (
                 <a
                   target="_blank"
                   href={selectedSPJ.eviDocumentSignedUrl}
-                  className="bg-blue-500 text-white px-4 py-2 rounded-md"
+                  className="bg-blue-600 text-white px-3 py-2 rounded-md text-sm"
                 >
                   Lihat Bukti
                 </a>
@@ -462,7 +463,7 @@ function SPJ() {
               )}
             </div>
 
-            <div className="p-6 space-y-3 overflow-y-auto">
+            <div className="p-4 sm:p-6 space-y-3 overflow-y-auto text-sm sm:text-base">
               <p>
                 <strong>Nama Petugas:</strong> {selectedSPJ.user?.name || "-"}
               </p>
@@ -484,9 +485,7 @@ function SPJ() {
               </p>
 
               <div className="pt-2">
-                <p className="mb-1">
-                  <strong>Status Persetujuan:</strong>
-                </p>
+                <p className="mb-1 font-medium">Status Persetujuan:</p>
                 <span
                   className={`inline-block px-3 py-1 text-sm font-semibold rounded-full ${
                     selectedSPJ.submitState === "Disetujui"
@@ -500,21 +499,21 @@ function SPJ() {
                 </span>
               </div>
 
-              {user?.role === "Admin" || user?.role === "SuperAdmin" && (
+              {user?.role === "Admin" || user?.role === "Superadmin" ? (
                 <form
                   onSubmit={handleUpdate}
-                  className="space-y-3 pt-4 border-t mt-4"
+                  className="space-y-3 pt-4 border-t mt-2"
                 >
-                  <h3 className="font-semibold">Form Ubah Status SPJ</h3>
-
                   <input
                     type="hidden"
                     id="id"
                     value={update.id}
                     onChange={handleChangeUpdate}
                   />
-
                   <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Ubah Status
+                    </label>
                     <select
                       id="status"
                       value={update.status}
@@ -525,17 +524,15 @@ function SPJ() {
                           id: selectedSPJ.id,
                         })
                       }
-                      className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      className="w-full px-3 py-2 border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="Menunggu">Menunggu</option>
                       <option value="Disetujui">Disetujui</option>
                       <option value="Ditolak">Ditolak</option>
                     </select>
                   </div>
-
                   <div>
                     <input
-                      type="text"
                       id="verifyNote"
                       placeholder="Catatan"
                       value={update.verifyNote}
@@ -546,11 +543,10 @@ function SPJ() {
                           id: selectedSPJ.id,
                         })
                       }
-                      className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      className="w-full px-3 py-2 border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
-
-                  <div className="flex justify-between pt-4">
+                  <div className="flex flex-col sm:flex-row sm:justify-between gap-2 pt-2">
                     <button
                       type="submit"
                       disabled={newloading}
@@ -558,7 +554,6 @@ function SPJ() {
                     >
                       {newloading ? "Menyimpan..." : "Update Status"}
                     </button>
-
                     <button
                       onClick={() => {
                         setIsModalOpen(false);
@@ -570,11 +565,23 @@ function SPJ() {
                         });
                       }}
                       className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+                      type="button"
                     >
                       Tutup
                     </button>
                   </div>
                 </form>
+              ) : (
+                <button
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    setSelectedSPJ(null);
+                  }}
+                  className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 flex justify-center w-full mt-2"
+                  type="button"
+                >
+                  Tutup
+                </button>
               )}
             </div>
           </div>

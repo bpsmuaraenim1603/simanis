@@ -13,6 +13,33 @@ registerEnumType(Role, {
 });
 
 @InputType()
+export class createUserDto {
+  @Field()
+  @IsNotEmpty({ message: 'Nama belum diisi' })
+  @IsString({ message: 'Nama harus berupa teks' })
+  name: string;
+
+  @Field()
+  @IsNotEmpty({ message: 'Password belum diisi' })
+  @Min(8, { message: 'Password diisi minimal 8 karakter' })
+  password: string;
+
+  @Field()
+  @IsNotEmpty({ message: 'Email belum diisi' })
+  @IsEmail({}, { message: 'Format Email tidak sesuai' })
+  email: string;
+
+  @Field()
+  @IsNotEmpty({ message: 'Nomor Telepon belum diisi' })
+  @Min(12, { message: 'Nomor Telepon diisi minimal 12 angka' })
+  phone_number: string;
+
+  @Field()
+  @IsNotEmpty({ message: 'Alamat belum diisi' })
+  address: string;
+}
+
+@InputType()
 export class RegisterDto {
   @Field()
   @IsNotEmpty({ message: 'Nama belum diisi' })

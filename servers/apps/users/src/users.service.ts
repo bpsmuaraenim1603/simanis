@@ -34,6 +34,12 @@ export class UsersService {
     private readonly emailService: EmailService,
   ) {}
 
+  // async createUser(user: Prisma.UserCreateInput) {
+  //   return this.prisma.user.create({
+  //     data: user,
+  //   });
+  // }
+
   // register user
   async register(registerDto: RegisterDto, response: Response) {
     const { name, email, phone_number, password, address } = registerDto;
@@ -191,7 +197,7 @@ export class UsersService {
     const forgotPasswordToken = await this.generateForgotPasswordLink(user);
 
     const resetPasswordUrl =
-      this.configService.get<string>('CLIENT_SIDE_URI') +
+      this.configService.get<string>('CLIENT_SIDE_URI_SECOND') +
       `/reset-password?verify=${forgotPasswordToken}`;
 
     await this.emailService.sendMail({

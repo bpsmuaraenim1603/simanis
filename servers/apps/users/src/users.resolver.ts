@@ -8,10 +8,12 @@ import {
   LogoutResponse,
   RegisterResponse,
   ResetPasswordResponse,
+  UserResponse,
   UserType,
 } from './types/users.types';
 import {
   ActivationDto,
+  createUserDto,
   ForgotPasswordDto,
   RegisterDto,
   ResetPasswordDto,
@@ -27,6 +29,12 @@ import { CurrentUser } from './decorators/current-user.decorator';
 // @UseFilters()
 export class UsersResolver {
   constructor(private readonly usersService: UsersService) {}
+
+  // @Mutation(() => UserResponse)
+  // async createUser(@Args('createUser') createUserDto: createUserDto): Promise<UserResponse> {
+  //   return await this.usersService.createUser(createUserDto);
+  // }
+
   @Mutation(() => RegisterResponse)
   async register(
     @Args('registerDto') registerDto: RegisterDto,

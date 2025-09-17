@@ -26,7 +26,6 @@ const ProgressTemplate = () => {
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [selectedCity, setSelectedCity] = useState<string>("");
 
-  // --- semua hooks di atas, tidak ada return dulu ---
   const { data: surveyData, loading: loadingSurvey } = useQuery(
     GET_SURVEY_ACTIVITIES_BY_SLUG,
     { variables: { slug }, skip: !slug, fetchPolicy: "network-only" }
@@ -55,7 +54,6 @@ const ProgressTemplate = () => {
   const userProgress: ProgressRow[] =
     (progressData?.userProgressBySubSurveyActivityId as ProgressRow[]) ?? [];
 
-  // --- useMemo JUGA sebelum guard ---
   const cities = useMemo<string[]>(() => {
     const list = userProgress
       .map((p) => p?.district?.city ?? "")
@@ -73,155 +71,109 @@ const ProgressTemplate = () => {
       ? Math.round((progress.submitCount / progress.targetSample) * 100)
       : 0;
 
-  // --- guard SETELAH semua hooks / useMemo ---
   if (loadingSurvey || loadingSubSurveyAll) return <div>Loading...</div>;
   if (!surveyData || !surveyData.surveyActivityBySlug) return <div>Data tidak ditemukan.</div>;
 
   return (
-    <div className="px-8 py-4 space-y-4 font-Poppins">
-      <div className="bg-orange-50 rounded-lg p-2 text-xl font-bold w-full shadow-md">
+    <div className="max-w-screen-xl mx-auto px-3 sm:px-6 md:px-8 py-4 space-y-4 font-Poppins">
+      <div className="bg-orange-50 rounded-lg p-3 md:p-4 text-lg md:text-xl font-bold w-full shadow-md">
         <h1>Progres {surveyData.surveyActivityBySlug.name}</h1>
       </div>
 
-      <div className="bg-orange-50 rounded-lg p-2 w-full shadow-md">
-        <p className="font-semibold text-xl">Pilih Jenis Survei:</p>
-        <div className="space-x-4 p-2 flex justify-start flex-wrap gap-2">
+      {/* Pilihan sub survey */}
+      <div className="bg-orange-50 rounded-lg p-3 md:p-4 w-full shadow-md">
+        <p className="font-semibold text-base md:text-lg mb-2">Pilih Jenis Survei:</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
           {subSurveyActivities.map((subSurvey: any) => (
             <div key={subSurvey.id} className="relative group">
               <button
-                onClick={() => {
-                  setSelectedSubSurvey(subSurvey.id);
-                  setSelectedName(subSurvey.name);
-                  setSelectedCity(""); // reset filter kota ketika ganti sub-survey
-                }}
-                className={`p-2 rounded-md border font-semibold ${
-                  selectedSubSurvey === subSurvey.id
-                    ? "bg-orange-500 text-white"
-                    : "bg-slate-700 text-white hover:bg-orange-500"
+                onClick={() => { setSelectedSubSurvey(subSurvey.id); setSelectedName(subSurvey.name); setSelectedCity(""); }}
+                className={`w-full p-2 rounded-md border font-semibold ${
+                  selectedSubSurvey === subSurvey.id ? "bg-orange-500 text-white" : "bg-slate-700 text-white hover:bg-orange-500"
                 }`}
               >
-                <span className="block truncate overflow-hidden text-ellipsis max-w-[220px]">
-                  {subSurvey.name}
-                </span>
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block bg-black text-white text-xs rounded py-1 px-2 whitespace-nowrap shadow-lg z-10">
-                  {subSurvey.name}
-                </div>
+                <span className="block truncate">{subSurvey.name}</span>
               </button>
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block bg-black text-white text-xs rounded py-1 px-2 whitespace-nowrap shadow-lg z-10">
+                {subSurvey.name}
+              </div>
             </div>
           ))}
         </div>
       </div>
 
       {selectedSubSurvey && progress && (
-        <div className="bg-orange-50 rounded-lg p-2 w-full shadow-md">
-          <h1 className="text-xl font-bold">{selectedName}</h1>
+        <div className="bg-orange-50 rounded-lg p-3 md:p-4 w-full shadow-md space-y-4">
+          <h1 className="text-lg md:text-xl font-bold">{selectedName}</h1>
 
-          <div className="p-2 space-x-4 flex flex-col md:flex-row justify-between items-stretch gap-3">
-            <div className="bg-slate-400 rounded-lg border w-full flex flex-col p-3 space-y-3 font-semibold">
+          {/* Ringkasan atas */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="bg-slate-400 rounded-lg border w-full p-3 space-y-2 font-semibold">
               <p>Periode</p>
-              <p className="text-xl">
-                {new Date(progress.startDate).toLocaleDateString("id-ID", {
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                })}{" "}
-                -{" "}
-                {new Date(progress.endDate).toLocaleDateString("id-ID", {
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                })}
+              <p className="text-base md:text-xl">
+                {new Date(progress.startDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} -{" "}
+                {new Date(progress.endDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
               </p>
             </div>
 
-            <div className="bg-slate-400 rounded-lg border w-full flex flex-col p-3 space-y-3 font-semibold">
+            <div className="bg-slate-400 rounded-lg border w-full p-3 space-y-2 font-semibold">
               <p>Target Sampel {progress.activityType}</p>
-              <p className="text-xl">{progress.targetSample} {progress.sampleType}</p>
+              <p className="text-base md:text-xl">{progress.targetSample} {progress.sampleType}</p>
             </div>
 
-            {/* NEW: Filter Wilayah berdasarkan district.city */}
-            <div className="bg-slate-400 rounded-lg border w-full flex flex-col p-2 space-y-2 font-semibold">
+            <div className="bg-slate-400 rounded-lg border w-full p-3 space-y-2 font-semibold">
               <p>Wilayah (Kota/Kab.)</p>
-              <div className="relative">
-                <select
-                  id="wilayah"
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                  value={selectedCity}
-                  onChange={(e) => setSelectedCity(e.target.value)}
-                  disabled={!cities.length}
-                >
-                  <option value="">-- Semua Wilayah --</option>
-                  {cities.map((city) => (
-                    <option key={city} value={city}>
-                      {city}
-                    </option>
-                  ))}
-                </select>
-                {!cities.length && (
-                  <p className="text-xs text-gray-700 mt-1">
-                    Tidak ada data kota pada user progress.
-                  </p>
-                )}
-              </div>
+              <select
+                id="wilayah"
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                value={selectedCity}
+                onChange={(e) => setSelectedCity(e.target.value)}
+                disabled={!cities.length}
+              >
+                <option value="">-- Semua Wilayah --</option>
+                {cities.map((city) => (<option key={city} value={city}>{city}</option>))}
+              </select>
+              {!cities.length && <p className="text-xs text-gray-700">Tidak ada data kota pada user progress.</p>}
             </div>
           </div>
 
-          <div className="p-2">
-            <p className="font-semibold text-sm mb-1 border-l-4 border-blue-500 pl-2">
-              Progres kegiatan
-            </p>
+          {/* Progress bar global */}
+          <div>
+            <p className="font-semibold text-sm mb-1 border-l-4 border-blue-500 pl-2">Progres kegiatan</p>
             <div className="w-full bg-gray-200 rounded-full h-3 relative">
-              <div
-                className="bg-blue-600 h-3 rounded-full"
-                style={{ width: `${overallPercent}%` }}
-              />
-              <span className="absolute right-0 top-[-24px] text-blue-600 font-bold text-xs">
-                {overallPercent}%
-              </span>
+              <div className="bg-blue-600 h-3 rounded-full" style={{ width: `${overallPercent}%` }} />
+              <span className="absolute right-0 -top-6 text-blue-600 font-bold text-xs">{overallPercent}%</span>
             </div>
-            <div className="flex justify-between text-xs text-gray-500 mt-1">
-              <span>0%</span>
-              <span>100%</span>
-            </div>
+            <div className="flex justify-between text-xs text-gray-500 mt-1"><span>0%</span><span>100%</span></div>
           </div>
 
-          <div className="flex flex-col space-y-2 p-2">
-            <p className="font-semibold text-xl">Progres Kegiatan</p>
-          </div>
-
-          <div className="p-2 space-x-4 flex justify-between items-center">
-            <div className="bg-blue-300 rounded-md flex flex-col items-center space-y-2 w-full py-2">
+          {/* Ringkasan angka 4 kolom */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="bg-blue-300 rounded-md flex flex-col items-center space-y-1 w-full py-2">
               <p>Total Petugas</p>
-              <p className="font-bold text-2xl text-blue-600">
-                {progress.totalPetugas}
-              </p>
+              <p className="font-bold text-xl md:text-2xl text-blue-600">{progress.totalPetugas}</p>
             </div>
-            <div className="bg-green-300 rounded-md flex flex-col items-center space-y-2 w-full py-2">
+            <div className="bg-green-300 rounded-md flex flex-col items-center space-y-1 w-full py-2">
               <p>Sampel Submitted</p>
-              <p className="font-bold text-2xl text-green-600">
-                {progress.submitCount}
-              </p>
+              <p className="font-bold text-xl md:text-2xl text-green-600">{progress.submitCount}</p>
             </div>
-            <div className="bg-purple-300 rounded-md flex flex-col items-center space-y-2 w-full py-2">
+            <div className="bg-purple-300 rounded-md flex flex-col items-center space-y-1 w-full py-2">
               <p>Sampel Approved</p>
-              <p className="font-bold text-2xl text-purple-600">
-                {progress.approvedCount}
-              </p>
+              <p className="font-bold text-xl md:text-2xl text-purple-600">{progress.approvedCount}</p>
             </div>
-            <div className="bg-red-300 rounded-md flex flex-col items-center space-y-2 w-full py-2">
+            <div className="bg-red-300 rounded-md flex flex-col items-center space-y-1 w-full py-2">
               <p>Sampel Rejected</p>
-              <p className="font-bold text-2xl text-red-600">
-                {progress.rejectedCount}
-              </p>
+              <p className="font-bold text-xl md:text-2xl text-red-600">{progress.rejectedCount}</p>
             </div>
           </div>
 
-          <div className="mt-4 bg-orange-50 rounded-lg p-4">
-            <h2 className="text-lg font-semibold mb-2 text-orange-600 border-b border-orange-200 pb-1">
+          {/* Tabel petugas */}
+          <div className="mt-2 bg-orange-50 rounded-lg">
+            <h2 className="text-base md:text-lg font-semibold mb-2 text-orange-600 border-b border-orange-200 pb-1">
               Petugas Pendataan Lapangan
             </h2>
             <div className="overflow-x-auto">
-              <table className="min-w-full table-auto text-sm text-left">
+              <table className="min-w-[760px] w-full table-auto text-sm text-left">
                 <thead className="bg-gray-100 text-gray-700 font-semibold">
                   <tr>
                     <th className="px-4 py-2">NAMA PETUGAS</th>
@@ -236,27 +188,15 @@ const ProgressTemplate = () => {
                 <tbody className="divide-y">
                   {filteredUserProgress.map((row: any) => {
                     const percent =
-                      row.totalAssigned > 0
-                        ? Math.round(
-                            (row.submitCount / row.totalAssigned) * 100
-                          )
-                        : 0;
+                      row.totalAssigned > 0 ? Math.round((row.submitCount / row.totalAssigned) * 100) : 0;
                     return (
                       <tr key={row.user.id}>
                         <td className="px-4 py-3 font-medium text-gray-800">
-                          <div className="flex items-center space-x-2">
-                            <div>
-                              <p>{row.user.name}</p>
-                              <p className="text-xs text-gray-500">
-                                {row.user.email}
-                              </p>
-                            </div>
-                          </div>
+                          <p className="truncate">{row.user.name}</p>
+                          <p className="text-xs text-gray-500 truncate">{row.user.email}</p>
                         </td>
                         <td className="px-4 py-3 text-gray-700">
-                          {/* tampilkan District Name + City bila ada */}
-                          {row?.district?.name ?? "-"}
-                          {row?.district?.city ? `, ${row.district.city}` : ""}
+                          {row?.district?.name ?? "-"}{row?.district?.city ? `, ${row.district.city}` : ""}
                         </td>
                         <td className="px-4 py-3">{row.totalAssigned}</td>
                         <td className="px-4 py-3">{row.submitCount}</td>
@@ -265,28 +205,18 @@ const ProgressTemplate = () => {
                         <td className="px-4 py-3">
                           <div className="w-full bg-gray-200 rounded-full h-2">
                             <div
-                              className={`h-2 rounded-full ${
-                                percent >= 80
-                                  ? "bg-green-500"
-                                  : percent >= 50
-                                    ? "bg-yellow-400"
-                                    : "bg-red-400"
-                              }`}
+                              className={`h-2 rounded-full ${percent >= 80 ? "bg-green-500" : percent >= 50 ? "bg-yellow-400" : "bg-red-400"}`}
                               style={{ width: `${percent}%` }}
                             />
                           </div>
-                          <p className="text-xs text-gray-600 mt-1">
-                            {percent}%
-                          </p>
+                          <p className="text-xs text-gray-600 mt-1">{percent}%</p>
                         </td>
                       </tr>
                     );
                   })}
                   {!filteredUserProgress.length && (
                     <tr>
-                      <td className="px-4 py-3 text-gray-600" colSpan={7}>
-                        Tidak ada data untuk wilayah yang dipilih.
-                      </td>
+                      <td className="px-4 py-3 text-gray-600" colSpan={7}>Tidak ada data untuk wilayah yang dipilih.</td>
                     </tr>
                   )}
                 </tbody>

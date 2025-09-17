@@ -6,19 +6,19 @@ import { motion, AnimatePresence } from "framer-motion";
 import { GET_ALL_USERS } from "@/src/graphql/actions/find-allusers.action";
 import { UPDATE_ROLE } from "@/src/graphql/actions/update-role.action";
 
-/**
- * ===== Utilities & constants (no re-creation on each render) =====
- */
-const ROLE_OPTIONS = [{label: "Super Admin", value: "Superadmin"}, {label: "Admin", value: "Admin"}, {label: "Supervisor", value: "Supervisor"}, {label: "User", value: "User"}] as const;
+const ROLE_OPTIONS = [
+  { label: "Super Admin", value: "Superadmin" },
+  { label: "Admin", value: "Admin" },
+  { label: "Supervisor", value: "Supervisor" },
+  { label: "User", value: "User" },
+] as const;
+
 const pretty = (s?: string | null) =>
   (s ?? "")
     .replaceAll("_", " ")
     .toLowerCase()
     .replace(/\b\w/g, (c) => c.toUpperCase());
 
-/**
- * Small, reusable cell wrapper with motion — avoids repeating the same motion props
- */
 function Cell({ children }: { children: React.ReactNode }) {
   return (
     <motion.div
@@ -32,25 +32,16 @@ function Cell({ children }: { children: React.ReactNode }) {
   );
 }
 
-/**
- * ===== Main Page =====
- */
 export default function SuperAdminManagePage() {
   const { data, loading, error, refetch } = useQuery(GET_ALL_USERS, {
     fetchPolicy: "cache-and-network",
   });
-
-  // Single source of truth for users
   const users = data?.getUsers ?? [];
-
-  // Local UI states
   const [searchTerm, setSearchTerm] = useState("");
   const [pending, setPending] = useState<Record<string, string>>({});
   const [updating, setUpdating] = useState<Record<string, boolean>>({});
-
   const [updateRole] = useMutation(UPDATE_ROLE);
 
-  // Derived: filtered users (memoized)
   const filteredUsers = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
     if (!q) return users;
@@ -61,7 +52,6 @@ export default function SuperAdminManagePage() {
     );
   }, [users, searchTerm]);
 
-  // Handlers (memoized to avoid re-creation)
   const handleChange = useCallback((userId: string, newRole: string) => {
     setPending((p) => (p[userId] === newRole ? p : { ...p, [userId]: newRole }));
   }, []);
@@ -98,131 +88,134 @@ export default function SuperAdminManagePage() {
   );
 
   return (
-    <div className="px-8 py-4 space-y-4 font-Poppins">
+    <div className="max-w-screen-xl mx-auto px-3 sm:px-6 md:px-8 py-4 space-y-4 font-Poppins">
       {/* Header */}
-      <div className="bg-orange-50 rounded-lg p-2 font-bold text-xl flex justify-between shadow-md">
-        Kelola Role Pengguna
-        <button
-          onClick={() => refetch()}
-          className="bg-blue-600 text-white px-4 py-1.5 rounded-md text-sm hover:bg-blue-700 transition font-semibold"
-        >
-          Refresh
-        </button>
+      <div className="bg-orange-50 rounded-lg p-3 md:p-4 font-bold text-lg md:text-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 shadow-md">
+        <span>Kelola Role Pengguna</span>
+        <div className="flex gap-2">
+          <button
+            onClick={() => refetch()}
+            className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700 transition font-semibold w-full sm:w-auto"
+          >
+            Refresh
+          </button>
+        </div>
       </div>
 
-      {/* Table */}
-      <div className="relative shadow-md">
-        <table className="table-fixed w-full text-sm text-left text-gray-500">
-          <thead className="text-gray-700 bg-gray-200 block w-full sm:rounded-t-lg">
-            <tr className="table w-full table-fixed">
-              <th className="px-6 py-3 uppercase">Nama</th>
-              <th className="px-6 py-3 uppercase">Email</th>
-              <th className="px-6 py-3 uppercase">Role</th>
-              <th className="px-6 py-3">
-                <div className="flex items-center">
-                  <input
-                    type="text"
-                    placeholder="Cari pengguna… (nama/email/role)"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="border focus:outline-none border-gray-300 bg-white rounded-md px-3 py-1 text-sm font-thin w-full"
-                  />
-                </div>
-              </th>
-            </tr>
-          </thead>
+      {/* Toolbar pencarian (dipisah dari thead supaya aman di mobile) */}
+      <div className="bg-white rounded-lg p-3 shadow flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
+        <label className="text-sm font-medium">Cari pengguna</label>
+        <input
+          type="text"
+          placeholder="Nama / email / role…"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="border focus:outline-none border-gray-300 bg-white rounded-md px-3 py-2 text-sm w-full sm:max-w-sm"
+        />
+      </div>
 
-          <tbody className="block max-h-96 overflow-y-auto w-full">
-            {loading && (
-              <tr className="table w-full">
-                <td colSpan={5} className="px-6 py-3 text-center">
-                  Memuat pengguna…
-                </td>
+      {/* Tabel responsif */}
+      <div className="relative shadow-md rounded-lg overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-[720px] w-full text-sm text-left text-gray-600">
+            <thead className="text-gray-700 bg-gray-200">
+              <tr>
+                <th className="px-4 md:px-6 py-3 uppercase text-xs md:text-sm">Nama</th>
+                <th className="px-4 md:px-6 py-3 uppercase text-xs md:text-sm">Email</th>
+                <th className="px-4 md:px-6 py-3 uppercase text-xs md:text-sm">Role</th>
+                <th className="px-4 md:px-6 py-3 uppercase text-xs md:text-sm text-right">Aksi</th>
               </tr>
-            )}
-            {error && (
-              <tr className="table w-full">
-                <td colSpan={5} className="px-6 py-3 text-center text-red-600">
-                  Terjadi kesalahan memuat data
-                </td>
-              </tr>
-            )}
-            {!loading && !error && filteredUsers.length === 0 && (
-              <tr className="table w-full">
-                <td colSpan={5} className="px-6 py-6 text-center text-gray-500">
-                  Tidak ada pengguna yang cocok dengan kata kunci "{searchTerm}"
-                </td>
-              </tr>
-            )}
+            </thead>
 
-            <AnimatePresence>
-              {filteredUsers.map((user: any) => {
-                const pendingRole = pending[user.id];
-                const effectiveRole = pendingRole ?? user.role;
-                const dirty = !!pendingRole && pendingRole !== user.role;
-                const isSaving = !!updating[user.id];
+            <tbody>
+              {loading && (
+                <tr>
+                  <td colSpan={4} className="px-6 py-4 text-center">
+                    Memuat pengguna…
+                  </td>
+                </tr>
+              )}
+              {error && (
+                <tr>
+                  <td colSpan={4} className="px-6 py-4 text-center text-red-600">
+                    Terjadi kesalahan memuat data
+                  </td>
+                </tr>
+              )}
+              {!loading && !error && filteredUsers.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-6 py-6 text-center text-gray-500">
+                    Tidak ada pengguna yang cocok dengan kata kunci "{searchTerm}"
+                  </td>
+                </tr>
+              )}
 
-                return (
-                  <tr
-                    key={user.id}
-                    className="bg-white border-b border-gray-200 table w-full table-fixed"
-                  >
-                    <td className="px-6 py-2 font-medium text-gray-900">
-                      <Cell>{user.name}</Cell>
-                    </td>
-                    <td className="px-6 py-2">
-                      <Cell>{user.email}</Cell>
-                    </td>
-                    <td className="px-6 py-2">
-                      <select
-                        className="w-full rounded-lg border px-3 py-2 text-sm outline-none bg-white"
-                        value={effectiveRole ?? ""}
-                        onChange={(e) => handleChange(user.id, e.target.value)}
-                      >
-                        <option value="" disabled>
-                          -- Pilih Role --
-                        </option>
-                        {ROLE_OPTIONS.map((r) => (
-                          <option key={r.label} value={r.value}>
-                            {pretty(r.label)}
+              <AnimatePresence>
+                {filteredUsers.map((user: any) => {
+                  const pendingRole = pending[user.id];
+                  const effectiveRole = pendingRole ?? user.role;
+                  const dirty = !!pendingRole && pendingRole !== user.role;
+                  const isSaving = !!updating[user.id];
+
+                  return (
+                    <tr key={user.id} className="bg-white border-t border-gray-200 align-top">
+                      <td className="px-4 md:px-6 py-3 font-medium text-gray-900 break-words">
+                        <Cell>{user.name}</Cell>
+                      </td>
+                      <td className="px-4 md:px-6 py-3 break-words">
+                        <Cell>{user.email}</Cell>
+                      </td>
+                      <td className="px-4 md:px-6 py-3">
+                        <select
+                          className="w-full rounded-lg border px-3 py-2 text-sm outline-none bg-white"
+                          value={effectiveRole ?? ""}
+                          onChange={(e) => handleChange(user.id, e.target.value)}
+                        >
+                          <option value="" disabled>
+                            -- Pilih Role --
                           </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="px-6 py-2 text-right">
-                      <div className="inline-flex gap-2">
-                        <button
-                          onClick={() => handleSave(user)}
-                          disabled={!dirty || isSaving}
-                          className={`rounded-lg px-3 py-2 text-sm font-medium text-white shadow-sm transition ${
-                            !dirty || isSaving
-                              ? "cursor-not-allowed bg-gray-300"
-                              : "bg-blue-600 hover:bg-blue-700"
-                          }`}
-                          title={!dirty ? "Tidak ada perubahan" : "Simpan perubahan"}
-                        >
-                          {isSaving ? "Menyimpan…" : "Simpan"}
-                        </button>
-                        <button
-                          onClick={() => handleReset(user.id)}
-                          disabled={!dirty || isSaving}
-                          className={`rounded-lg px-3 py-2 text-sm font-medium shadow-sm transition ${
-                            !dirty || isSaving
-                              ? "cursor-not-allowed bg-gray-100 text-gray-400"
-                              : "bg-white text-gray-700 hover:bg-gray-50"
-                          }`}
-                          title="Batalkan perubahan"
-                        >
-                          Reset
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </AnimatePresence>
-          </tbody>
-        </table>
+                          {ROLE_OPTIONS.map((r) => (
+                            <option key={r.label} value={r.value}>
+                              {pretty(r.label)}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="px-4 md:px-6 py-3">
+                        <div className="flex flex-col sm:flex-row justify-end gap-2">
+                          <button
+                            onClick={() => handleSave(user)}
+                            disabled={!dirty || isSaving}
+                            className={`rounded-lg px-3 py-2 text-sm font-medium text-white shadow-sm transition ${
+                              !dirty || isSaving
+                                ? "cursor-not-allowed bg-gray-300"
+                                : "bg-blue-600 hover:bg-blue-700"
+                            }`}
+                            title={!dirty ? "Tidak ada perubahan" : "Simpan perubahan"}
+                          >
+                            {isSaving ? "Menyimpan…" : "Simpan"}
+                          </button>
+                          <button
+                            onClick={() => handleReset(user.id)}
+                            disabled={!dirty || isSaving}
+                            className={`rounded-lg px-3 py-2 text-sm font-medium shadow-sm transition ${
+                              !dirty || isSaving
+                                ? "cursor-not-allowed bg-gray-100 text-gray-400"
+                                : "bg-white text-gray-700 hover:bg-gray-50"
+                            }`}
+                            title="Batalkan perubahan"
+                          >
+                            Reset
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </AnimatePresence>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

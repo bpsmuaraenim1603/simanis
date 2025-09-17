@@ -30,27 +30,6 @@ interface CalendarEvent {
 }
 
 function Dashboard() {
-  type User = {
-    id: string;
-    name: string;
-    email: string;
-    password: string;
-    role: string;
-    address: string;
-    phone_number: string;
-    updatedAt: string;
-  };
-
-  type SubSurveyActivity = {
-    id: string;
-    name: string;
-    slug: string;
-    surveyActivityId: string;
-    startDate: string;
-    endDate: string;
-    targetSample: number;
-  };
-
   type SubSurveyProgress = {
     startDate: string;
     endDate: string;
@@ -64,10 +43,7 @@ function Dashboard() {
   };
 
   type UserProgress = {
-    user: {
-      id: string;
-      name: string;
-    };
+    user: { id: string; name: string };
     userId: string;
     subSurveyActivity: {
       id: string;
@@ -117,52 +93,20 @@ function Dashboard() {
       userProgressData?.allUserSurveyProgress?.map((item) => [
         item.subSurveyActivity.id,
         item.subSurveyActivity.name,
-      ])
+      ]) ?? []
     ),
   ];
-
-  const toggleTable = (index: string) => {
-    setIsMinimized((prev) => ({
-      ...prev,
-      [index]: !prev[index],
-    }));
-  };
-
-  const toggleAllTables = (close: boolean) => {
-    const newState: Record<string, boolean> = {};
-    Object.keys(
-      filteredEvents.reduce<Record<string, CalendarEvent[]>>(
-        (groups, event) => {
-          const key = event.surveyEvent;
-          if (!groups[key]) groups[key] = [];
-          groups[key].push(event);
-          return groups;
-        },
-        {}
-      )
-    ).forEach((key) => {
-      newState[key] = close;
-    });
-
-    setIsMinimized(newState);
-  };
 
   const fetchEvents = async () => {
     try {
       const res = await axios.get("../../../../api/cals", {
         headers: { "Cache-Control": "no-store" },
       });
-
-      if (res.status !== 200) {
-        throw new Error("Gagal terhubung ke database");
-      }
-
-      // Convert numeric ids to strings for FullCalendar compatibility
+      if (res.status !== 200) throw new Error("Gagal terhubung ke database");
       const formattedEvents = res.data.cals.map((event: any) => ({
         ...event,
         id: String(event.id),
       }));
-
       setEvents(formattedEvents);
     } catch (error) {
       console.log("Error memuat database: ", error);
@@ -170,17 +114,12 @@ function Dashboard() {
   };
 
   const filteredEvents = events.filter((event) => {
-    const isTitleMatch = event.title
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase());
-    const isThisSurvey = event.surveyEvent
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase());
-    const isInfoMatch = event.info
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase());
-
-    return isTitleMatch || isThisSurvey || isInfoMatch;
+    const q = searchTerm.toLowerCase();
+    return (
+      event.title.toLowerCase().includes(q) ||
+      event.surveyEvent.toLowerCase().includes(q) ||
+      event.info.toLowerCase().includes(q)
+    );
   });
 
   const groupedEntries = useMemo(() => {
@@ -195,20 +134,26 @@ function Dashboard() {
     return Object.entries(groups);
   }, [filteredEvents]);
 
-  useEffect(() => {
-    const groupedEvents = filteredEvents.reduce<
-      Record<string, CalendarEvent[]>
-    >((groups, event) => {
-      const key = event.surveyEvent;
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(event);
-      return groups;
-    }, {});
+  const toggleTable = (key: string) =>
+    setIsMinimized((prev) => ({ ...prev, [key]: !prev[key] }));
 
-    const allClosed = Object.keys(groupedEvents).every(
+  const toggleAllTables = (close: boolean) => {
+    const newState: Record<string, boolean> = {};
+    groupedEntries.forEach(([key]) => (newState[key] = close));
+    setIsMinimized(newState);
+  };
+
+  useEffect(() => {
+    const grouped = filteredEvents.reduce<Record<string, CalendarEvent[]>>(
+      (groups, e) => {
+        (groups[e.surveyEvent] ||= []).push(e);
+        return groups;
+      },
+      {}
+    );
+    const allClosed = Object.keys(grouped).every(
       (surveyEvent) => isMinimized[surveyEvent] === true
     );
-
     setIsCloseTable(allClosed);
   }, [isMinimized, filteredEvents]);
 
@@ -217,244 +162,330 @@ function Dashboard() {
   }, []);
 
   return (
-    <div className="px-8 py-4 space-y-4 font-Poppins">
-      <div className="bg-orange-50 rounded-lg p-2 font-bold text-xl flex justify-between shadow-md">
-        Beranda
+    <div className="max-w-screen-xl mx-auto px-3 sm:px-6 md:px-8 py-4 space-y-4 font-Poppins">
+      {/* Header */}
+      <div className="bg-orange-50 rounded-lg p-3 md:p-4 font-bold text-lg md:text-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 shadow-md">
+        <span>Beranda</span>
         <button
           onClick={fetchEvents}
-          className="bg-blue-600 text-white px-4 py-1.5 rounded-md text-sm hover:bg-blue-700 transition font-semibold"
+          className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700 transition font-semibold w-full sm:w-auto"
         >
           Refresh
         </button>
       </div>
-      <div className="relative shadow-md">
-        <table className="table-fixed w-full text-sm text-left text-gray-500">
-          <thead className="text-gray-700 bg-gray-200 block w-full sm:rounded-t-lg">
-            <tr className="table w-full table-fixed">
-              <th scope="col" className="px-6 py-3 uppercase">
-                Kegiatan Survei
-              </th>
-              <th scope="col" className="px-6 py-3 uppercase">
-                <div className="flex items-center">Jadwal Kegiatan</div>
-              </th>
-              <th scope="col" className="px-6 py-3 uppercase">
-                <div className="flex items-center">Keterangan</div>
-              </th>
-              <th scope="col" className="px-6 py-3">
-                <div className="flex items-center">
-                  <input
-                    type="text"
-                    placeholder="Cari kegiatan..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="border focus:outline-none border-gray-300 bg-white rounded-md px-3 py-1 text-sm font-thin w-full"
-                  />
-                </div>
-              </th>
-            </tr>
-          </thead>
-          <tbody className="block max-h-96 overflow-y-auto w-full">
-            {/* Empty state: tidak ada data / hasil pencarian */}
-            {groupedEntries.length === 0 ? (
-              <tr className="table w-full">
-                <td colSpan={4} className="px-6 py-6 text-center text-gray-500">
-                  {searchTerm ? (
-                    <>
-                      Tidak ada kegiatan yang cocok untuk "
-                      <span className="font-semibold">{searchTerm}</span>"
-                    </>
-                  ) : (
-                    "Belum ada jadwal kegiatan."
-                  )}
+
+      {/* Toolbar pencarian */}
+      <div className="bg-white rounded-lg p-3 shadow flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
+        <label className="text-sm font-medium">Cari kegiatan</label>
+        <input
+          type="text"
+          placeholder="Nama kegiatan / info …"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="border focus:outline-none border-gray-300 bg-white rounded-md px-3 py-2 text-sm w-full sm:max-w-sm"
+        />
+      </div>
+
+      {/* ======= Jadwal Kegiatan ======= */}
+      {/* Desktop/Tablets: tabel scroll horizontal */}
+      <div className="hidden sm:block bg-white rounded-lg shadow">
+        <div className="w-full overflow-x-auto">
+          <table className="min-w-[900px] w-full text-sm text-left text-gray-600">
+            <thead className="text-gray-700 bg-gray-200">
+              <tr>
+                <th className="px-6 py-3 uppercase">Kegiatan Survei</th>
+                <th className="px-6 py-3 uppercase">Jadwal Kegiatan</th>
+                <th className="px-6 py-3 uppercase">Keterangan</th>
+                <th className="px-6 py-3 text-right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {/* Empty */}
+              {groupedEntries.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-6 py-6 text-center text-gray-500">
+                    {searchTerm ? (
+                      <>
+                        Tidak ada kegiatan yang cocok untuk{" "}
+                        <span className="font-semibold">"{searchTerm}"</span>
+                      </>
+                    ) : (
+                      "Belum ada jadwal kegiatan."
+                    )}
+                  </td>
+                </tr>
+              ) : null}
+
+              {groupedEntries.map(([surveyEvent, list]) => {
+                list.sort(
+                  (a, b) => +new Date(a.start) - +new Date(b.start)
+                );
+                const minimized = isMinimized[surveyEvent] ?? false;
+                return (
+                  <React.Fragment key={surveyEvent}>
+                    <tr className="bg-gray-100 border-y border-gray-300">
+                      <td colSpan={3} className="px-6 py-2 font-bold text-gray-800">
+                        {surveyEvent}
+                      </td>
+                      <td className="px-6 py-2">
+                        <div className="flex justify-end">
+                          <button
+                            onClick={() => toggleTable(surveyEvent)}
+                            className="inline-flex items-center px-2 py-1 rounded-md border text-sm"
+                            title={minimized || isCloseTable ? "Buka" : "Tutup"}
+                          >
+                            {minimized || isCloseTable ? (
+                              <>
+                                <span className="mr-1">Buka</span>
+                                <ChevronDown size={16} />
+                              </>
+                            ) : (
+                              <>
+                                <span className="mr-1">Tutup</span>
+                                <ChevronUp size={16} />
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    <AnimatePresence>
+                      {(minimized || isCloseTable) ? null : list.map((event) => (
+                        <tr key={event.id} className="bg-white border-b border-gray-200 align-top">
+                          <td className="px-6 py-2 font-medium text-gray-900">
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.1 }}
+                            >
+                              {event.title}
+                            </motion.div>
+                          </td>
+                          <td className="px-6 py-2">
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.1 }}
+                            >
+                              {new Date(event.start).toLocaleDateString("id-ID", {
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric",
+                              })}{" "}
+                              -{" "}
+                              {new Date(event.end).toLocaleDateString("id-ID", {
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric",
+                              })}
+                            </motion.div>
+                          </td>
+                          <td className="px-6 py-2">
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.1 }}
+                            >
+                              {event.info}
+                            </motion.div>
+                          </td>
+                          <td className="px-6 py-2 text-right">
+                            <a href="#" className="font-medium text-blue-600 hover:underline">
+                              Edit
+                            </a>
+                          </td>
+                        </tr>
+                      ))}
+                    </AnimatePresence>
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="text-gray-700 bg-gray-200">
+                <td colSpan={4} className="px-6 py-2">
+                  <div className="flex justify-end items-center">
+                    {isCloseTable ? (
+                      <button
+                        onClick={() => toggleAllTables(false)}
+                        className="flex items-center px-3 py-1.5 rounded-md bg-gray-900 text-white"
+                      >
+                        <span className="mr-1">Buka Jadwal</span>
+                        <ChevronDown size={16} />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => toggleAllTables(true)}
+                        className="flex items-center px-3 py-1.5 rounded-md bg-gray-900 text-white"
+                      >
+                        <span className="mr-1">Tutup Jadwal</span>
+                        <ChevronUp size={16} />
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
-            ) : null}
-
-            {groupedEntries.map(([surveyEvent, events]) => {
-              events.sort(
-                (a, b) =>
-                  new Date(a.start).getTime() - new Date(b.start).getTime()
-              );
-              const minimized = isMinimized[surveyEvent] ?? false;
-              return (
-                <React.Fragment key={surveyEvent}>
-                  <tr className="bg-gray-100 border-b border-gray-300 table w-full table-fixed">
-                    <td
-                      colSpan={3}
-                      className="px-6 py-2 font-bold text-gray-800"
-                    >
-                      {surveyEvent}
-                    </td>
-                    <td className="px-6 py-2 text-gray-600">
-                      <div className="flex justify-end">
-                        <button onClick={() => toggleTable(surveyEvent)}>
-                          {minimized || isCloseTable ? (
-                            <ChevronUp size={16} className="mt-1" />
-                          ) : (
-                            <ChevronDown size={16} className="mt-1" />
-                          )}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                  <AnimatePresence>
-                    {minimized || isCloseTable
-                      ? null
-                      : events.map((event) => (
-                          <tr
-                            key={event.id}
-                            className="bg-white border-b border-gray-200 table w-full table-fixed"
-                          >
-                            <td
-                              scope="row"
-                              className="px-12 py-2 font-medium text-gray-900 whitespace-nowrap"
-                            >
-                              <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: "auto", opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                transition={{ duration: 0.1 }}
-                              >
-                                {event.title}
-                              </motion.div>
-                            </td>
-                            <td className="px-6 py-2">
-                              <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: "auto", opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                transition={{ duration: 0.1 }}
-                              >
-                                {new Date(event.start).toLocaleDateString(
-                                  "id-ID",
-                                  {
-                                    day: "2-digit",
-                                    month: "short",
-                                    year: "numeric",
-                                  }
-                                )}{" "}
-                                -{" "}
-                                {new Date(event.end).toLocaleDateString(
-                                  "id-ID",
-                                  {
-                                    day: "2-digit",
-                                    month: "short",
-                                    year: "numeric",
-                                  }
-                                )}
-                              </motion.div>
-                            </td>
-                            <td className="px-6 py-2">
-                              <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: "auto", opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                transition={{ duration: 0.1 }}
-                              >
-                                {event.info}
-                              </motion.div>
-                            </td>
-                            <td className="px-6 py-2 text-right">
-                              <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: "auto", opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                transition={{ duration: 0.1 }}
-                              >
-                                <a
-                                  href="#"
-                                  className="font-medium text-blue-600 hover:underline"
-                                >
-                                  Edit
-                                </a>
-                              </motion.div>
-                            </td>
-                          </tr>
-                        ))}
-                  </AnimatePresence>
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-          <tfoot className="block w-full rounded-b-lg">
-            <tr className="text-gray-700 bg-gray-200 table w-full table-fixed">
-              <td colSpan={4} className="px-6 py-2">
-                <div className="flex justify-end items-center">
-                  {isCloseTable ? (
-                    <button
-                      onClick={() => toggleAllTables(false)}
-                      className="flex items-center px-2 bg-gray-900 rounded-md border-gray-900 border-2"
-                    >
-                      <p className="text-sm font-bold text-white">
-                        Buka Jadwal
-                      </p>
-                      <div className="pl-1 pb-1">
-                        <ChevronDown size={16} className="mt-1 text-white" />
-                      </div>
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => toggleAllTables(true)}
-                      className="flex items-center px-2 bg-gray-900 rounded-md border-gray-900 border-2"
-                    >
-                      <p className="text-sm font-bold text-white">
-                        Tutup Jadwal
-                      </p>
-                      <div className="pl-1 pb-1">
-                        <ChevronUp size={16} className="mt-1 text-white" />
-                      </div>
-                    </button>
-                  )}
-                </div>
-              </td>
-            </tr>
-          </tfoot>
-        </table>
+            </tfoot>
+          </table>
+        </div>
       </div>
-      <div className="space-x-4 flex justify-between items-center">
-        <div className="p-2 bg-orange-50 rounded-lg shadow-md font-bold w-full">
+
+      {/* Mobile: jadikan list kartu per kegiatan */}
+      <div className="sm:hidden space-y-3">
+        {groupedEntries.length === 0 ? (
+          <div className="bg-white rounded-lg p-3 shadow text-center text-gray-500">
+            {searchTerm ? (
+              <>
+                Tidak ada kegiatan yang cocok untuk{" "}
+                <span className="font-semibold">"{searchTerm}"</span>
+              </>
+            ) : (
+              "Belum ada jadwal kegiatan."
+            )}
+          </div>
+        ) : null}
+
+        {groupedEntries.map(([surveyEvent, list]) => {
+          const minimized = isMinimized[surveyEvent] ?? false;
+          const sorted = [...list].sort(
+            (a, b) => +new Date(a.start) - +new Date(b.start)
+          );
+          return (
+            <div key={surveyEvent} className="bg-white rounded-lg shadow">
+              <div className="flex items-center justify-between px-3 py-2 border-b">
+                <h3 className="font-semibold">{surveyEvent}</h3>
+                <button
+                  onClick={() => toggleTable(surveyEvent)}
+                  className="inline-flex items-center px-2 py-1 rounded-md border text-sm"
+                >
+                  {minimized ? (
+                    <>
+                      <span className="mr-1">Buka</span>
+                      <ChevronDown size={16} />
+                    </>
+                  ) : (
+                    <>
+                      <span className="mr-1">Tutup</span>
+                      <ChevronUp size={16} />
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <AnimatePresence>
+                {minimized ? null : (
+                  <motion.ul
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="divide-y"
+                  >
+                    {sorted.map((event) => (
+                      <li key={event.id} className="p-3">
+                        <p className="font-medium text-gray-900">{event.title}</p>
+                        <p className="text-sm text-gray-700">
+                          {new Date(event.start).toLocaleDateString("id-ID", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })}{" "}
+                          -{" "}
+                          {new Date(event.end).toLocaleDateString("id-ID", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </p>
+                        {event.info && (
+                          <p className="text-sm text-gray-600 mt-1">{event.info}</p>
+                        )}
+                        <div className="pt-2">
+                          <a href="#" className="text-blue-600 text-sm font-medium">
+                            Edit
+                          </a>
+                        </div>
+                      </li>
+                    ))}
+                  </motion.ul>
+                )}
+              </AnimatePresence>
+            </div>
+          );
+        })}
+
+        <div className="flex justify-end">
+          {isCloseTable ? (
+            <button
+              onClick={() => toggleAllTables(false)}
+              className="flex items-center px-3 py-1.5 rounded-md bg-gray-900 text-white"
+            >
+              <span className="mr-1">Buka Semua</span>
+              <ChevronDown size={16} />
+            </button>
+          ) : (
+            <button
+              onClick={() => toggleAllTables(true)}
+              className="flex items-center px-3 py-1.5 rounded-md bg-gray-900 text-white"
+            >
+              <span className="mr-1">Tutup Semua</span>
+              <ChevronUp size={16} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ======= Headline Cards ======= */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="p-3 md:p-4 bg-orange-50 rounded-lg shadow-md font-bold">
           <h2>PROGRES PENDATAAN BULAN INI</h2>
         </div>
-        <div className="p-2 bg-orange-50 rounded-lg shadow-md font-bold w-full">
+        <div className="p-3 md:p-4 bg-orange-50 rounded-lg shadow-md font-bold">
           <h2>PENCAPAIAN PETUGAS</h2>
         </div>
       </div>
-      <div className="space-x-4 flex justify-between items-center">
-        <div className="p-2 bg-orange-50 rounded-lg shadow-md w-full">
-          <p className="text-md font-bold">Petugas Aktif</p>
+
+      {/* ======= KPI Cards ======= */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
+        <div className="p-4 bg-orange-50 rounded-lg shadow-md">
+          <p className="text-sm font-semibold">Petugas Aktif</p>
           <h2 className="font-bold text-2xl">
             {monthlyStats?.getMonthlySurveyStats?.totalActiveUsers ?? "-"}
           </h2>
-          <p>Selama sebulan ini</p>
+          <p className="text-sm">Selama sebulan ini</p>
         </div>
-        <div className="p-2 bg-orange-50 rounded-lg shadow-md w-full">
-          <p className="text-md font-bold">Kendala Petugas</p>
+        <div className="p-4 bg-orange-50 rounded-lg shadow-md">
+          <p className="text-sm font-semibold">Kendala Petugas</p>
           <h2 className="font-bold text-2xl">0</h2>
-          <p>Selama sebulan ini</p>
+          <p className="text-sm">Selama sebulan ini</p>
         </div>
-        <div className="p-2 bg-orange-50 rounded-lg shadow-md w-full">
-          <p className="text-md font-bold">Pengumpulan ST</p>
+        <div className="p-4 bg-orange-50 rounded-lg shadow-md">
+          <p className="text-sm font-semibold">Pengumpulan ST</p>
           <h2 className="font-bold text-2xl">
             {monthlyStats?.getMonthlySurveyStats?.totalJobLetters ?? "-"}
           </h2>
-          <p>Selama sebulan ini</p>
+          <p className="text-sm">Selama sebulan ini</p>
         </div>
-        <div className="p-2 bg-orange-50 rounded-lg shadow-md w-full">
-          <p className="text-md font-bold">Pengajuan Honor</p>
+        <div className="p-4 bg-orange-50 rounded-lg shadow-md">
+          <p className="text-sm font-semibold">Pengajuan Honor</p>
           <h2 className="font-bold text-2xl">
             {monthlyStats?.getMonthlySurveyStats?.totalSPJ ?? "-"}
           </h2>
-          <p>Selama sebulan ini</p>
+          <p className="text-sm">Selama sebulan ini</p>
         </div>
       </div>
+
+      {/* ======= Chart & Leaderboard ======= */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-        {/* Bagian kiri: Chart + Filter */}
+        {/* Kiri: Chart + Filter */}
         <div className="bg-orange-50 p-4 rounded-lg shadow-md w-full">
-          <div className="mb-4">
+          <div className="mb-3 md:mb-4">
             <label className="font-semibold">Filter Kegiatan Survei:</label>
-            <br />
             <select
-              className="px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white mt-2"
+              className="mt-2 w-full sm:w-auto px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               onChange={(e) => setSelectedSurvey(e.target.value)}
               value={selectedSurvey}
             >
@@ -473,27 +504,19 @@ function Dashboard() {
             </select>
           </div>
 
-          <div style={{ width: "100%", height: 300 }}>
+          <div className="w-full h-64 md:h-80">
             <ResponsiveContainer>
               <BarChart
                 data={filteredProgress}
-                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                margin={{ top: 20, right: 20, left: 4, bottom: 8 }}
               >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
                 <YAxis />
                 <Tooltip />
                 <Legend />
-                <Bar
-                  dataKey="targetSample"
-                  fill="#f97316"
-                  name="Target Sampel"
-                />
-                <Bar
-                  dataKey="submitCount"
-                  fill="#3b82f6"
-                  name="Submit Sampel"
-                />
+                <Bar dataKey="targetSample" fill="#f97316" name="Target Sampel" />
+                <Bar dataKey="submitCount" fill="#3b82f6" name="Submit Sampel" />
                 <Bar dataKey="approvedCount" fill="#22c55e" name="Approved" />
                 <Bar dataKey="rejectedCount" fill="#ef4444" name="Rejected" />
               </BarChart>
@@ -501,24 +524,25 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* Bagian kanan: Pencapaian Petugas */}
+        {/* Kanan: Pencapaian Petugas */}
         <div className="bg-orange-50 rounded-lg shadow-md p-4 w-full h-fit">
-          <div className="flex justify-between items-center mb-2">
-            <h3 className="text-lg font-bold">PENCAPAIAN PETUGAS</h3>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+            <h3 className="text-base md:text-lg font-bold">PENCAPAIAN PETUGAS</h3>
             <select
-              className="text-sm px-3 py-1 border rounded-md bg-white focus:outline-none"
+              className="text-sm px-3 py-2 border rounded-md bg-white focus:outline-none w-full sm:w-auto"
               value={selectedSubSurveyId}
               onChange={(e) => setSelectedSubSurveyId(e.target.value)}
             >
               <option value="">Semua Kegiatan</option>
               {subSurveyOptions.map(([id, name]) => (
                 <option key={id} value={id}>
-                  {name}
+                  {name as string}
                 </option>
               ))}
             </select>
           </div>
-          <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
+
+          <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
             {userProgressData?.allUserSurveyProgress
               ?.filter(
                 (progress) =>
@@ -533,11 +557,10 @@ function Dashboard() {
                       )
                     : 0;
                 const key = `${progress.user.id}-${progress.subSurveyActivity.id}-${idx}`;
-
                 return (
                   <div key={key} className="space-y-1">
                     <div className="flex justify-between font-semibold text-sm">
-                      <span>{progress.user.name}</span>
+                      <span className="truncate pr-2">{progress.user.name}</span>
                       <span>{percent}%</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
@@ -546,8 +569,8 @@ function Dashboard() {
                           percent >= 80
                             ? "bg-green-500"
                             : percent >= 50
-                              ? "bg-yellow-400"
-                              : "bg-red-400"
+                            ? "bg-yellow-400"
+                            : "bg-red-400"
                         }`}
                         style={{ width: `${percent}%` }}
                       />

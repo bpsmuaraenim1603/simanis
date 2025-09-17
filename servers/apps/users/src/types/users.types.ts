@@ -11,6 +11,21 @@ export class ErrorType {
 }
 
 @ObjectType()
+export class UserResponse {
+    @Field(() => String)
+    name: string;
+
+    @Field(() => String)
+    email: string;
+
+    @Field(() => String)
+    phone_number: string;
+
+    @Field(() => String)
+    address: string | null;
+}
+
+@ObjectType()
 export class RegisterResponse {
     @Field()
     activation_token: string;

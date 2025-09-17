@@ -44,34 +44,63 @@ export default function ContentIssueForm() {
 
   const { data: subSurveyData } = useQuery(GET_ALL_OF_SUB_SURVEY_ACTIVITIES);
 
-  const { data: issuesData, loading: issuesLoading, refetch: refetchIssues } = useQuery(CONTENT_ISSUES, {
+  const {
+    data: issuesData,
+    loading: issuesLoading,
+    refetch: refetchIssues,
+  } = useQuery(CONTENT_ISSUES, {
     variables: {
       subSurveyActivityId: updateIssueState.subSurveyActivityId || null,
       status: null,
       search: null,
-      skip: 0,   // schema: Float
+      skip: 0,
       take: 20,
     },
     fetchPolicy: "cache-and-network",
   });
 
-  const issues: IssueItem[] = useMemo(() => issuesData?.contentIssues ?? [], [issuesData]);
+  const issues: IssueItem[] = useMemo(
+    () => issuesData?.contentIssues ?? [],
+    [issuesData]
+  );
 
-  const [createContentIssue, { loading: creating }] = useMutation(CREATE_CONTENT_ISSUE, {
-    refetchQueries: [{
-      query: CONTENT_ISSUES,
-      variables: { subSurveyActivityId: null, status: null, search: null, skip: 0, take: 20 },
-    }],
-    awaitRefetchQueries: true,
-  });
+  const [createContentIssue, { loading: creating }] = useMutation(
+    CREATE_CONTENT_ISSUE,
+    {
+      refetchQueries: [
+        {
+          query: CONTENT_ISSUES,
+          variables: {
+            subSurveyActivityId: null,
+            status: null,
+            search: null,
+            skip: 0,
+            take: 20,
+          },
+        },
+      ],
+      awaitRefetchQueries: true,
+    }
+  );
 
-  const [updateContentIssue, { loading: updatingIssue }] = useMutation(UPDATE_CONTENT_ISSUE, {
-    refetchQueries: [{
-      query: CONTENT_ISSUES,
-      variables: { subSurveyActivityId: null, status: null, search: null, skip: 0, take: 20 },
-    }],
-    awaitRefetchQueries: true,
-  });
+  const [updateContentIssue, { loading: updatingIssue }] = useMutation(
+    UPDATE_CONTENT_ISSUE,
+    {
+      refetchQueries: [
+        {
+          query: CONTENT_ISSUES,
+          variables: {
+            subSurveyActivityId: null,
+            status: null,
+            search: null,
+            skip: 0,
+            take: 20,
+          },
+        },
+      ],
+      awaitRefetchQueries: true,
+    }
+  );
 
   // sinkronisasi isi form update saat pilih issue
   useEffect(() => {
@@ -83,7 +112,11 @@ export default function ContentIssueForm() {
         issueStatus: sel.issueStatus ?? "Waiting",
       }));
     } else {
-      setUpdateIssueState((prev) => ({ ...prev, content: "", issueStatus: "Waiting" }));
+      setUpdateIssueState((prev) => ({
+        ...prev,
+        content: "",
+        issueStatus: "Waiting",
+      }));
     }
   }, [updateIssueState.selectedIssueId, issues]);
 
@@ -95,13 +128,15 @@ export default function ContentIssueForm() {
         toast.error("Isi laporan dan pilih kegiatan!");
         return;
       }
-      await createContentIssue({ variables: { input: { ...contentInput, reporterId: user?.id } } });
+      await createContentIssue({
+        variables: { input: { ...contentInput, reporterId: user?.id } },
+      });
       toast.success("Laporan kendala berhasil dikirim");
-      setContentInput({
+      setContentInput((prev) => ({
+        ...prev,
         content: "",
         issueStatus: "Waiting",
-        subSurveyActivityId: contentInput.subSurveyActivityId,
-      });
+      }));
       refetchIssues();
     } catch (error) {
       toast.error("Gagal membuat laporan");
@@ -121,7 +156,9 @@ export default function ContentIssueForm() {
         toast.error("Pilih laporan yang akan diupdate!");
         return;
       }
-      await updateContentIssue({ variables: { input: { id: selectedIssueId, content, issueStatus } } });
+      await updateContentIssue({
+        variables: { input: { id: selectedIssueId, content, issueStatus } },
+      });
       toast.success("Laporan kendala berhasil diperbarui");
       refetchIssues();
     } catch {
@@ -130,100 +167,192 @@ export default function ContentIssueForm() {
   };
 
   return (
-    <div className="px-8 py-4 space-y-6 font-Poppins">
-      {/* ===== Tambah Issue ===== */}
-      <div className="bg-orange-50 rounded-lg p-4 shadow-md">
-        <h2 className="text-lg font-bold mb-4">Laporkan Kendala</h2>
-        <form onSubmit={handleSubmitContentIssue} className="space-y-3">
-          <select
-            value={contentInput.subSurveyActivityId}
-            onChange={(e) => {
-              const id = e.target.value;
-              setContentInput((prev) => ({ ...prev, subSurveyActivityId: id }));
-            }}
-            className="w-full border px-3 py-2 rounded bg-white"
-          >
-            <option value="">-- Pilih Kegiatan --</option>
-            {subSurveyData?.allSubSurveyActivities?.map((sub: SubSurveyActivity) => (
-              <option key={sub.id} value={sub.id}>{sub.name}</option>
-            ))}
-          </select>
-
-          <textarea
-            value={contentInput.content}
-            onChange={(e) => setContentInput({ ...contentInput, content: e.target.value })}
-            placeholder="Tuliskan kendala..."
-            className="w-full border px-3 py-2 rounded bg-white min-h-[120px]"
-          />
-
-          <label className="block text-sm font-medium text-gray-700">Status</label>
-          <select
-            value={contentInput.issueStatus}
-            onChange={(e) => setContentInput((p) => ({ ...p, issueStatus: e.target.value }))}
-            className="w-full border px-3 py-2 rounded bg-white"
-          >
-            {ISSUE_STATUS_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-
-          <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-60" disabled={creating}>
-            {creating ? "Mengirim..." : "Kirim Laporan"}
-          </button>
-        </form>
+    <div className="max-w-screen-xl mx-auto px-3 sm:px-6 md:px-8 py-4 font-Poppins">
+      <div className="bg-orange-50 rounded-lg p-3 md:p-4 shadow-md mb-4">
+        <h1 className="text-lg md:text-xl font-bold">Laporan Kendala</h1>
+        <p className="text-sm text-gray-600">
+          Laporkan dan perbarui kendala terkait kegiatan survei.
+        </p>
       </div>
 
-      {/* ===== Ubah Issue ===== */}
-      <div className="bg-blue-50 rounded-lg p-4 shadow-md">
-        <h2 className="text-lg font-bold mb-4">Ubah Laporan Kendala</h2>
-        <form onSubmit={handleUpdateContentIssue} className="space-y-3">
-          <select
-            value={updateIssueState.subSurveyActivityId}
-            onChange={(e) => {
-              const id = e.target.value;
-              setUpdateIssueState((prev) => ({ ...prev, subSurveyActivityId: id, selectedIssueId: "" }));
-              refetchIssues({ subSurveyActivityId: id || null, status: null, search: null, skip: 0, take: 20 });
-            }}
-            className="w-full border px-3 py-2 rounded bg-white"
-          >
-            <option value="">-- Pilih Kegiatan --</option>
-            {subSurveyData?.allSubSurveyActivities?.map((sub: SubSurveyActivity) => (
-              <option key={sub.id} value={sub.id}>{sub.name}</option>
-            ))}
-          </select>
+      {/* Grid responsif: 1 kolom (mobile), 2 kolom (md+) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+        {/* ===== Tambah Issue ===== */}
+        <div className="bg-white rounded-lg p-4 shadow-md">
+          <h2 className="text-base md:text-lg font-bold mb-3">Laporkan Kendala</h2>
+          <form onSubmit={handleSubmitContentIssue} className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Kegiatan Survei
+              </label>
+              <select
+                value={contentInput.subSurveyActivityId}
+                onChange={(e) =>
+                  setContentInput((prev) => ({
+                    ...prev,
+                    subSurveyActivityId: e.target.value,
+                  }))
+                }
+                className="w-full border px-3 py-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">-- Pilih Kegiatan --</option>
+                {subSurveyData?.allSubSurveyActivities?.map(
+                  (sub: SubSurveyActivity) => (
+                    <option key={sub.id} value={sub.id}>
+                      {sub.name}
+                    </option>
+                  )
+                )}
+              </select>
+            </div>
 
-          <select
-            value={updateIssueState.selectedIssueId}
-            onChange={(e) => setUpdateIssueState((prev) => ({ ...prev, selectedIssueId: e.target.value }))}
-            className="w-full border px-3 py-2 rounded bg-white"
-          >
-            <option value="">{updateIssueState.subSurveyActivityId ? (issuesLoading ? "Memuat..." : "-- Pilih Laporan --") : "Pilih kegiatan dulu"}</option>
-            {issues.map((it) => (
-              <option key={it.id} value={it.id}>#{it.id.slice(0, 6)} • {it.content?.slice(0, 40) || "(tanpa isi)"}…</option>
-            ))}
-          </select>
+            <div>
+              <label className="block text-sm font-medium mb-1">Isi Kendala</label>
+              <textarea
+                value={contentInput.content}
+                onChange={(e) =>
+                  setContentInput((prev) => ({ ...prev, content: e.target.value }))
+                }
+                placeholder="Tuliskan kendala..."
+                className="w-full border px-3 py-2 rounded bg-white min-h-[120px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
 
-          <textarea
-            value={updateIssueState.content}
-            onChange={(e) => setUpdateIssueState((p) => ({ ...p, content: e.target.value }))}
-            placeholder="Perbarui isi kendala…"
-            className="w-full border px-3 py-2 rounded bg-white min-h-[120px]"
-          />
-          <label className="block text-sm font-medium text-gray-700">Status</label>
-          <select
-            value={updateIssueState.issueStatus}
-            onChange={(e) => setUpdateIssueState((p) => ({ ...p, issueStatus: e.target.value }))}
-            className="w-full border px-3 py-2 rounded bg-white"
-          >
-            {ISSUE_STATUS_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
+            <div>
+              <label className="block text-sm font-medium mb-1">Status</label>
+              <select
+                value={contentInput.issueStatus}
+                onChange={(e) =>
+                  setContentInput((p) => ({ ...p, issueStatus: e.target.value }))
+                }
+                className="w-full border px-3 py-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {ISSUE_STATUS_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-60" disabled={updatingIssue}>
-            {updatingIssue ? "Menyimpan..." : "Simpan Perubahan"}
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={creating}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded w-full sm:w-auto disabled:opacity-60"
+            >
+              {creating ? "Mengirim..." : "Kirim Laporan"}
+            </button>
+          </form>
+        </div>
+
+        {/* ===== Ubah Issue ===== */}
+        <div className="bg-white rounded-lg p-4 shadow-md">
+          <h2 className="text-base md:text-lg font-bold mb-3">Ubah Laporan Kendala</h2>
+          <form onSubmit={handleUpdateContentIssue} className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Kegiatan Survei
+              </label>
+              <select
+                value={updateIssueState.subSurveyActivityId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setUpdateIssueState((prev) => ({
+                    ...prev,
+                    subSurveyActivityId: id,
+                    selectedIssueId: "",
+                  }));
+                  refetchIssues({
+                    subSurveyActivityId: id || null,
+                    status: null,
+                    search: null,
+                    skip: 0,
+                    take: 20,
+                  });
+                }}
+                className="w-full border px-3 py-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">-- Pilih Kegiatan --</option>
+                {subSurveyData?.allSubSurveyActivities?.map(
+                  (sub: SubSurveyActivity) => (
+                    <option key={sub.id} value={sub.id}>
+                      {sub.name}
+                    </option>
+                  )
+                )}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Pilih Laporan
+              </label>
+              <select
+                value={updateIssueState.selectedIssueId}
+                onChange={(e) =>
+                  setUpdateIssueState((prev) => ({
+                    ...prev,
+                    selectedIssueId: e.target.value,
+                  }))
+                }
+                className="w-full border px-3 py-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">
+                  {updateIssueState.subSurveyActivityId
+                    ? issuesLoading
+                      ? "Memuat..."
+                      : "-- Pilih Laporan --"
+                    : "Pilih kegiatan dulu"}
+                </option>
+                {issues.map((it) => (
+                  <option key={it.id} value={it.id}>
+                    #{it.id.slice(0, 6)} • {it.content?.slice(0, 40) || "(tanpa isi)"}…
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Isi Kendala</label>
+              <textarea
+                value={updateIssueState.content}
+                onChange={(e) =>
+                  setUpdateIssueState((p) => ({ ...p, content: e.target.value }))
+                }
+                placeholder="Perbarui isi kendala…"
+                className="w-full border px-3 py-2 rounded bg-white min-h-[120px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Status</label>
+              <select
+                value={updateIssueState.issueStatus}
+                onChange={(e) =>
+                  setUpdateIssueState((p) => ({
+                    ...p,
+                    issueStatus: e.target.value,
+                  }))
+                }
+                className="w-full border px-3 py-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {ISSUE_STATUS_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              type="submit"
+              disabled={updatingIssue}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded w-full sm:w-auto disabled:opacity-60"
+            >
+              {updatingIssue ? "Menyimpan..." : "Simpan Perubahan"}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );

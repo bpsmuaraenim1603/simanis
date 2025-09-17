@@ -6,103 +6,113 @@ import {
   DropdownTrigger,
 } from "@heroui/react";
 import { Avatar } from "@heroui/avatar";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import useUser from "../hooks/useUser";
 import toast from "react-hot-toast";
 import Cookies from "js-cookie";
 import { signOut, useSession } from "next-auth/react";
 
+const initialsFrom = (name?: string) =>
+  name?.split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase() ?? "U";
+
 const ProfileDropDown = () => {
-  const [signedIn, setsignedIn] = useState(false);
+  const [signedIn, setSignedIn] = useState(false);
   const [open, setOpen] = useState(false);
   const { user, loading } = useUser();
   const { data } = useSession();
 
-  useEffect(() => {
-    if (!loading) {
-      setsignedIn(!!user);
-    }
-    if (data?.user) {
-      setsignedIn(true);
-      addUser(data?.user);
-    }
-  }, [loading, user, open, data]);
+  const displayUser = data?.user ?? user;
+  const avatarSrc = displayUser?.image || undefined;
+  const avatarInitials = useMemo(() => initialsFrom(displayUser?.name), [displayUser?.name]);
 
-  const handleLogOut = () => {
-    if (data?.user) {
-      signOut().then(() => {
-        Cookies.remove("access_token")
-        Cookies.remove("refresh_token")
-        window.location.href = "/"
-        toast.success("Logout Berhasil!")
-      });
-    } else {
+  useEffect(() => {
+    if (!loading) setSignedIn(!!user || !!data?.user);
+    if (data?.user) addUser(data.user);
+  }, [loading, user, data]);
+
+  const handleLogOut = async () => {
+    try {
+      if (data?.user) await signOut();
       Cookies.remove("access_token");
       Cookies.remove("refresh_token");
-      window.location.href = "/";
       toast.success("Logout Berhasil!");
+      window.location.href = "/";
+    } catch {
+      toast.error("Gagal logout. Coba lagi.");
     }
   };
 
-  const addUser = async (user: any) => {
+  const addUser = async (u: any) => {
     try {
       const res = await fetch("/api/register", {
         method: "POST",
-        body: JSON.stringify({
-          name: user.name,
-          email: user.email,
-          image: user.image,
-        }),
-        headers: {
-          "Content-Type": "application/json",
-        },
+        body: JSON.stringify({ name: u.name, email: u.email, image: u.image }),
+        headers: { "Content-Type": "application/json" },
       });
-      const result = await res.json();
-
-      if (result.created) {
-        console.log("User baru dibuat:", result.user);
-      } else {
-        console.log("User sudah ada:", result.user);
-      }
-    } catch (err) {
-      console.error("Gagal mendaftarkan user:", err);
+      await res.json();
+    } catch {
+      // silent
     }
   };
 
   const openProfile = () => {
     window.location.href = "/profile";
-  }
+  };
+
+  if (!signedIn) return null;
 
   return (
-    <div className="flex items-center gap-4">
-      {signedIn && (
-        <Dropdown placement="bottom-end">
-          <DropdownTrigger>
-            <Avatar
-              as="button"
-              className="transition-transform text-white"
-              src={data?.user ? data.user.image : user.image}
-            />
-          </DropdownTrigger>
-          <DropdownMenu
-            aria-label="Profile Actions"
-            variant="flat"
-            className="border rounded-lg bg-white shadow-md text-black"
+    <div className="flex items-center">
+      <Dropdown placement="bottom-end" offset={8} isOpen={open} onOpenChange={setOpen}>
+        <DropdownTrigger>
+          <button
+            aria-label="Buka menu profil"
+            title="Profil"
+            className="inline-flex items-center justify-center rounded-full focus:outline-none focus:ring-2 focus:ring-white/70"
           >
-            <DropdownItem key="profile" className="h-14 gap-2">
-              <p className="font-semibold">Nama Petugas</p>
-              <p className="font-semibold">
-                {data?.user ? data.user.name : user.name}
+            <Avatar
+              as="div"
+              className="transition-transform text-white w-9 h-9 sm:w-10 sm:h-10"
+              src={avatarSrc}
+              name={avatarInitials}
+              radius="full"
+            />
+          </button>
+        </DropdownTrigger>
+
+        <DropdownMenu
+          aria-label="Aksi Profil"
+          className="border rounded-lg bg-white shadow-md text-black max-h-[70vh] overflow-auto w-[calc(100vw-2rem)] sm:w-64"
+          itemClasses={{ base: "py-2" }}
+        >
+          <DropdownItem key="profile" className="h-auto gap-2">
+            <p className="text-xs text-gray-500">Nama Petugas</p>
+            <p className="font-semibold truncate max-w-[70vw] sm:max-w-[14rem]">
+              {displayUser?.name ?? "Pengguna"}
+            </p>
+            {displayUser?.email && (
+              <p className="text-xs text-gray-500 truncate max-w-[70vw] sm:max-w-[14rem]">
+                {displayUser.email}
               </p>
-            </DropdownItem>
-            <DropdownItem key="profile settings" onClick={() => openProfile()}>Profil Saya</DropdownItem>
-            <DropdownItem key="achievement">Notifikasi</DropdownItem>
-            <DropdownItem key="logout" onClick={() => handleLogOut()}>
-              Log Out
-            </DropdownItem>
-          </DropdownMenu>
-        </Dropdown>
-      )}
+            )}
+          </DropdownItem>
+
+          <DropdownItem key="profile-settings" onClick={openProfile}>
+            Profil Saya
+          </DropdownItem>
+
+          <DropdownItem key="notifications">Notifikasi</DropdownItem>
+
+          <DropdownItem
+            key="logout"
+            color="danger"
+            className="text-red-600"
+            onClick={handleLogOut}
+          >
+            Log Out
+          </DropdownItem>
+        </DropdownMenu>
+      </Dropdown>
     </div>
   );
 };
