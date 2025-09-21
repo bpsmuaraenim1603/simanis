@@ -106,6 +106,19 @@ export default function Partners() {
     [upData]
   );
 
+  const isAdmin =
+    user?.role === "Admin" ||
+    user?.role === "Superadmin" ||
+    user?.role === "Supervisor";
+
+  const isInPetugasList = useMemo(() => {
+    if (!input.subSurveyActivityId) return false; // belum pilih kegiatan
+    if (loadingUP) return false; // masih fetch daftar petugas
+    return petugasList.some((p) => p.userId === user?.id);
+  }, [input.subSurveyActivityId, loadingUP, petugasList, user?.id]);
+
+  const canSeeForm = isAdmin || isInPetugasList;
+
   const handleSelectPetugas = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const userId = e.target.value;
     const selectedUP = petugasList.find((p) => p.userId === userId);
@@ -435,61 +448,65 @@ export default function Partners() {
               )}
             </select>
           </div>
-          <div>
-            <label className="block text-sm font-semibold mb-1">
-              Petugas{" "}
-              {loadingUP && (
-                <span className="text-xs text-gray-500">(memuat…)</span>
-              )}
-            </label>
-            <select
-              id="userId"
-              value={input.userId}
-              onChange={handleSelectPetugas}
-              disabled={!input.subSurveyActivityId || loadingUP}
-              className="w-full px-3 py-2 border rounded-md bg-white disabled:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">-- Pilih Petugas --</option>
-              {petugasList.map((p) => (
-                <option key={p.id} value={p.userId}>
-                  {p.user?.name ?? p.userId}
-                </option>
-              ))}
-            </select>
-            {!loadingUP &&
-              input.subSurveyActivityId &&
-              petugasList.length === 0 && (
-                <p className="text-xs text-red-600 mt-1">
-                  Belum ada petugas untuk kegiatan ini.
-                </p>
-              )}
-          </div>
-          <div>
-            <label className="block text-sm font-semibold mb-1">
-              Wilayah (otomatis)
-            </label>
-            <input
-              id="region"
-              value={input.region}
-              readOnly
-              disabled
-              placeholder="Pilih petugas untuk mengisi wilayah"
-              className="w-full px-3 py-2 border rounded-md bg-gray-100 text-gray-700"
-            />
-          </div>
-          <div>
-            <input
-              type="file"
-              accept=".pdf,image/*"
-              onChange={handleFile}
-              className="block w-full text-sm text-gray-900 file:mr-4 file:py-2 file:px-4
+          {canSeeForm && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold mb-1">
+                  Petugas{" "}
+                  {loadingUP && (
+                    <span className="text-xs text-gray-500">(memuat…)</span>
+                  )}
+                </label>
+                <select
+                  id="userId"
+                  value={input.userId}
+                  onChange={handleSelectPetugas}
+                  disabled={!input.subSurveyActivityId || loadingUP}
+                  className="w-full px-3 py-2 border rounded-md bg-white disabled:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">-- Pilih Petugas --</option>
+                  {petugasList.map((p) => (
+                    <option key={p.id} value={p.userId}>
+                      {p.user?.name ?? p.userId}
+                    </option>
+                  ))}
+                </select>
+                {!loadingUP &&
+                  input.subSurveyActivityId &&
+                  petugasList.length === 0 && (
+                    <p className="text-xs text-red-600 mt-1">
+                      Belum ada petugas untuk kegiatan ini.
+                    </p>
+                  )}
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-1">
+                  Wilayah (otomatis)
+                </label>
+                <input
+                  id="region"
+                  value={input.region}
+                  readOnly
+                  disabled
+                  placeholder="Pilih petugas untuk mengisi wilayah"
+                  className="w-full px-3 py-2 border rounded-md bg-gray-100 text-gray-700"
+                />
+              </div>
+              <div>
+                <input
+                  type="file"
+                  accept=".pdf,image/*"
+                  onChange={handleFile}
+                  className="block w-full text-sm text-gray-900 file:mr-4 file:py-2 file:px-4
                          file:rounded-md file:border-gray-500 file:text-sm file:font-semibold
                          file:bg-white file:text-black hover:file:bg-gray-100"
-            />
-            <p className="text-xs text-gray-600 mt-1">
-              Format: PDF/JPG/PNG. Maks 1MB.
-            </p>
-          </div>
+                />
+                <p className="text-xs text-gray-600 mt-1">
+                  Format: PDF/JPG/PNG. Maks 1MB.
+                </p>
+              </div>
+            </div>
+          )}
           <button
             type="submit"
             disabled={loading}

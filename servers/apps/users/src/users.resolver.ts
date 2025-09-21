@@ -30,10 +30,12 @@ import { CurrentUser } from './decorators/current-user.decorator';
 export class UsersResolver {
   constructor(private readonly usersService: UsersService) {}
 
-  // @Mutation(() => UserResponse)
-  // async createUser(@Args('createUser') createUserDto: createUserDto): Promise<UserResponse> {
-  //   return await this.usersService.createUser(createUserDto);
-  // }
+  @Mutation(() => UserResponse)
+  async createUser(
+    @Args('createUser') createUserDto: createUserDto,
+  ): Promise<UserResponse> {
+    return await this.usersService.createUser(createUserDto);
+  }
 
   @Mutation(() => RegisterResponse)
   async register(

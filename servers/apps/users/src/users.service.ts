@@ -34,11 +34,20 @@ export class UsersService {
     private readonly emailService: EmailService,
   ) {}
 
-  // async createUser(user: Prisma.UserCreateInput) {
-  //   return this.prisma.user.create({
-  //     data: user,
-  //   });
-  // }
+  async createUser(registerDto: RegisterDto) {
+    const { name, email, phone_number, password, address } = registerDto;
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = {
+      name,
+      email,
+      phone_number,
+      password: hashedPassword,
+      address,
+    };
+    return this.prisma.user.create({
+      data: user,
+    });
+  }
 
   // register user
   async register(registerDto: RegisterDto, response: Response) {

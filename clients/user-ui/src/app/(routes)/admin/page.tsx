@@ -565,8 +565,8 @@ function Admin() {
       handleRefresh();
       setUpdateUserProgressForm({
         userProgressId: "",
-        subSurveyActivityId: "",
-        surveyActivityId: "",
+        subSurveyActivityId: updateUserProgressForm.subSurveyActivityId,
+        surveyActivityId: updateUserProgressForm.surveyActivityId,
         userId: "",
         totalAssigned: 0,
         submitCount: 0,
@@ -655,12 +655,17 @@ function Admin() {
     setUserProgressForm((prev) => ({ ...prev, [key]: value }));
   };
 
-   const setUpdateUPField = <K extends keyof typeof updateUserProgressForm>(
+  const setUpdateUPField = <K extends keyof typeof updateUserProgressForm>(
     key: K,
     value: (typeof updateUserProgressForm)[K]
   ) => {
     setUpdateUserProgressForm((prev) => ({ ...prev, [key]: value }));
-  }
+  };
+
+  const toOpts = <T,>(
+    rows: T[],
+    pick: (row: T) => { value: string; label: string; subLabel?: string }
+  ) => rows.map(pick);
 
   /* ---------- Effects (sama) ---------- */
   useEffect(() => {
@@ -1356,19 +1361,16 @@ function Admin() {
               >
                 Tim Penyelenggara
               </label>
-              <select
-                id="surveyActivityId"
-                value={userProgressForm.surveyActivityId}
-                onChange={handleChangeUserProgress}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              >
-                <option value="">-- Pilih Tim --</option>
-                {data?.allSurveyActivities.map((s: SurveyActivity) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+              <HUComboBox
+                value={userProgressForm.surveyActivityId || null}
+                onValueChange={(v) =>
+                  setUPField("surveyActivityId", (v ?? "") as string)
+                }
+                options={data?.allSurveyActivities.map((s: SurveyActivity) => ({
+                  value: s.id,
+                  label: s.name ?? "",
+                }))}
+              />
             </div>
 
             <div>
@@ -1514,22 +1516,22 @@ function Admin() {
             </div>
 
             <div>
-              <label htmlFor="districtId" className="block text-sm font-bold">
+              <label htmlFor="districtId" className="block text-sm font-bold mb-2">
                 Kecamatan
               </label>
-              <select
-                id="districtId"
-                value={userProgressForm.districtId}
-                onChange={handleChangeUserProgress}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              >
-                <option value="">-- Pilih Kecamatan --</option>
-                {districtData?.getAllSurveyDistrict?.map((d: District) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
+
+              <HUComboBox
+                value={userProgressForm.districtId || null}
+                onValueChange={(v) =>
+                  setUPField("districtId", (v ?? "") as string)
+                }
+                options={districtData?.getAllSurveyDistrict?.map(
+                  (d: District) => ({
+                    value: d.id,
+                    label: d.name ?? "-",
+                  })
+                )}
+              />
             </div>
 
             <div className="md:col-span-2">
@@ -1565,19 +1567,17 @@ function Admin() {
               >
                 Tim Penyelenggara
               </label>
-              <select
-                id="surveyActivityId"
-                value={updateUserProgressForm.surveyActivityId}
-                onChange={handleChangeUpdateUserProgress}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              >
-                <option value="">-- Pilih Tim --</option>
-                {data?.allSurveyActivities.map((s: SurveyActivity) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+
+              <HUComboBox
+                value={updateUserProgressForm.surveyActivityId || null}
+                onValueChange={(v) =>
+                  setUpdateUPField("surveyActivityId", (v ?? "") as string)
+                }
+                options={data?.allSurveyActivities.map((s: SurveyActivity) => ({
+                  value: s.id,
+                  label: s.name ?? "-",
+                }))}
+              />
             </div>
 
             <div>
@@ -1627,11 +1627,13 @@ function Admin() {
                 onValueChange={(v) =>
                   setUpdateUPField("userProgressId", (v ?? "") as string)
                 }
-                options={filteredUPsForUpdate.map((up: UserProgressWithUser) => ({
-                  value: up.id,
-                  label: up.user?.name ?? "-",
-                  subLabel: up.user?.email ?? "",
-                }))}
+                options={filteredUPsForUpdate.map(
+                  (up: UserProgressWithUser) => ({
+                    value: up.id,
+                    label: up.user?.name ?? "-",
+                    subLabel: up.user?.email ?? "",
+                  })
+                )}
               />
             </div>
 
@@ -1714,22 +1716,22 @@ function Admin() {
             </div>
 
             <div>
-              <label htmlFor="districtId" className="block text-sm font-bold">
+              <label htmlFor="districtId" className="block text-sm font-bold mb-2">
                 Kecamatan
               </label>
-              <select
-                id="districtId"
-                value={updateUserProgressForm.districtId}
-                onChange={handleChangeUpdateUserProgress}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              >
-                <option value="">-- Pilih Kecamatan --</option>
-                {districtData?.getAllSurveyDistrict?.map((d: District) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
+
+              <HUComboBox
+                value={updateUserProgressForm.districtId || null}
+                onValueChange={(v) =>
+                  setUpdateUPField("districtId", (v ?? "") as string)
+                }
+                options={districtData?.getAllSurveyDistrict?.map(
+                  (d: District) => ({
+                    value: d.id,
+                    label: d.name,
+                  })
+                )}
+              />
             </div>
 
             <div className="md:col-span-2">
