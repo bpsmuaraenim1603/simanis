@@ -5,6 +5,7 @@ import { useQuery, useMutation } from "@apollo/client";
 import { motion, AnimatePresence } from "framer-motion";
 import { GET_ALL_USERS } from "@/src/graphql/actions/find-allusers.action";
 import { UPDATE_ROLE } from "@/src/graphql/actions/update-role.action";
+import HUSelect from "@/src/components/HUSelect";
 
 const ROLE_OPTIONS = [
   { label: "Super Admin", value: "Superadmin" },
@@ -12,6 +13,11 @@ const ROLE_OPTIONS = [
   { label: "Supervisor", value: "Supervisor" },
   { label: "User", value: "User" },
 ] as const;
+
+const ROLE_OPTIONS_FOR_SELECT = ROLE_OPTIONS.map((r) => ({
+  value: r.value,
+  label: r.label,
+}));
 
 const pretty = (s?: string | null) =>
   (s ?? "")
@@ -53,7 +59,9 @@ export default function SuperAdminManagePage() {
   }, [users, searchTerm]);
 
   const handleChange = useCallback((userId: string, newRole: string) => {
-    setPending((p) => (p[userId] === newRole ? p : { ...p, [userId]: newRole }));
+    setPending((p) =>
+      p[userId] === newRole ? p : { ...p, [userId]: newRole }
+    );
   }, []);
 
   const handleReset = useCallback((userId: string) => {
@@ -70,7 +78,10 @@ export default function SuperAdminManagePage() {
       try {
         setUpdating((u) => ({ ...u, [user.id]: true }));
         await updateRole({
-          variables: { userId: user.id, updateRole: { name: user.name, role: newRole } },
+          variables: {
+            userId: user.id,
+            updateRole: { name: user.name, role: newRole },
+          },
         });
         setPending((p) => {
           const { [user.id]: _, ...rest } = p;
@@ -120,10 +131,18 @@ export default function SuperAdminManagePage() {
           <table className="min-w-[720px] w-full text-sm text-left text-gray-600">
             <thead className="text-gray-700 bg-gray-200">
               <tr>
-                <th className="px-4 md:px-6 py-3 uppercase text-xs md:text-sm">Nama</th>
-                <th className="px-4 md:px-6 py-3 uppercase text-xs md:text-sm">Email</th>
-                <th className="px-4 md:px-6 py-3 uppercase text-xs md:text-sm">Role</th>
-                <th className="px-4 md:px-6 py-3 uppercase text-xs md:text-sm text-right">Aksi</th>
+                <th className="px-4 md:px-6 py-3 uppercase text-xs md:text-sm">
+                  Nama
+                </th>
+                <th className="px-4 md:px-6 py-3 uppercase text-xs md:text-sm">
+                  Email
+                </th>
+                <th className="px-4 md:px-6 py-3 uppercase text-xs md:text-sm">
+                  Role
+                </th>
+                <th className="px-4 md:px-6 py-3 uppercase text-xs md:text-sm text-right">
+                  Aksi
+                </th>
               </tr>
             </thead>
 
@@ -137,15 +156,22 @@ export default function SuperAdminManagePage() {
               )}
               {error && (
                 <tr>
-                  <td colSpan={4} className="px-6 py-4 text-center text-red-600">
+                  <td
+                    colSpan={4}
+                    className="px-6 py-4 text-center text-red-600"
+                  >
                     Terjadi kesalahan memuat data
                   </td>
                 </tr>
               )}
               {!loading && !error && filteredUsers.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-6 py-6 text-center text-gray-500">
-                    Tidak ada pengguna yang cocok dengan kata kunci "{searchTerm}"
+                  <td
+                    colSpan={4}
+                    className="px-6 py-6 text-center text-gray-500"
+                  >
+                    Tidak ada pengguna yang cocok dengan kata kunci "
+                    {searchTerm}"
                   </td>
                 </tr>
               )}
@@ -158,28 +184,24 @@ export default function SuperAdminManagePage() {
                   const isSaving = !!updating[user.id];
 
                   return (
-                    <tr key={user.id} className="bg-white border-t border-gray-200 align-top">
+                    <tr
+                      key={user.id}
+                      className="bg-white border-t border-gray-200 align-top"
+                    >
                       <td className="px-4 md:px-6 py-3 font-medium text-gray-900 break-words">
                         <Cell>{user.name}</Cell>
                       </td>
                       <td className="px-4 md:px-6 py-3 break-words">
                         <Cell>{user.email}</Cell>
                       </td>
-                      <td className="px-4 md:px-6 py-3">
-                        <select
-                          className="w-full rounded-lg border px-3 py-2 text-sm outline-none bg-white"
-                          value={effectiveRole ?? ""}
-                          onChange={(e) => handleChange(user.id, e.target.value)}
-                        >
-                          <option value="" disabled>
-                            -- Pilih Role --
-                          </option>
-                          {ROLE_OPTIONS.map((r) => (
-                            <option key={r.label} value={r.value}>
-                              {pretty(r.label)}
-                            </option>
-                          ))}
-                        </select>
+                      <td className="px-4 md:px-6 py-3 align-middle">
+                        <HUSelect
+                          value={(effectiveRole ?? "") || null}
+                          onValueChange={(v) => handleChange(user.id, v ?? "")}
+                          options={ROLE_OPTIONS_FOR_SELECT}
+                          placeholder="-- Pilih Role --"
+                          className="text-sm [&_*]:text-sm" // opsional: biar tidak terlalu sempit
+                        />
                       </td>
                       <td className="px-4 md:px-6 py-3">
                         <div className="flex flex-col sm:flex-row justify-end gap-2">
@@ -191,7 +213,11 @@ export default function SuperAdminManagePage() {
                                 ? "cursor-not-allowed bg-gray-300"
                                 : "bg-blue-600 hover:bg-blue-700"
                             }`}
-                            title={!dirty ? "Tidak ada perubahan" : "Simpan perubahan"}
+                            title={
+                              !dirty
+                                ? "Tidak ada perubahan"
+                                : "Simpan perubahan"
+                            }
                           >
                             {isSaving ? "Menyimpan…" : "Simpan"}
                           </button>

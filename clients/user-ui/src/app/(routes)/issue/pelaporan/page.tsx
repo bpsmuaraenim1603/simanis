@@ -8,6 +8,8 @@ import { GET_ALL_OF_SUB_SURVEY_ACTIVITIES } from "@/src/graphql/actions/find-rea
 import { CONTENT_ISSUES } from "@/src/graphql/actions/find-all-content-issue.action";
 import { CREATE_CONTENT_ISSUE } from "@/src/graphql/actions/add-content-issue.action";
 import { UPDATE_CONTENT_ISSUE } from "@/src/graphql/actions/update-content-issue.action";
+import HUComboBox from "@/src/components/HUCombobox";
+import HUSelect from "@/src/components/HUSelect";
 
 type SubSurveyActivity = { id: string; name: string };
 type IssueItem = {
@@ -102,6 +104,24 @@ export default function ContentIssueForm() {
     }
   );
 
+  const toOpts = <T,>(
+    rows: T[],
+    pick: (row: T) => { value: string; label: string; subLabel?: string }
+  ) => rows?.map(pick) ?? [];
+
+  const subSurveyOpts = toOpts(
+    subSurveyData?.allSubSurveyActivities ?? [],
+    (s: SubSurveyActivity) => ({
+      value: s.id,
+      label: s.name ?? "-",
+    })
+  );
+
+  const issueOpts = toOpts(issues, (it) => ({
+    value: it.id,
+    label: `#${it.id.slice(0, 6)} • ${it.content?.slice(0, 40) || "(tanpa isi)"}…`,
+  }));
+
   // sinkronisasi isi form update saat pilih issue
   useEffect(() => {
     const sel = issues.find((it) => it.id === updateIssueState.selectedIssueId);
@@ -179,39 +199,38 @@ export default function ContentIssueForm() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
         {/* ===== Tambah Issue ===== */}
         <div className="bg-white rounded-lg p-4 shadow-md">
-          <h2 className="text-base md:text-lg font-bold mb-3">Laporkan Kendala</h2>
+          <h2 className="text-base md:text-lg font-bold mb-3">
+            Laporkan Kendala
+          </h2>
           <form onSubmit={handleSubmitContentIssue} className="space-y-3">
             <div>
               <label className="block text-sm font-medium mb-1">
                 Kegiatan Survei
               </label>
-              <select
-                value={contentInput.subSurveyActivityId}
-                onChange={(e) =>
+              <HUComboBox
+                value={contentInput.subSurveyActivityId || null}
+                onValueChange={(v) =>
                   setContentInput((prev) => ({
                     ...prev,
-                    subSurveyActivityId: e.target.value,
+                    subSurveyActivityId: (v ?? "") as string,
                   }))
                 }
-                className="w-full border px-3 py-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">-- Pilih Kegiatan --</option>
-                {subSurveyData?.allSubSurveyActivities?.map(
-                  (sub: SubSurveyActivity) => (
-                    <option key={sub.id} value={sub.id}>
-                      {sub.name}
-                    </option>
-                  )
-                )}
-              </select>
+                options={subSurveyOpts}
+                placeholder="Pilih kegiatan"
+              />
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Isi Kendala</label>
+              <label className="block text-sm font-medium mb-1">
+                Isi Kendala
+              </label>
               <textarea
                 value={contentInput.content}
                 onChange={(e) =>
-                  setContentInput((prev) => ({ ...prev, content: e.target.value }))
+                  setContentInput((prev) => ({
+                    ...prev,
+                    content: e.target.value,
+                  }))
                 }
                 placeholder="Tuliskan kendala..."
                 className="w-full border px-3 py-2 rounded bg-white min-h-[120px] focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -220,19 +239,19 @@ export default function ContentIssueForm() {
 
             <div>
               <label className="block text-sm font-medium mb-1">Status</label>
-              <select
-                value={contentInput.issueStatus}
-                onChange={(e) =>
-                  setContentInput((p) => ({ ...p, issueStatus: e.target.value }))
+              <HUSelect
+                value={contentInput.issueStatus || null}
+                onValueChange={(v) =>
+                  setContentInput((p) => ({
+                    ...p,
+                    issueStatus: (v ?? "Waiting") as string,
+                  }))
                 }
-                className="w-full border px-3 py-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {ISSUE_STATUS_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+                options={ISSUE_STATUS_OPTIONS.map((opt) => ({
+                  value: opt.value,
+                  label: opt.label,
+                }))}
+              />
             </div>
 
             <button
@@ -247,16 +266,18 @@ export default function ContentIssueForm() {
 
         {/* ===== Ubah Issue ===== */}
         <div className="bg-white rounded-lg p-4 shadow-md">
-          <h2 className="text-base md:text-lg font-bold mb-3">Ubah Laporan Kendala</h2>
+          <h2 className="text-base md:text-lg font-bold mb-3">
+            Ubah Laporan Kendala
+          </h2>
           <form onSubmit={handleUpdateContentIssue} className="space-y-3">
             <div>
               <label className="block text-sm font-medium mb-1">
                 Kegiatan Survei
               </label>
-              <select
-                value={updateIssueState.subSurveyActivityId}
-                onChange={(e) => {
-                  const id = e.target.value;
+              <HUComboBox
+                value={updateIssueState.subSurveyActivityId || null}
+                onValueChange={(v) => {
+                  const id = (v ?? "") as string;
                   setUpdateIssueState((prev) => ({
                     ...prev,
                     subSurveyActivityId: id,
@@ -270,54 +291,51 @@ export default function ContentIssueForm() {
                     take: 20,
                   });
                 }}
-                className="w-full border px-3 py-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">-- Pilih Kegiatan --</option>
-                {subSurveyData?.allSubSurveyActivities?.map(
-                  (sub: SubSurveyActivity) => (
-                    <option key={sub.id} value={sub.id}>
-                      {sub.name}
-                    </option>
-                  )
-                )}
-              </select>
+                options={subSurveyOpts}
+                placeholder="Pilih kegiatan"
+              />
             </div>
 
             <div>
               <label className="block text-sm font-medium mb-1">
                 Pilih Laporan
               </label>
-              <select
-                value={updateIssueState.selectedIssueId}
-                onChange={(e) =>
+              <HUSelect
+                value={updateIssueState.selectedIssueId || null}
+                onValueChange={(v) =>
                   setUpdateIssueState((prev) => ({
                     ...prev,
-                    selectedIssueId: e.target.value,
+                    selectedIssueId: (v ?? "") as string,
                   }))
                 }
-                className="w-full border px-3 py-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">
-                  {updateIssueState.subSurveyActivityId
+                options={
+                  updateIssueState.subSurveyActivityId
                     ? issuesLoading
-                      ? "Memuat..."
-                      : "-- Pilih Laporan --"
-                    : "Pilih kegiatan dulu"}
-                </option>
-                {issues.map((it) => (
-                  <option key={it.id} value={it.id}>
-                    #{it.id.slice(0, 6)} • {it.content?.slice(0, 40) || "(tanpa isi)"}…
-                  </option>
-                ))}
-              </select>
+                      ? []
+                      : issueOpts
+                    : []
+                }
+                placeholder={
+                  updateIssueState.subSurveyActivityId
+                    ? issuesLoading
+                      ? "Memuat…"
+                      : "Pilih laporan"
+                    : "Pilih kegiatan dulu"
+                }
+              />
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Isi Kendala</label>
+              <label className="block text-sm font-medium mb-1">
+                Isi Kendala
+              </label>
               <textarea
                 value={updateIssueState.content}
                 onChange={(e) =>
-                  setUpdateIssueState((p) => ({ ...p, content: e.target.value }))
+                  setUpdateIssueState((p) => ({
+                    ...p,
+                    content: e.target.value,
+                  }))
                 }
                 placeholder="Perbarui isi kendala…"
                 className="w-full border px-3 py-2 rounded bg-white min-h-[120px] focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -326,22 +344,19 @@ export default function ContentIssueForm() {
 
             <div>
               <label className="block text-sm font-medium mb-1">Status</label>
-              <select
-                value={updateIssueState.issueStatus}
-                onChange={(e) =>
+              <HUSelect
+                value={updateIssueState.issueStatus || null}
+                onValueChange={(v) =>
                   setUpdateIssueState((p) => ({
                     ...p,
-                    issueStatus: e.target.value,
+                    issueStatus: (v ?? "Waiting") as string,
                   }))
                 }
-                className="w-full border px-3 py-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {ISSUE_STATUS_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+                options={ISSUE_STATUS_OPTIONS.map((opt) => ({
+                  value: opt.value,
+                  label: opt.label,
+                }))}
+              />
             </div>
 
             <button

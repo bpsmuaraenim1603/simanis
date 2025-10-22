@@ -9,6 +9,7 @@ import { ADD_ISSUE_COMMENT } from "@/src/graphql/actions/add-issue-comment.actio
 import { UPDATE_ISSUE_COMMENT } from "@/src/graphql/actions/update-issue-comment.action";
 import { GET_ALL_OF_SUB_SURVEY_ACTIVITIES } from "@/src/graphql/actions/find-realallsubsurvey.action";
 import toast from "react-hot-toast";
+import HUComboBox from "@/src/components/HUCombobox";
 
 type IssueComment = {
   id: string;
@@ -70,6 +71,22 @@ export default function Issue() {
     fetchPolicy: "cache-and-network",
     notifyOnNetworkStatusChange: true,
   });
+
+  const activityOptions = useMemo(
+    () =>
+      (subSurveyData?.allSubSurveyActivities ?? []).map(
+        (sub: { id: string; name: string }) => ({
+          value: sub.id,
+          label: sub.name ?? "-",
+        })
+      ),
+    [subSurveyData]
+  );
+
+  const statusOptions = useMemo(
+    () => ISSUE_STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
+    []
+  );
 
   const [addIssueComment, { loading: commenting }] = useMutation(
     ADD_ISSUE_COMMENT,
@@ -222,41 +239,25 @@ export default function Issue() {
             <label className="block text-sm font-medium mb-1">
               Kegiatan Survei
             </label>
-            <select
-              value={activityId}
-              onChange={(e) => setActivityId(e.target.value)}
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              title="Pilih kegiatan survei"
-            >
-              <option value="">Semua Kegiatan</option>
-              {subSurveyData?.allSubSurveyActivities?.map(
-                (sub: SubSurveyActivity) => (
-                  <option key={sub.id} value={sub.id}>
-                    {sub.name}
-                  </option>
-                )
-              )}
-            </select>
+            <HUComboBox
+              value={activityId || null}
+              onValueChange={(v) => setActivityId((v ?? "") as string)}
+              options={activityOptions}
+              placeholder="Pilih Kegiatan"
+            />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">
               Status Kendala
             </label>
-            <select
-              value={statusFilter}
-              onChange={(e) =>
-                setStatusFilter(e.target.value as IssueStatusValue | "")
+            <HUComboBox
+              value={statusFilter || null}
+              onValueChange={(v) =>
+                setStatusFilter((v ?? "") as IssueStatusValue | "")
               }
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              title="Pilih status issue"
-            >
-              <option value="">Semua Status</option>
-              {ISSUE_STATUS_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+              options={statusOptions}
+              placeholder="Pilih Status"
+            />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Pencarian</label>
@@ -305,7 +306,10 @@ export default function Issue() {
                   <React.Fragment key={activityName}>
                     {/* Header Group */}
                     <tr className="bg-gray-100 border-y border-gray-300">
-                      <td colSpan={3} className="px-6 py-2 font-bold text-gray-800">
+                      <td
+                        colSpan={3}
+                        className="px-6 py-2 font-bold text-gray-800"
+                      >
                         {activityName}
                       </td>
                       <td className="px-6 py-2">
@@ -366,17 +370,17 @@ export default function Issue() {
                                             it.issueStatus === "Resolved"
                                               ? "bg-green-100 text-green-700"
                                               : it.issueStatus === "InProgress"
-                                              ? "bg-yellow-100 text-yellow-700"
-                                              : "bg-gray-100 text-gray-700",
+                                                ? "bg-yellow-100 text-yellow-700"
+                                                : "bg-gray-100 text-gray-700",
                                           ].join(" ")}
                                         >
                                           {it.issueStatus === "Waiting"
                                             ? "Menunggu"
                                             : it.issueStatus === "InProgress"
-                                            ? "Sedang Diproses"
-                                            : it.issueStatus === "Resolved"
-                                            ? "Selesai"
-                                            : it.issueStatus || "-"}
+                                              ? "Sedang Diproses"
+                                              : it.issueStatus === "Resolved"
+                                                ? "Selesai"
+                                                : it.issueStatus || "-"}
                                         </span>
                                       </div>
                                       <div className="text-xs text-gray-600">
@@ -391,7 +395,9 @@ export default function Issue() {
                                   {/* Aksi */}
                                   <td className="px-6 py-3 text-right align-top">
                                     <button
-                                      onClick={() => onToggleCommentPanel(it.id)}
+                                      onClick={() =>
+                                        onToggleCommentPanel(it.id)
+                                      }
                                       className="font-medium text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded text-sm"
                                     >
                                       {opened ? "Tutup" : "Masukkan Komentar"}
@@ -597,7 +603,8 @@ export default function Issue() {
                             </p>
                             <p className="text-xs text-gray-600 mt-1">
                               {formatID(it.id)} • Pelapor:{" "}
-                              {it.reporter?.name || "-"} • {fmtDate(it.createdAt)}
+                              {it.reporter?.name || "-"} •{" "}
+                              {fmtDate(it.createdAt)}
                             </p>
                             <div className="mt-2 flex items-center justify-between">
                               <span
@@ -605,17 +612,17 @@ export default function Issue() {
                                   it.issueStatus === "Resolved"
                                     ? "bg-green-100 text-green-700"
                                     : it.issueStatus === "InProgress"
-                                    ? "bg-yellow-100 text-yellow-700"
-                                    : "bg-gray-100 text-gray-700"
+                                      ? "bg-yellow-100 text-yellow-700"
+                                      : "bg-gray-100 text-gray-700"
                                 }`}
                               >
                                 {it.issueStatus === "Waiting"
                                   ? "Menunggu"
                                   : it.issueStatus === "InProgress"
-                                  ? "Sedang Diproses"
-                                  : it.issueStatus === "Resolved"
-                                  ? "Selesai"
-                                  : it.issueStatus || "-"}
+                                    ? "Sedang Diproses"
+                                    : it.issueStatus === "Resolved"
+                                      ? "Selesai"
+                                      : it.issueStatus || "-"}
                               </span>
                               <button
                                 onClick={() => onToggleCommentPanel(it.id)}

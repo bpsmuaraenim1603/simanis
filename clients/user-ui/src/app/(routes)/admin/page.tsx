@@ -22,6 +22,7 @@ import { GET_USER_PROGRESS_BY_SUBSURVEY_ID } from "@/src/graphql/actions/find-us
 import { GET_ALL_DISTRICT } from "@/src/graphql/actions/find-alldistrict.action";
 import { LayoutGroup, motion } from "framer-motion";
 import HUComboBox from "@/src/components/HUCombobox";
+import HUSelect from "@/src/components/HUSelect";
 
 /* ====== (type definitions sama persis dengan punyamu) ====== */
 type SurveyActivity = { id: string; name: string; slug: string };
@@ -662,6 +663,27 @@ function Admin() {
     setUpdateUserProgressForm((prev) => ({ ...prev, [key]: value }));
   };
 
+  const setF2Field = <K extends keyof typeof updateStateF2>(
+    key: K,
+    value: (typeof updateStateF2)[K]
+  ) => {
+    setFormStateF2((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const setUpdateF2Field = <K extends keyof typeof updateStateF2>(
+    key: K,
+    value: (typeof updateStateF2)[K]
+  ) => {
+    setUpdateStateF2((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const setUpdateF1Field = <K extends keyof typeof updateStateF1>(
+    key: K,
+    value: (typeof updateStateF1)[K]
+  ) => {
+    setUpdateStateF1((prev) => ({ ...prev, [key]: value }));
+  };
+
   const toOpts = <T,>(
     rows: T[],
     pick: (row: T) => { value: string; label: string; subLabel?: string }
@@ -990,19 +1012,18 @@ function Admin() {
               >
                 Pilih Tim
               </label>
-              <select
-                id="surveyActivityId"
-                value={updateStateF1.surveyActivityId}
-                onChange={handleChangeUpdateF1}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              >
-                <option value="">-- Pilih Tim --</option>
-                {data?.allSurveyActivities.map((s: SurveyActivity) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+
+              <HUSelect
+                value={updateStateF1.surveyActivityId || null}
+                onValueChange={(v) =>
+                  setUpdateF1Field("surveyActivityId", (v ?? "") as string)
+                }
+                options={data?.allSurveyActivities.map((s: SurveyActivity) => ({
+                  value: s.id,
+                  label: s.name,
+                }))}
+                placeholder="-- Pilih Tim --"
+              />
             </div>
             <div>
               <label htmlFor="name" className="block text-sm font-bold mb-2">
@@ -1077,21 +1098,20 @@ function Admin() {
                 htmlFor="surveyActivityId"
                 className="block text-sm font-bold mb-2"
               >
-                Tim
+                Tim Penyelenggara
               </label>
-              <select
-                id="surveyActivityId"
-                value={formStateF2.surveyActivityId}
-                onChange={handleChangeF2}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              >
-                <option value="">-- Pilih Tim --</option>
-                {data?.allSurveyActivities.map((s: SurveyActivity) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+
+              <HUSelect
+                value={formStateF2.surveyActivityId || null}
+                onValueChange={(v) =>
+                  setF2Field("surveyActivityId", (v ?? "") as string)
+                }
+                options={data?.allSurveyActivities.map((s: SurveyActivity) => ({
+                  value: s.id,
+                  label: s.name,
+                }))}
+                placeholder="-- Pilih Tim --"
+              />
             </div>
             <div>
               <label
@@ -1157,16 +1177,18 @@ function Admin() {
               >
                 Jenis Kegiatan
               </label>
-              <select
-                id="activityType"
-                value={formStateF2.activityType}
-                onChange={handleChangeF2}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              >
-                <option value="">-- Pilih Jenis Kegiatan --</option>
-                <option value="Listing">Listing</option>
-                <option value="Pencacahan">Pencacahan</option>
-              </select>
+
+              <HUSelect
+                value={formStateF2.activityType || null}
+                onValueChange={(v) =>
+                  setF2Field("activityType", (v ?? "") as string)
+                }
+                options={[
+                  { value: "Listing", label: "Listing" },
+                  { value: "Pencacahan", label: "Pencacahan" },
+                ]}
+                placeholder="-- Pilih Jenis Kegiatan --"
+              />
             </div>
             <div className="md:col-span-2">
               <button
@@ -1197,19 +1219,18 @@ function Admin() {
               >
                 Tim Penyelenggara
               </label>
-              <select
-                id="surveyActivityId"
-                value={updateStateF2.surveyActivityId}
-                onChange={handleChangeUpdateF2}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              >
-                <option value="">-- Pilih Tim --</option>
-                {data?.allSurveyActivities.map((s: SurveyActivity) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+
+              <HUSelect
+                value={updateStateF2.surveyActivityId || null}
+                onValueChange={(v) =>
+                  setUpdateF2Field("surveyActivityId", (v ?? "") as string)
+                }
+                options={data?.allSurveyActivities.map((s: SurveyActivity) => ({
+                  value: s.id,
+                  label: s.name,
+                }))}
+                placeholder="-- Pilih Tim --"
+              />
             </div>
             <div>
               <label
@@ -1218,21 +1239,24 @@ function Admin() {
               >
                 Kegiatan Survei
               </label>
-              <select
-                id="subSurveyActivityId"
-                value={updateStateF2.subSurveyActivityId}
-                onChange={handleChangeUpdateF2}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              >
-                <option value="">-- Pilih Kegiatan --</option>
-                {SubSurveydata?.subSurveyActivityById?.map(
-                  (sub: SubSurveyActivity) => (
-                    <option key={sub.id} value={sub.id}>
-                      {sub.name}
-                    </option>
-                  )
-                )}
-              </select>
+
+              <HUSelect
+                value={updateStateF2.subSurveyActivityId || null}
+                onValueChange={(v) =>
+                  setUpdateF2Field("subSurveyActivityId", (v ?? "") as string)
+                }
+                options={
+                  SubSurveydata?.subSurveyActivityById
+                    ? SubSurveydata?.subSurveyActivityById.map(
+                        (s: SubSurveyActivity) => ({
+                          value: s.id,
+                          label: s.name,
+                        })
+                      )
+                    : []
+                }
+                placeholder="-- Pilih Kegiatan --"
+              />
             </div>
             <div>
               <label htmlFor="name" className="block text-sm font-bold mb-2">
@@ -1242,6 +1266,7 @@ function Admin() {
                 id="name"
                 value={updateStateF2.name}
                 onChange={handleChangeUpdateF2}
+                placeholder="Contoh: Sensus Penduduk 2020"
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
@@ -1253,6 +1278,7 @@ function Admin() {
                 id="slug"
                 value={updateStateF2.slug}
                 onChange={handleChangeUpdateF2}
+                placeholder="Contoh: sensus-penduduk-2020"
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
@@ -1320,16 +1346,18 @@ function Admin() {
               >
                 Jenis Kegiatan
               </label>
-              <select
-                id="activityType"
-                value={updateStateF2.activityType}
-                onChange={handleChangeUpdateF2}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              >
-                <option value="">-- Pilih Jenis Kegiatan --</option>
-                <option value="Listing">Listing</option>
-                <option value="Pencacahan">Pencacahan</option>
-              </select>
+
+              <HUSelect
+                value={updateStateF2.activityType || null}
+                onValueChange={(v) =>
+                  setUpdateF2Field("activityType", (v ?? "") as string)
+                }
+                options={[
+                  { label: "Listing", value: "Listing" },
+                  { label: "Pencacahan", value: "Pencacahan" },
+                ]}
+                placeholder="-- Pilih Jenis Kegiatan --"
+              />
             </div>
             <div className="md:col-span-2">
               <button
@@ -1370,6 +1398,7 @@ function Admin() {
                   value: s.id,
                   label: s.name ?? "",
                 }))}
+                placeholder="-- Pilih Tim Penyelenggara --"
               />
             </div>
 
@@ -1380,21 +1409,24 @@ function Admin() {
               >
                 Kegiatan Survei
               </label>
-              <select
-                id="subSurveyActivityId"
-                value={userProgressForm.subSurveyActivityId}
-                onChange={handleChangeUserProgress}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              >
-                <option value="">-- Pilih Kegiatan --</option>
-                {SubmitUPData?.subSurveyActivityById?.map(
-                  (sub: SubSurveyActivity) => (
-                    <option key={sub.id} value={sub.id}>
-                      {sub.name}
-                    </option>
-                  )
-                )}
-              </select>
+
+              <HUSelect
+                value={userProgressForm.subSurveyActivityId || null}
+                onValueChange={(v) =>
+                  setUPField("subSurveyActivityId", (v ?? "") as string)
+                }
+                options={
+                  SubmitUPData?.subSurveyActivityById
+                    ? SubmitUPData?.subSurveyActivityById?.map(
+                        (sub: SubSurveyActivity) => ({
+                          label: sub.name,
+                          value: sub.id,
+                        })
+                      )
+                    : []
+                }
+                placeholder="-- Pilih Kegiatan --"
+              />
               {userProgressForm.subSurveyActivityId && (
                 <div className="mt-1 text-xs">
                   <span className="inline-block rounded bg-white border px-2 py-1">
@@ -1424,6 +1456,7 @@ function Admin() {
                   label: u.name ?? "-",
                   subLabel: u.email ?? "",
                 }))}
+                placeholder="-- Pilih Pengawas --"
               />
             </div>
 
@@ -1440,6 +1473,7 @@ function Admin() {
                   label: u.name ?? "-",
                   subLabel: u.email ?? "",
                 }))}
+                placeholder="-- Pilih Petugas --"
               />
             </div>
 
@@ -1516,7 +1550,10 @@ function Admin() {
             </div>
 
             <div>
-              <label htmlFor="districtId" className="block text-sm font-bold mb-2">
+              <label
+                htmlFor="districtId"
+                className="block text-sm font-bold mb-2"
+              >
                 Kecamatan
               </label>
 
@@ -1531,6 +1568,7 @@ function Admin() {
                     label: d.name ?? "-",
                   })
                 )}
+                placeholder="-- Pilih Kecamatan --"
               />
             </div>
 
@@ -1577,6 +1615,7 @@ function Admin() {
                   value: s.id,
                   label: s.name ?? "-",
                 }))}
+                placeholder="-- Pilih Tim Penyelenggara --"
               />
             </div>
 
@@ -1587,21 +1626,24 @@ function Admin() {
               >
                 Kegiatan Survei
               </label>
-              <select
-                id="subSurveyActivityId"
-                value={updateUserProgressForm.subSurveyActivityId}
-                onChange={handleChangeUpdateUserProgress}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              >
-                <option value="">-- Pilih Kegiatan --</option>
-                {UpdateUPData?.subSurveyActivityById?.map(
-                  (sub: SubSurveyActivity) => (
-                    <option key={sub.id} value={sub.id}>
-                      {sub.name}
-                    </option>
-                  )
-                )}
-              </select>
+
+              <HUSelect
+                value={updateUserProgressForm.subSurveyActivityId || null}
+                onValueChange={(v) =>
+                  setUpdateUPField("subSurveyActivityId", (v ?? "") as string)
+                }
+                options={
+                  UpdateUPData?.subSurveyActivityById
+                    ? UpdateUPData?.subSurveyActivityById?.map(
+                        (s: SubSurveyActivity) => ({
+                          value: s.id,
+                          label: s.name ?? "-",
+                        })
+                      )
+                    : []
+                }
+                placeholder="-- Pilih Kegiatan --"
+              />
               {updateUserProgressForm.subSurveyActivityId && (
                 <div className="mt-1 text-xs">
                   <span className="inline-block rounded bg-white border px-2 py-1">
@@ -1634,6 +1676,7 @@ function Admin() {
                     subLabel: up.user?.email ?? "",
                   })
                 )}
+                placeholder="-- Pilih Petugas --"
               />
             </div>
 
@@ -1716,7 +1759,10 @@ function Admin() {
             </div>
 
             <div>
-              <label htmlFor="districtId" className="block text-sm font-bold mb-2">
+              <label
+                htmlFor="districtId"
+                className="block text-sm font-bold mb-2"
+              >
                 Kecamatan
               </label>
 
@@ -1731,6 +1777,7 @@ function Admin() {
                     label: d.name,
                   })
                 )}
+                placeholder="-- Pilih Kecamatan --"
               />
             </div>
 

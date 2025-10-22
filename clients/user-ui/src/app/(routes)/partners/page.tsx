@@ -10,6 +10,7 @@ import { GET_USER_PROGRESS_BY_SUBSURVEY_ID } from "@/src/graphql/actions/find-us
 import toast from "react-hot-toast";
 import styles from "@/src/utils/style";
 import useUser from "@/src/hooks/useUser";
+import HUComboBox from "@/src/components/HUCombobox";
 
 type SubSurveyActivity = { id: string; name: string };
 type District = { id: string; name?: string; city?: string };
@@ -106,6 +107,14 @@ export default function Partners() {
     [upData]
   );
 
+  const regionOptions = useMemo(() => {
+    const raw: string[] = (petugasList ?? [])
+      .map((p) => p?.district?.city?.trim() || p?.district?.name?.trim() || "")
+      .filter(Boolean);
+    const uniq = Array.from(new Set(raw)).sort((a, b) => a.localeCompare(b));
+    return uniq.map((r) => ({ value: r, label: r }));
+  }, [petugasList]);
+
   const isAdmin =
     user?.role === "Admin" ||
     user?.role === "Superadmin" ||
@@ -201,6 +210,37 @@ export default function Partners() {
     });
   }, [dataJobLetter, user, filter]);
 
+  const activityOptions = useMemo(
+    () =>
+      (dataSubSurvey?.allSubSurveyActivities ?? []).map(
+        (sub: { id: string; name: string }) => ({
+          value: sub.id,
+          label: sub.name ?? "-",
+        })
+      ),
+    [dataSubSurvey]
+  );
+
+  const statusOptions = useMemo(
+    () => [
+      { value: "Menunggu", label: "Menunggu" },
+      { value: "Disetujui", label: "Disetujui" },
+      { value: "Ditolak", label: "Ditolak" },
+    ],
+    []
+  );
+
+  const petugasOptions = useMemo(
+    () =>
+      petugasList.map((p) => ({
+        value: p.userId,
+        label: p.user?.name ?? p.userId,
+        subLabel:
+          p.district?.city?.trim() || p.district?.name?.trim() || undefined,
+      })),
+    [petugasList]
+  );
+
   return (
     <div className="max-w-screen-xl mx-auto px-3 sm:px-6 md:px-8 py-4 space-y-4 font-Poppins">
       {/* Header */}
@@ -214,49 +254,52 @@ export default function Partners() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <label className="block text-sm font-medium mb-1">Wilayah</label>
-            <select
-              id="wilayah"
-              onChange={handleFilter}
-              className="w-full px-3 py-2 border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">-- Pilih Wilayah --</option>
-              <option value="Muara Enim">Muara Enim</option>
-              <option value="PALI">PALI</option>
-            </select>
+            <HUComboBox
+              value={filter.wilayah || null} // atau filter.region, sesuaikan nama state-mu
+              onValueChange={(v) =>
+                setFilter((prev) => ({ ...prev, wilayah: (v ?? "") as string }))
+              }
+              options={regionOptions}
+              placeholder="-- Pilih Wilayah --"
+            />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">
               Jenis Survei
             </label>
-            <select
-              id="survei"
-              onChange={handleFilter}
-              className="w-full px-3 py-2 border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">-- Pilih Jenis Survei --</option>
-              {dataSubSurvey?.allSubSurveyActivities?.map(
-                (survei: SubSurveyActivity) => (
-                  <option key={survei.id} value={survei.name}>
-                    {survei.name}
-                  </option>
+            <HUComboBox
+              value={filter.survei || null}
+              onValueChange={(v) =>
+                setFilter((prev) => ({ ...prev, survei: (v ?? "") as string }))
+              }
+              options={
+                // filter bekerja berdasarkan NAMA survei (bukan ID),
+                // jadi opsi diisi label sebagai value juga:
+                (dataSubSurvey?.allSubSurveyActivities ?? []).map(
+                  (s: { id: string; name: string }) => ({
+                    value: s.name ?? "-",
+                    label: s.name ?? "-",
+                  })
                 )
-              )}
-            </select>
+              }
+              placeholder="-- Pilih Jenis Survei --"
+            />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">
               Status Persetujuan
             </label>
-            <select
-              id="statusPengajuan"
-              onChange={handleFilter}
-              className="w-full px-3 py-2 border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">-- Pilih Status Persetujuan --</option>
-              <option value="Menunggu">Menunggu</option>
-              <option value="Disetujui">Disetujui</option>
-              <option value="Ditolak">Ditolak</option>
-            </select>
+            <HUComboBox
+              value={filter.statusPengajuan || null}
+              onValueChange={(v) =>
+                setFilter((prev) => ({
+                  ...prev,
+                  statusPengajuan: (v ?? "") as string,
+                }))
+              }
+              options={statusOptions}
+              placeholder="-- Pilih Status Persetujuan --"
+            />
           </div>
         </div>
       </div>
@@ -432,21 +475,17 @@ export default function Partners() {
             <label className="block text-sm font-semibold mb-1">
               Kegiatan Survei
             </label>
-            <select
-              id="subSurveyActivityId"
-              value={input.subSurveyActivityId}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">-- Pilih Kegiatan --</option>
-              {dataSubSurvey?.allSubSurveyActivities?.map(
-                (sub: SubSurveyActivity) => (
-                  <option key={sub.id} value={sub.id}>
-                    {sub.name}
-                  </option>
-                )
-              )}
-            </select>
+            <HUComboBox
+              value={input.subSurveyActivityId || null}
+              onValueChange={(v) =>
+                setInput((prev) => ({
+                  ...prev,
+                  subSurveyActivityId: (v ?? "") as string,
+                }))
+              }
+              options={activityOptions}
+              placeholder="-- Pilih Kegiatan Survei --"
+            />
           </div>
           {canSeeForm && (
             <div className="space-y-4">
@@ -457,20 +496,33 @@ export default function Partners() {
                     <span className="text-xs text-gray-500">(memuat…)</span>
                   )}
                 </label>
-                <select
-                  id="userId"
-                  value={input.userId}
-                  onChange={handleSelectPetugas}
+                <HUComboBox
+                  value={input.userId || null}
+                  onValueChange={(v) => {
+                    const userId = (v ?? "") as string;
+                    const selectedUP = petugasList.find(
+                      (p) => p.userId === userId
+                    );
+                    const regionAuto =
+                      selectedUP?.district?.city?.trim() ||
+                      selectedUP?.district?.name?.trim() ||
+                      "";
+                    setInput((prev) => ({
+                      ...prev,
+                      userId,
+                      region: regionAuto,
+                    }));
+                  }}
+                  options={petugasOptions}
+                  placeholder={
+                    !input.subSurveyActivityId
+                      ? "Pilih kegiatan dulu"
+                      : loadingUP
+                        ? "Memuat daftar petugas…"
+                        : "Pilih atau ketik nama petugas…"
+                  }
                   disabled={!input.subSurveyActivityId || loadingUP}
-                  className="w-full px-3 py-2 border rounded-md bg-white disabled:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">-- Pilih Petugas --</option>
-                  {petugasList.map((p) => (
-                    <option key={p.id} value={p.userId}>
-                      {p.user?.name ?? p.userId}
-                    </option>
-                  ))}
-                </select>
+                />
                 {!loadingUP &&
                   input.subSurveyActivityId &&
                   petugasList.length === 0 && (

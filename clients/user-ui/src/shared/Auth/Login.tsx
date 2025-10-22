@@ -72,7 +72,7 @@ const Login = ({ setActiveState }: { setActiveState: (e: string) => void }) => {
         )}
         <div className="w-full mt-5 relative mb-1">
           <label htmlFor="password" className="text-[16px] font-Poppins">
-            Masukkan Passwordmu
+            Masukkan passwordmu
           </label>
           <input
             {...register("password")}

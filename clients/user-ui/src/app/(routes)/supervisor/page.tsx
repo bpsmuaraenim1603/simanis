@@ -9,33 +9,63 @@ import { GET_ALL_SUB_SURVEY_ACTIVITIES } from "@/src/graphql/actions/find-allsub
 import { GET_USER_PROGRESS_BY_SUBSURVEY_ID } from "@/src/graphql/actions/find-usersurveyprogress.action";
 import { UPDATE_USER_PROGRESS } from "@/src/graphql/actions/update-userprogress.action";
 import styles from "@/src/utils/style";
+import HUComboBox from "@/src/components/HUCombobox";
+import HUSelect from "@/src/components/HUSelect";
 
 /* ==== (type definitions sama persis dengan punyamu) ==== */
 type SurveyActivity = { id: string; name: string };
-type SubSurveyActivity = { id: string; name: string; activityType?: string | null; surveyActivityId: string };
+type SubSurveyActivity = {
+  id: string;
+  name: string;
+  activityType?: string | null;
+  surveyActivityId: string;
+};
 type UserLite = { id: string; name: string; email?: string | null };
 type UserProgressRow = {
-  id: string; userId: string; superVisorId?: string | null; subSurveyActivityId: string;
-  totalAssigned: number; submitCount: number; approvedCount: number; rejectedCount: number;
-  lastUpdated?: string | null; districtId?: string | null;
+  id: string;
+  userId: string;
+  superVisorId?: string | null;
+  subSurveyActivityId: string;
+  totalAssigned: number;
+  submitCount: number;
+  approvedCount: number;
+  rejectedCount: number;
+  lastUpdated?: string | null;
+  districtId?: string | null;
   user?: UserLite | null;
-  subSurveyActivity?: { id: string; name?: string | null; activityType?: string | null } | null;
+  subSurveyActivity?: {
+    id: string;
+    name?: string | null;
+    activityType?: string | null;
+  } | null;
 };
 
 export default function SupervisorManagePage() {
   const { user: me } = useUser();
   const apollo = useApolloClient();
 
-  const { data: saData, loading: saLoading, refetch: refetchSA } = useQuery(GET_ALL_SURVEY_ACTIVITIES, { fetchPolicy: "cache-and-network" });
-  const [fetchSubs, { data: subsData, loading: subsLoading }] = useLazyQuery(GET_ALL_SUB_SURVEY_ACTIVITIES, { fetchPolicy: "network-only" });
-  const [fetchUP, { data: upData, loading: upLoading, refetch: refetchUP }] = useLazyQuery(GET_USER_PROGRESS_BY_SUBSURVEY_ID, { fetchPolicy: "network-only" });
+  const {
+    data: saData,
+    loading: saLoading,
+    refetch: refetchSA,
+  } = useQuery(GET_ALL_SURVEY_ACTIVITIES, { fetchPolicy: "cache-and-network" });
+  const [fetchSubs, { data: subsData, loading: subsLoading }] = useLazyQuery(
+    GET_ALL_SUB_SURVEY_ACTIVITIES,
+    { fetchPolicy: "network-only" }
+  );
+  const [fetchUP, { data: upData, loading: upLoading, refetch: refetchUP }] =
+    useLazyQuery(GET_USER_PROGRESS_BY_SUBSURVEY_ID, {
+      fetchPolicy: "network-only",
+    });
 
   const [surveyActivityId, setSurveyActivityId] = React.useState("");
   const [subSurveyActivityId, setSubSurveyActivityId] = React.useState("");
-  const [selectedUserProgressId, setSelectedUserProgressId] = React.useState("");
+  const [selectedUserProgressId, setSelectedUserProgressId] =
+    React.useState("");
 
   React.useEffect(() => {
-    setSubSurveyActivityId(""); setSelectedUserProgressId("");
+    setSubSurveyActivityId("");
+    setSelectedUserProgressId("");
     if (surveyActivityId) fetchSubs({ variables: { surveyActivityId } });
   }, [surveyActivityId, fetchSubs]);
 
@@ -45,15 +75,38 @@ export default function SupervisorManagePage() {
   }, [subSurveyActivityId, fetchUP]);
 
   const surveyActivities: SurveyActivity[] = saData?.allSurveyActivities ?? [];
-  const subActivities: SubSurveyActivity[] = subsData?.subSurveyActivityById ?? [];
-  const allUPRows: UserProgressRow[] = upData?.userProgressBySubSurveyActivityId ?? [];
+
+  const teamOptions = useMemo(
+    () => surveyActivities.map((s) => ({ value: s.id, label: s.name })),
+    [surveyActivities]
+  );
+
+  const subActivities: SubSurveyActivity[] =
+    subsData?.subSurveyActivityById ?? [];
+
+  const kegiatanOptions = useMemo(
+    () =>
+      subActivities.map((sub) => ({
+        value: sub.id,
+        label: `${sub.name}${sub.activityType ? ` (${sub.activityType})` : ""}`,
+      })),
+    [subActivities]
+  );
+  const allUPRows: UserProgressRow[] =
+    upData?.userProgressBySubSurveyActivityId ?? [];
 
   const supervisorId = me?.id ?? "";
   const myUPRows = React.useMemo(() => {
-    const rowsForSub = allUPRows.filter((r) => r.subSurveyActivityId === subSurveyActivityId);
-    const svFieldExist = rowsForSub.some((r) => typeof r.superVisorId !== "undefined");
+    const rowsForSub = allUPRows.filter(
+      (r) => r.subSurveyActivityId === subSurveyActivityId
+    );
+    const svFieldExist = rowsForSub.some(
+      (r) => typeof r.superVisorId !== "undefined"
+    );
     if (!svFieldExist) return rowsForSub;
-    const mine = rowsForSub.filter((r) => (r.superVisorId ?? "") === supervisorId);
+    const mine = rowsForSub.filter(
+      (r) => (r.superVisorId ?? "") === supervisorId
+    );
     return mine.length ? mine : rowsForSub;
   }, [allUPRows, subSurveyActivityId, supervisorId]);
 
@@ -61,9 +114,16 @@ export default function SupervisorManagePage() {
     () =>
       myUPRows.map((r) => ({
         upId: r.id,
-        label: r.user?.name ? `${r.user.name}${r.user?.email ? ` - ${r.user.email}` : ""}` : r.userId,
+        label: r.user?.name
+          ? `${r.user.name}${r.user?.email ? ` - ${r.user.email}` : ""}`
+          : r.userId,
       })),
     [myUPRows]
+  );
+
+  const petugasComboOptions = useMemo(
+    () => petugasOptions.map((p) => ({ value: p.upId, label: p.label })),
+    [petugasOptions]
   );
 
   const currentUP: UserProgressRow | undefined = React.useMemo(
@@ -76,7 +136,11 @@ export default function SupervisorManagePage() {
     [subActivities, subSurveyActivityId]
   );
   const isListing =
-    (selectedSub?.activityType ?? currentUP?.subSurveyActivity?.activityType ?? "")
+    (
+      selectedSub?.activityType ??
+      currentUP?.subSurveyActivity?.activityType ??
+      ""
+    )
       .toString()
       .toLowerCase() === "listing";
 
@@ -106,19 +170,40 @@ export default function SupervisorManagePage() {
         if (sum > totalAssigned) {
           let overflow = sum - totalAssigned;
           const takeFromSubmit = Math.min(overflow, submitCount);
-          submitCount -= takeFromSubmit; overflow -= takeFromSubmit;
-          if (overflow > 0) { const t = Math.min(overflow, rejectedCount); rejectedCount -= t; overflow -= t; }
-          if (overflow > 0) { const t = Math.min(overflow, approvedCount); approvedCount -= t; }
+          submitCount -= takeFromSubmit;
+          overflow -= takeFromSubmit;
+          if (overflow > 0) {
+            const t = Math.min(overflow, rejectedCount);
+            rejectedCount -= t;
+            overflow -= t;
+          }
+          if (overflow > 0) {
+            const t = Math.min(overflow, approvedCount);
+            approvedCount -= t;
+          }
         }
       }
-      return { ...draft, totalAssigned, submitCount, approvedCount, rejectedCount };
+      return {
+        ...draft,
+        totalAssigned,
+        submitCount,
+        approvedCount,
+        rejectedCount,
+      };
     },
     [isListing]
   );
 
   React.useEffect(() => {
     if (!currentUP) {
-      setForm({ userProgressId: "", totalAssigned: 0, submitCount: 0, approvedCount: 0, rejectedCount: 0, districtId: "" });
+      setForm({
+        userProgressId: "",
+        totalAssigned: 0,
+        submitCount: 0,
+        approvedCount: 0,
+        rejectedCount: 0,
+        districtId: "",
+      });
       return;
     }
     setForm((prev) =>
@@ -134,19 +219,39 @@ export default function SupervisorManagePage() {
     );
   }, [currentUP, applyConstraints]);
 
-  const step = (field: "submitCount" | "approvedCount" | "rejectedCount", delta: number) => {
+  const step = (
+    field: "submitCount" | "approvedCount" | "rejectedCount",
+    delta: number
+  ) => {
     setForm((prev) => {
       let { submitCount, approvedCount, rejectedCount } = prev;
       if (field === "submitCount") submitCount = clamp(submitCount + delta, 0);
       if (field === "approvedCount") {
-        if (delta > 0) { if (submitCount <= 0) return prev; submitCount -= 1; approvedCount += 1; }
-        else if (approvedCount > 0) { approvedCount -= 1; submitCount += 1; }
+        if (delta > 0) {
+          if (submitCount <= 0) return prev;
+          submitCount -= 1;
+          approvedCount += 1;
+        } else if (approvedCount > 0) {
+          approvedCount -= 1;
+          submitCount += 1;
+        }
       }
       if (field === "rejectedCount") {
-        if (delta > 0) { if (submitCount <= 0) return prev; submitCount -= 1; rejectedCount += 1; }
-        else if (rejectedCount > 0) { rejectedCount -= 1; submitCount += 1; }
+        if (delta > 0) {
+          if (submitCount <= 0) return prev;
+          submitCount -= 1;
+          rejectedCount += 1;
+        } else if (rejectedCount > 0) {
+          rejectedCount -= 1;
+          submitCount += 1;
+        }
       }
-      return applyConstraints({ ...prev, submitCount, approvedCount, rejectedCount });
+      return applyConstraints({
+        ...prev,
+        submitCount,
+        approvedCount,
+        rejectedCount,
+      });
     });
   };
 
@@ -213,57 +318,65 @@ export default function SupervisorManagePage() {
           {/* Tim */}
           <div>
             <label className="block text-sm font-semibold mb-1">Tim</label>
-            <select
-              value={surveyActivityId}
-              onChange={(e) => setSurveyActivityId(e.target.value)}
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              disabled={saLoading}
-            >
-              <option value="">{saLoading ? "Memuat…" : "-- Pilih Tim --"}</option>
-              {surveyActivities.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
+            <HUComboBox
+              value={surveyActivityId || null}
+              onValueChange={(v) => setSurveyActivityId(v ?? "")}
+              options={teamOptions}
+              placeholder={saLoading ? "Memuat…" : "-- Pilih Tim --"}
+              className="w-full"
+            />
           </div>
 
           {/* Kegiatan */}
           <div>
-            <label className="block text-sm font-semibold mb-1">Kegiatan Survei</label>
-            <select
-              value={subSurveyActivityId}
-              onChange={(e) => setSubSurveyActivityId(e.target.value)}
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            <label className="block text-sm font-semibold mb-1">
+              Kegiatan Survei
+            </label>
+            <HUSelect
+              value={subSurveyActivityId || null}
+              onValueChange={(v) => setSubSurveyActivityId(v ?? "")}
+              options={kegiatanOptions}
+              placeholder={
+                !surveyActivityId
+                  ? "Pilih Tim dulu"
+                  : subsLoading
+                    ? "Memuat…"
+                    : "-- Pilih Kegiatan --"
+              }
               disabled={!surveyActivityId || subsLoading}
-            >
-              <option value="">
-                {!surveyActivityId ? "Pilih Tim dulu" : subsLoading ? "Memuat…" : "-- Pilih Kegiatan --"}
-              </option>
-              {subActivities.map((sub) => (
-                <option key={sub.id} value={sub.id}>{sub.name} {sub.activityType ? `(${sub.activityType})` : ""}</option>
-              ))}
-            </select>
+              className="w-full"
+            />
             {!!subSurveyActivityId && (
-              <p className="text-xs mt-1">Tipe kegiatan: <b>{isListing ? "Listing" : (selectedSub?.activityType ?? "-")}</b></p>
+              <p className="text-xs mt-1">
+                Tipe kegiatan:{" "}
+                <b>
+                  {isListing ? "Listing" : (selectedSub?.activityType ?? "-")}
+                </b>
+              </p>
             )}
           </div>
 
           {/* Petugas */}
           <div>
             <label className="block text-sm font-semibold mb-1">Petugas</label>
-            <select
-              value={selectedUserProgressId}
-              onChange={(e) => setSelectedUserProgressId(e.target.value)}
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              disabled={!subSurveyActivityId || upLoading || petugasOptions.length === 0}
-            >
-              <option value="">
-                {!subSurveyActivityId ? "Pilih Kegiatan dulu" : upLoading
-                  ? "Memuat…" : petugasOptions.length === 0 ? "Tidak ada petugas" : "-- Pilih Petugas --"}
-              </option>
-              {petugasOptions.map((opt) => (
-                <option key={opt.upId} value={opt.upId}>{opt.label}</option>
-              ))}
-            </select>
+            <HUComboBox
+              value={selectedUserProgressId || null}
+              onValueChange={(v) => setSelectedUserProgressId(v ?? "")}
+              options={petugasComboOptions}
+              placeholder={
+                !subSurveyActivityId
+                  ? "Pilih Kegiatan dulu"
+                  : upLoading
+                    ? "Memuat…"
+                    : petugasOptions.length === 0
+                      ? "Tidak ada petugas"
+                      : "-- Pilih Petugas --"
+              }
+              disabled={
+                !subSurveyActivityId || upLoading || petugasOptions.length === 0
+              }
+              className="w-full"
+            />
             {!!subSurveyActivityId && (
               <p className="text-[11px] text-gray-500 mt-1">
                 {myUPRows.some((r) => (r.superVisorId ?? "") === supervisorId)
@@ -276,7 +389,10 @@ export default function SupervisorManagePage() {
       </div>
 
       {/* Form Update */}
-      <form onSubmit={onSubmit} className="bg-blue-50 rounded-xl p-4 shadow space-y-4">
+      <form
+        onSubmit={onSubmit}
+        className="bg-blue-50 rounded-xl p-4 shadow space-y-4"
+      >
         <h3 className="text-base font-bold">Update Data Petugas</h3>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -287,39 +403,64 @@ export default function SupervisorManagePage() {
             <input
               type="number"
               value={form.totalAssigned}
-              onChange={(e) => setForm((p) => applyConstraints({ ...p, totalAssigned: Number(e.target.value) }))}
+              onChange={(e) =>
+                setForm((p) =>
+                  applyConstraints({
+                    ...p,
+                    totalAssigned: Number(e.target.value),
+                  })
+                )
+              }
               readOnly={isListing}
               className="w-full px-3 py-2 border rounded-md bg-white"
             />
             <p className="text-xs text-gray-600 mt-1">
-              {isListing ? "Listing: total mengikuti Submit + Approved + Rejected."
-                        : "Non-Listing: (Submit + Approved + Rejected) tidak boleh melebihi Total Sampel."}
+              {isListing
+                ? "Listing: total mengikuti Submit + Approved + Rejected."
+                : "Non-Listing: (Submit + Approved + Rejected) tidak boleh melebihi Total Sampel."}
             </p>
           </div>
 
-          {(["submitCount","approvedCount","rejectedCount"] as const).map((key) => (
-            <div key={key}>
-              <label className="block text-sm font-semibold mb-1">
-                {key === "submitCount" ? "Submit" : key === "approvedCount" ? "Approved" : "Rejected"}
-              </label>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="px-3 py-2 border rounded-md font-bold bg-red-500 text-white hover:bg-red-600"
-                  onClick={() => step(key, -1)}
-                >-</button>
-                <input readOnly value={form[key]} className="w-full px-3 py-2 border rounded-md bg-white text-center" />
-                <button
-                  type="button"
-                  className="px-3 py-2 border rounded-md font-bold bg-green-500 text-white hover:bg-green-600"
-                  onClick={() => step(key, +1)}
-                >+</button>
+          {(["submitCount", "approvedCount", "rejectedCount"] as const).map(
+            (key) => (
+              <div key={key}>
+                <label className="block text-sm font-semibold mb-1">
+                  {key === "submitCount"
+                    ? "Submit"
+                    : key === "approvedCount"
+                      ? "Approved"
+                      : "Rejected"}
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="px-3 py-2 border rounded-md font-bold bg-red-500 text-white hover:bg-red-600"
+                    onClick={() => step(key, -1)}
+                  >
+                    -
+                  </button>
+                  <input
+                    readOnly
+                    value={form[key]}
+                    className="w-full px-3 py-2 border rounded-md bg-white text-center"
+                  />
+                  <button
+                    type="button"
+                    className="px-3 py-2 border rounded-md font-bold bg-green-500 text-white hover:bg-green-600"
+                    onClick={() => step(key, +1)}
+                  >
+                    +
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          )}
         </div>
 
-        <button disabled={!form.userProgressId || saving} className={`${styles.button} my-2 text-white w-full sm:w-auto`}>
+        <button
+          disabled={!form.userProgressId || saving}
+          className={`${styles.button} my-2 text-white w-full sm:w-auto`}
+        >
           {saving ? "Menyimpan..." : "Simpan Perubahan"}
         </button>
       </form>
@@ -328,13 +469,23 @@ export default function SupervisorManagePage() {
         <h3 className="text-base font-bold mb-2">Ringkasan Kegiatan</h3>
         {subSurveyActivityId ? (
           <div className="flex flex-wrap gap-2 sm:gap-4 text-sm">
-            <span className="px-3 py-2 rounded bg-gray-100">Total Assigned: <b>{summary.totalAssigned}</b></span>
-            <span className="px-3 py-2 rounded bg-gray-100">Submit: <b>{summary.submit}</b></span>
-            <span className="px-3 py-2 rounded bg-gray-100">Approved: <b>{summary.approved}</b></span>
-            <span className="px-3 py-2 rounded bg-gray-100">Rejected: <b>{summary.rejected}</b></span>
+            <span className="px-3 py-2 rounded bg-gray-100">
+              Total Assigned: <b>{summary.totalAssigned}</b>
+            </span>
+            <span className="px-3 py-2 rounded bg-gray-100">
+              Submit: <b>{summary.submit}</b>
+            </span>
+            <span className="px-3 py-2 rounded bg-gray-100">
+              Approved: <b>{summary.approved}</b>
+            </span>
+            <span className="px-3 py-2 rounded bg-gray-100">
+              Rejected: <b>{summary.rejected}</b>
+            </span>
           </div>
         ) : (
-          <p className="text-gray-600 text-sm">Pilih Tim dan Kegiatan untuk melihat ringkasan.</p>
+          <p className="text-gray-600 text-sm">
+            Pilih Tim dan Kegiatan untuk melihat ringkasan.
+          </p>
         )}
       </div>
     </div>

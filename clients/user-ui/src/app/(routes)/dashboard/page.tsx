@@ -17,6 +17,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import HUComboBox from "@/src/components/HUCombobox";
 
 interface CalendarEvent {
   title: string;
@@ -73,11 +74,34 @@ function Dashboard() {
     getAllSubSurveyProgress: SubSurveyProgress[];
   }>(GET_REAL_ALL_SUB_SURVEY_PROGRESS);
 
+  const surveyNameOptions = useMemo(() => {
+    const names = [
+      ...new Set(
+        (surveyPogressData?.getAllSubSurveyProgress ?? [])
+          .map((it) => it.name)
+          .filter(Boolean)
+      ),
+    ];
+    return names.map((name) => ({ value: String(name), label: String(name) }));
+  }, [surveyPogressData]);
+
   const { data: monthlyStats } = useQuery(GET_MONTHLY_DASHBOARD_STATS);
 
   const { data: userProgressData } = useQuery<{
     allUserSurveyProgress: UserProgress[];
   }>(GET_REAL_ALL_USER_PROGRESS);
+
+  const subSurveyIdOptions = useMemo(() => {
+    const list = userProgressData?.allUserSurveyProgress ?? [];
+    const map = new Map<string, string>();
+    for (const it of list) {
+      map.set(it.subSurveyActivity.id, it.subSurveyActivity.name);
+    }
+    return Array.from(map.entries()).map(([value, label]) => ({
+      value,
+      label,
+    }));
+  }, [userProgressData]);
 
   const filteredProgress = useMemo(() => {
     const rows = surveyPogressData?.getAllSubSurveyProgress ?? [];
@@ -203,7 +227,10 @@ function Dashboard() {
               {/* Empty */}
               {groupedEntries.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-6 py-6 text-center text-gray-500">
+                  <td
+                    colSpan={4}
+                    className="px-6 py-6 text-center text-gray-500"
+                  >
                     {searchTerm ? (
                       <>
                         Tidak ada kegiatan yang cocok untuk{" "}
@@ -217,14 +244,15 @@ function Dashboard() {
               ) : null}
 
               {groupedEntries.map(([surveyEvent, list]) => {
-                list.sort(
-                  (a, b) => +new Date(a.start) - +new Date(b.start)
-                );
+                list.sort((a, b) => +new Date(a.start) - +new Date(b.start));
                 const minimized = isMinimized[surveyEvent] ?? false;
                 return (
                   <React.Fragment key={surveyEvent}>
                     <tr className="bg-gray-100 border-y border-gray-300">
-                      <td colSpan={3} className="px-6 py-2 font-bold text-gray-800">
+                      <td
+                        colSpan={3}
+                        className="px-6 py-2 font-bold text-gray-800"
+                      >
                         {surveyEvent}
                       </td>
                       <td className="px-6 py-2">
@@ -250,55 +278,69 @@ function Dashboard() {
                       </td>
                     </tr>
                     <AnimatePresence>
-                      {(minimized || isCloseTable) ? null : list.map((event) => (
-                        <tr key={event.id} className="bg-white border-b border-gray-200 align-top">
-                          <td className="px-6 py-2 font-medium text-gray-900">
-                            <motion.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: "auto", opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              transition={{ duration: 0.1 }}
+                      {minimized || isCloseTable
+                        ? null
+                        : list.map((event) => (
+                            <tr
+                              key={event.id}
+                              className="bg-white border-b border-gray-200 align-top"
                             >
-                              {event.title}
-                            </motion.div>
-                          </td>
-                          <td className="px-6 py-2">
-                            <motion.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: "auto", opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              transition={{ duration: 0.1 }}
-                            >
-                              {new Date(event.start).toLocaleDateString("id-ID", {
-                                day: "2-digit",
-                                month: "short",
-                                year: "numeric",
-                              })}{" "}
-                              -{" "}
-                              {new Date(event.end).toLocaleDateString("id-ID", {
-                                day: "2-digit",
-                                month: "short",
-                                year: "numeric",
-                              })}
-                            </motion.div>
-                          </td>
-                          <td className="px-6 py-2">
-                            <motion.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: "auto", opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              transition={{ duration: 0.1 }}
-                            >
-                              {event.info}
-                            </motion.div>
-                          </td>
-                          <td className="px-6 py-2 text-right">
-                            <a href="#" className="font-medium text-blue-600 hover:underline">
-                              Edit
-                            </a>
-                          </td>
-                        </tr>
-                      ))}
+                              <td className="px-6 py-2 font-medium text-gray-900">
+                                <motion.div
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: "auto", opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  transition={{ duration: 0.1 }}
+                                >
+                                  {event.title}
+                                </motion.div>
+                              </td>
+                              <td className="px-6 py-2">
+                                <motion.div
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: "auto", opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  transition={{ duration: 0.1 }}
+                                >
+                                  {new Date(event.start).toLocaleDateString(
+                                    "id-ID",
+                                    {
+                                      day: "2-digit",
+                                      month: "short",
+                                      year: "numeric",
+                                    }
+                                  )}{" "}
+                                  -{" "}
+                                  {new Date(event.end).toLocaleDateString(
+                                    "id-ID",
+                                    {
+                                      day: "2-digit",
+                                      month: "short",
+                                      year: "numeric",
+                                    }
+                                  )}
+                                </motion.div>
+                              </td>
+                              <td className="px-6 py-2">
+                                <motion.div
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: "auto", opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  transition={{ duration: 0.1 }}
+                                >
+                                  {event.info}
+                                </motion.div>
+                              </td>
+                              <td className="px-6 py-2 text-right">
+                                <a
+                                  href="#"
+                                  className="font-medium text-blue-600 hover:underline"
+                                >
+                                  Edit
+                                </a>
+                              </td>
+                            </tr>
+                          ))}
                     </AnimatePresence>
                   </React.Fragment>
                 );
@@ -386,7 +428,9 @@ function Dashboard() {
                   >
                     {sorted.map((event) => (
                       <li key={event.id} className="p-3">
-                        <p className="font-medium text-gray-900">{event.title}</p>
+                        <p className="font-medium text-gray-900">
+                          {event.title}
+                        </p>
                         <p className="text-sm text-gray-700">
                           {new Date(event.start).toLocaleDateString("id-ID", {
                             day: "2-digit",
@@ -401,10 +445,15 @@ function Dashboard() {
                           })}
                         </p>
                         {event.info && (
-                          <p className="text-sm text-gray-600 mt-1">{event.info}</p>
+                          <p className="text-sm text-gray-600 mt-1">
+                            {event.info}
+                          </p>
                         )}
                         <div className="pt-2">
-                          <a href="#" className="text-blue-600 text-sm font-medium">
+                          <a
+                            href="#"
+                            className="text-blue-600 text-sm font-medium"
+                          >
                             Edit
                           </a>
                         </div>
@@ -484,24 +533,12 @@ function Dashboard() {
         <div className="bg-orange-50 p-4 rounded-lg shadow-md w-full">
           <div className="mb-3 md:mb-4">
             <label className="font-semibold">Filter Kegiatan Survei:</label>
-            <select
-              className="mt-2 w-full sm:w-auto px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              onChange={(e) => setSelectedSurvey(e.target.value)}
-              value={selectedSurvey}
-            >
-              <option value="">Semua</option>
-              {[
-                ...new Set(
-                  (surveyPogressData?.getAllSubSurveyProgress ?? [])
-                    .map((item: SubSurveyProgress) => item.name)
-                    .filter(Boolean)
-                ),
-              ].map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
+            <HUComboBox
+              value={selectedSurvey || null}
+              onValueChange={(v) => setSelectedSurvey(v ?? "")}
+              options={surveyNameOptions}
+              placeholder="Semua Survei"
+            />
           </div>
 
           <div className="w-full h-64 md:h-80">
@@ -515,8 +552,16 @@ function Dashboard() {
                 <YAxis />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="targetSample" fill="#f97316" name="Target Sampel" />
-                <Bar dataKey="submitCount" fill="#3b82f6" name="Submit Sampel" />
+                <Bar
+                  dataKey="targetSample"
+                  fill="#f97316"
+                  name="Target Sampel"
+                />
+                <Bar
+                  dataKey="submitCount"
+                  fill="#3b82f6"
+                  name="Submit Sampel"
+                />
                 <Bar dataKey="approvedCount" fill="#22c55e" name="Approved" />
                 <Bar dataKey="rejectedCount" fill="#ef4444" name="Rejected" />
               </BarChart>
@@ -527,19 +572,15 @@ function Dashboard() {
         {/* Kanan: Pencapaian Petugas */}
         <div className="bg-orange-50 rounded-lg shadow-md p-4 w-full h-fit">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
-            <h3 className="text-base md:text-lg font-bold">PENCAPAIAN PETUGAS</h3>
-            <select
-              className="text-sm px-3 py-2 border rounded-md bg-white focus:outline-none w-full sm:w-auto"
-              value={selectedSubSurveyId}
-              onChange={(e) => setSelectedSubSurveyId(e.target.value)}
-            >
-              <option value="">Semua Kegiatan</option>
-              {subSurveyOptions.map(([id, name]) => (
-                <option key={id} value={id}>
-                  {name as string}
-                </option>
-              ))}
-            </select>
+            <label className="font-semibold">
+              Pencapaian Petugas
+            </label>
+            <HUComboBox
+              value={selectedSubSurveyId || null}
+              onValueChange={(v) => setSelectedSubSurveyId(v ?? "")}
+              options={subSurveyIdOptions}
+              placeholder="Semua Kegiatan"
+            />
           </div>
 
           <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
@@ -560,7 +601,9 @@ function Dashboard() {
                 return (
                   <div key={key} className="space-y-1">
                     <div className="flex justify-between font-semibold text-sm">
-                      <span className="truncate pr-2">{progress.user.name}</span>
+                      <span className="truncate pr-2">
+                        {progress.user.name}
+                      </span>
                       <span>{percent}%</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
@@ -569,8 +612,8 @@ function Dashboard() {
                           percent >= 80
                             ? "bg-green-500"
                             : percent >= 50
-                            ? "bg-yellow-400"
-                            : "bg-red-400"
+                              ? "bg-yellow-400"
+                              : "bg-red-400"
                         }`}
                         style={{ width: `${percent}%` }}
                       />

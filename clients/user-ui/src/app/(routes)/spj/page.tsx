@@ -11,6 +11,7 @@ import { GET_ALL_OF_SUB_SURVEY_ACTIVITIES } from "@/src/graphql/actions/find-rea
 import toast from "react-hot-toast";
 import useUser from "@/src/hooks/useUser";
 import { GET_USER_PROGRESS_BY_SUBSURVEY_ID } from "@/src/graphql/actions/find-usersurveyprogress.action";
+import HUComboBox from "@/src/components/HUCombobox";
 
 type District = { id: string; name?: string; city?: string };
 type UserProgressForSelect = {
@@ -173,6 +174,40 @@ function SPJ() {
     });
   }, [SPJData, user, filter]);
 
+  const activityOptions = useMemo(
+    () =>
+      (subSurveyData?.allSubSurveyActivities ?? []).map(
+        (sub: { id: string; name: string }) => ({
+          value: sub.id,
+          label: sub.name ?? "-",
+        })
+      ),
+    [subSurveyData]
+  );
+
+  const statusOptions = useMemo(
+    () => [
+      { value: "", label: "Semua Status" }, // untuk filter
+      { value: "Menunggu", label: "Menunggu" },
+      { value: "Disetujui", label: "Disetujui" },
+      { value: "Ditolak", label: "Ditolak" },
+    ],
+    []
+  );
+
+  const petugasOptionField = useMemo(
+    () =>
+      (userProgressData?.userProgressBySubSurveyActivityId ?? []).map(
+        (u: UserProgressForSelect) => ({
+          value: u.userId,
+          label: u.user?.name || u.userId,
+          subLabel:
+            u.district?.city?.trim() || u.district?.name?.trim() || undefined,
+        })
+      ),
+    [userProgressData]
+  );
+
   return (
     <div className="max-w-screen-xl mx-auto px-3 sm:px-6 md:px-8 py-4 space-y-4 font-Poppins">
       <div className="bg-orange-50 rounded-lg p-3 md:p-4 font-bold text-lg md:text-xl shadow-md">
@@ -187,39 +222,41 @@ function SPJ() {
             <label className="block text-sm font-medium mb-1">
               Jenis Survei
             </label>
-            <select
-              id="jenisSurvei"
-              onChange={(e) =>
-                setFilter({ ...filter, jenisSurvei: e.target.value })
+            <HUComboBox
+              value={filter.jenisSurvei || null}
+              onValueChange={(v) =>
+                setFilter((prev) => ({
+                  ...prev,
+                  jenisSurvei: (v ?? "") as string,
+                }))
               }
-              className="w-full px-3 py-2 border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">-- Pilih Jenis Survei --</option>
-              {subSurveyData?.allSubSurveyActivities?.map(
-                (sub: SubSurveyActivity) => (
-                  <option key={sub.id} value={sub.name}>
-                    {sub.name}
-                  </option>
-                )
-              )}
-            </select>
+              options={[
+                { value: "", label: "Semua Jenis Survei" }, // baris “kosongkan”
+                ...(subSurveyData?.allSubSurveyActivities ?? []).map(
+                  (sub: SubSurveyActivity) => ({
+                    value: sub.name, // filter kamu membandingkan by name
+                    label: sub.name,
+                  })
+                ),
+              ]}
+              placeholder="-- Pilih Jenis Survei --"
+            />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">
               Status Pengajuan
             </label>
-            <select
-              id="statusPengajuan"
-              onChange={(e) =>
-                setFilter({ ...filter, statusPengajuan: e.target.value })
+            <HUComboBox
+              value={filter.statusPengajuan || null}
+              onValueChange={(v) =>
+                setFilter((prev) => ({
+                  ...prev,
+                  statusPengajuan: (v ?? "") as string,
+                }))
               }
-              className="w-full px-3 py-2 border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">-- Pilih Status Pengajuan --</option>
-              <option value="Menunggu">Menunggu</option>
-              <option value="Disetujui">Disetujui</option>
-              <option value="Ditolak">Ditolak</option>
-            </select>
+              options={statusOptions}
+              placeholder="-- Pilih Status Pengajuan --"
+            />
           </div>
         </div>
       </div>
@@ -356,50 +393,44 @@ function SPJ() {
               <label className="block text-sm font-semibold mb-1">
                 Kegiatan Survei
               </label>
-              <select
-                id="subSurveyActivityId"
-                value={input.subSurveyActivityId}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">-- Pilih Kegiatan --</option>
-                {subSurveyData?.allSubSurveyActivities?.map(
-                  (sub: SubSurveyActivity) => (
-                    <option key={sub.id} value={sub.id}>
-                      {sub.name}
-                    </option>
-                  )
-                )}
-              </select>
+              <HUComboBox
+                value={input.subSurveyActivityId || null}
+                onValueChange={(v) =>
+                  setInput((prev) => ({
+                    ...prev,
+                    subSurveyActivityId: (v ?? "") as string,
+                  }))
+                }
+                options={activityOptions}
+                placeholder="-- Pilh Kegiatan Survei --"
+              />
             </div>
             <div>
               <label className="block text-sm font-semibold mb-1">
                 Petugas
               </label>
-              <select
-                id="userId"
-                value={input.userId}
-                onChange={handleChange}
+              <HUComboBox
+                value={input.userId || null}
+                onValueChange={(v) =>
+                  setInput((prev) => ({ ...prev, userId: (v ?? "") as string }))
+                }
+                options={petugasOptionField}
+                placeholder={
+                  !input.subSurveyActivityId
+                    ? "Pilih kegiatan dulu"
+                    : loadingPetugas
+                      ? "Memuat daftar petugas…"
+                      : "-- Pilih Petugas --"
+                }
                 disabled={!input.subSurveyActivityId || loadingPetugas}
-                className="w-full px-3 py-2 border rounded-md bg-white disabled:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {!input.subSurveyActivityId ? (
-                  <option value="">-- Pilih Kegiatan terlebih dahulu --</option>
-                ) : loadingPetugas ? (
-                  <option value="">Memuat daftar petugas…</option>
-                ) : petugasOptions.length === 0 ? (
-                  <option value="">Tidak ada petugas untuk kegiatan ini</option>
-                ) : (
-                  <>
-                    <option value="">-- Pilih Petugas --</option>
-                    {petugasOptions.map((u) => (
-                      <option key={u.id} value={u.userId}>
-                        {u.user?.name || u.userId}
-                      </option>
-                    ))}
-                  </>
+              />
+              {!loadingPetugas &&
+                input.subSurveyActivityId &&
+                petugasOptions.length === 0 && (
+                  <p className="text-xs text-red-600 mt-1">
+                    Belum ada petugas untuk kegiatan ini.
+                  </p>
                 )}
-              </select>
             </div>
             <div>
               <label className="block text-sm font-semibold mb-1">
@@ -514,22 +545,18 @@ function SPJ() {
                     <label className="block text-sm font-medium mb-1">
                       Ubah Status
                     </label>
-                    <select
-                      id="status"
-                      value={update.status}
-                      onChange={(e) =>
-                        setUpdate({
-                          ...update,
-                          status: e.target.value,
+                    <HUComboBox
+                      value={update.status || null}
+                      onValueChange={(v) =>
+                        setUpdate((prev) => ({
+                          ...prev,
+                          status: (v ?? "") as string,
                           id: selectedSPJ.id,
-                        })
+                        }))
                       }
-                      className="w-full px-3 py-2 border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="Menunggu">Menunggu</option>
-                      <option value="Disetujui">Disetujui</option>
-                      <option value="Ditolak">Ditolak</option>
-                    </select>
+                      options={statusOptions.filter((o) => o.value)} // hilangkan baris "Semua Status"
+                      placeholder="Pilih status…"
+                    />
                   </div>
                   <div>
                     <input
