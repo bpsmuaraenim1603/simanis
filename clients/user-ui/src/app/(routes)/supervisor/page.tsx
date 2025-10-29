@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import toast from "react-hot-toast";
 import { useApolloClient, useLazyQuery, useQuery } from "@apollo/client";
 import useUser from "@/src/hooks/useUser";
@@ -30,6 +30,7 @@ type UserProgressRow = {
   submitCount: number;
   approvedCount: number;
   rejectedCount: number;
+  blockCount: string;
   lastUpdated?: string | null;
   districtId?: string | null;
   user?: UserLite | null;
@@ -59,6 +60,8 @@ export default function SupervisorManagePage() {
     });
 
   const [surveyActivityId, setSurveyActivityId] = React.useState("");
+  const [selectedUserId, setSelectedUserId] = React.useState<string>("");
+  const [selectedBlock, setSelectedBlock] = React.useState<string>("");
   const [subSurveyActivityId, setSubSurveyActivityId] = React.useState("");
   const [selectedUserProgressId, setSelectedUserProgressId] =
     React.useState("");
@@ -107,19 +110,59 @@ export default function SupervisorManagePage() {
     const mine = rowsForSub.filter(
       (r) => (r.superVisorId ?? "") === supervisorId
     );
-    return mine.length ? mine : rowsForSub;
+
+    if (me?.role === "Superadmin") return rowsForSub;
+    return mine.length ? mine : [];
   }, [allUPRows, subSurveyActivityId, supervisorId]);
 
-  const petugasOptions = React.useMemo(
-    () =>
-      myUPRows.map((r) => ({
-        upId: r.id,
-        label: r.user?.name
-          ? `${r.user.name}${r.user?.email ? ` - ${r.user.email}` : ""}`
-          : r.userId,
-      })),
-    [myUPRows]
-  );
+  const aggregatedUsers = React.useMemo(() => {
+    type Agg = {
+      userId: string;
+      name: string;
+      email?: string;
+      blocks: Set<string>;
+      totalAssigned: number;
+      submitCount: number;
+      approvedCount: number;
+    };
+    const map = new Map<string, Agg>();
+
+    for (const r of myUPRows) {
+      const u = r?.user;
+      if (!u?.id) continue;
+      const key = u.id;
+      const blk = (r?.blockCount ?? "").toString().trim();
+
+      if (!map.has(key)) {
+        map.set(key, {
+          userId: key,
+          name: u.name ?? r.userId ?? "Tanpa Nama",
+          email: u.email ?? "",
+          blocks: new Set(blk ? [blk] : []),
+          totalAssigned: Number(r.totalAssigned ?? 0),
+          submitCount: Number(r.submitCount ?? 0),
+          approvedCount: Number(r.approvedCount ?? 0),
+        });
+      } else {
+        const it = map.get(key)!;
+        if (blk) it.blocks.add(blk);
+        it.totalAssigned += Number(r.totalAssigned ?? 0);
+        it.submitCount += Number(r.submitCount ?? 0);
+        it.approvedCount += Number(r.approvedCount ?? 0);
+      }
+    }
+
+    return Array.from(map.values()).sort(
+      (a, b) => b.approvedCount - a.approvedCount
+    );
+  }, [myUPRows]);
+
+  const petugasOptions = React.useMemo(() => {
+    return aggregatedUsers.map((u) => ({
+      upId: u.userId,
+      label: `${u.name}${u.email ? ` — ${u.email}` : ""} (${u.blocks.size || 0} blok)`,
+    }));
+  }, [aggregatedUsers]);
 
   const petugasComboOptions = useMemo(
     () => petugasOptions.map((p) => ({ value: p.upId, label: p.label })),
@@ -162,9 +205,10 @@ export default function SupervisorManagePage() {
       let submitCount = clamp(Number(draft.submitCount), 0);
       let approvedCount = clamp(Number(draft.approvedCount), 0);
       let rejectedCount = clamp(Number(draft.rejectedCount), 0);
+      let sumCount = submitCount + approvedCount + rejectedCount;
 
-      if (isListing) {
-        totalAssigned = submitCount + approvedCount + rejectedCount;
+      if (isListing && sumCount > totalAssigned) {
+        totalAssigned = sumCount;
       } else {
         const sum = submitCount + approvedCount + rejectedCount;
         if (sum > totalAssigned) {
@@ -262,6 +306,10 @@ export default function SupervisorManagePage() {
       toast.error("Pilih Tim, Kegiatan, dan Petugas terlebih dahulu.");
       return;
     }
+    const updateTotalAssigned =
+      form.submitCount < form.totalAssigned
+        ? (currentUP?.totalAssigned ?? 0)
+        : form.totalAssigned;
     try {
       setSaving(true);
       await apollo.mutate({
@@ -269,7 +317,7 @@ export default function SupervisorManagePage() {
         variables: {
           userProgressId: form.userProgressId,
           input: {
-            totalAssigned: Number(form.totalAssigned),
+            totalAssigned: Number(updateTotalAssigned),
             submitCount: Number(form.submitCount),
             approvedCount: Number(form.approvedCount),
             rejectedCount: Number(form.rejectedCount),
@@ -288,8 +336,60 @@ export default function SupervisorManagePage() {
     }
   };
 
+  const blockOptions = React.useMemo(() => {
+    if (!selectedUserId) return [];
+    const u = aggregatedUsers.find((x) => x.userId === selectedUserId);
+    if (!u) return [];
+    return Array.from(u.blocks)
+      .sort((a, b) => a.localeCompare(b, "id"))
+      .map((b) => ({ value: b, label: `Blok ${b}` }));
+  }, [aggregatedUsers, selectedUserId]);
+
+  const visibleUPRows = React.useMemo(() => {
+    let rows = myUPRows;
+    if (selectedUserId) {
+      rows = rows.filter((r) => r?.user?.id === selectedUserId);
+    }
+    if (selectedBlock) {
+      rows = rows.filter(
+        (r) => (r?.blockCount ?? "").toString().trim() === selectedBlock
+      );
+    }
+    return rows;
+  }, [myUPRows, selectedUserId, selectedBlock]);
+
+  const selectedRowByUserBlock = React.useMemo(() => {
+    if (!selectedUserId || !selectedBlock) return undefined;
+    return myUPRows.find(
+      (r) =>
+        r?.user?.id === selectedUserId &&
+        (r?.blockCount ?? "").toString().trim() === selectedBlock
+    );
+  }, [myUPRows, selectedUserId, selectedBlock]);
+
+  React.useEffect(() => {
+    setSelectedBlock("");
+  }, [selectedUserId]);
+
+  React.useEffect(() => {
+    if (selectedRowByUserBlock) {
+      setSelectedUserProgressId(selectedRowByUserBlock.id);
+    } else if (selectedBlock) {
+      setSelectedUserProgressId("");
+    }
+  }, [selectedRowByUserBlock, selectedBlock]);
+
+  React.useEffect(() => {
+    if (!selectedUserId) return;
+    const u = aggregatedUsers.find((x) => x.userId === selectedUserId);
+    if (u && u.blocks.size === 1) {
+      const onlyBlock = Array.from(u.blocks)[0];
+      setSelectedBlock(onlyBlock);
+    }
+  }, [selectedUserId, aggregatedUsers]);
+
   const summary = React.useMemo(() => {
-    return myUPRows.reduce(
+    return visibleUPRows.reduce(
       (acc, r) => {
         acc.totalAssigned += Number(r.totalAssigned ?? 0);
         acc.submit += Number(r.submitCount ?? 0);
@@ -299,7 +399,7 @@ export default function SupervisorManagePage() {
       },
       { totalAssigned: 0, submit: 0, approved: 0, rejected: 0 }
     );
-  }, [myUPRows]);
+  }, [visibleUPRows]);
 
   const disabled = saLoading || subsLoading || upLoading;
 
@@ -314,7 +414,7 @@ export default function SupervisorManagePage() {
 
       {/* Filter bertingkat */}
       <div className="bg-white rounded-xl p-4 shadow space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {/* Tim */}
           <div>
             <label className="block text-sm font-semibold mb-1">Tim</label>
@@ -360,8 +460,8 @@ export default function SupervisorManagePage() {
           <div>
             <label className="block text-sm font-semibold mb-1">Petugas</label>
             <HUComboBox
-              value={selectedUserProgressId || null}
-              onValueChange={(v) => setSelectedUserProgressId(v ?? "")}
+              value={selectedUserId || null}
+              onValueChange={(v) => setSelectedUserId(v ?? "")}
               options={petugasComboOptions}
               placeholder={
                 !subSurveyActivityId
@@ -381,7 +481,33 @@ export default function SupervisorManagePage() {
               <p className="text-[11px] text-gray-500 mt-1">
                 {myUPRows.some((r) => (r.superVisorId ?? "") === supervisorId)
                   ? "Menampilkan petugas di bawah pengawasan Anda."
-                  : "superVisorId tidak ditemukan/bernilai null; menampilkan semua petugas."}
+                  : me?.role === "Superadmin"
+                    ? "Menampilkan semua petugas."
+                    : "Anda tidak bertugas mengawasi petugas pada kegiatan ini."}
+              </p>
+            )}
+          </div>
+
+          {/* Blok */}
+          <div>
+            <label className="block text-sm font-semibold mb-1">Blok</label>
+            <HUSelect
+              value={selectedBlock || null}
+              onValueChange={(v) => setSelectedBlock(v ?? "")}
+              options={blockOptions}
+              placeholder={
+                !selectedUserId
+                  ? "Pilih Petugas dulu"
+                  : blockOptions.length === 0
+                    ? "Tidak ada blok"
+                    : "-- Pilih Blok --"
+              }
+              disabled={!selectedUserId || blockOptions.length === 0}
+              className="w-full"
+            />
+            {!!selectedBlock && (
+              <p className="text-[11px] text-gray-500 mt-1">
+                Menyaring data untuk Blok <b>{selectedBlock}</b>.
               </p>
             )}
           </div>

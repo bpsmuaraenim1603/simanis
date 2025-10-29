@@ -61,7 +61,6 @@ export const SideBar = () => {
   const asideClass = [
     "fixed top-0 left-0 bottom-0 z-50 bg-orange-900 text-white shadow-lg",
     "transition-[transform,width] duration-300 ease-in-out",
-    // jaga konten saat menyempit supaya tidak tumpah
     "overflow-hidden",
     "w-[250px]",
     // MOBILE: minimized => off-screen & non-interaktif; open => overlay & interaktif
@@ -78,7 +77,7 @@ export const SideBar = () => {
     <aside className={asideClass} aria-label="Sidebar">
       {/* Bar atas mobile */}
       <div className="lg:hidden flex items-center justify-between h-14 px-3 border-b border-white/10">
-        <span className="font-semibold">SIMANIS</span>
+        <span className="font-semibold font-Poppins">SIMANIS</span>
         <button
           onClick={closeMobile}
           aria-label="Tutup sidebar"
@@ -89,7 +88,7 @@ export const SideBar = () => {
       </div>
 
       {/* Bar atas desktop (toggle 60/250) */}
-      <div className="hidden lg:flex items-center justify-between h-14 px-3 border-b border-white/10">
+      <div className={`hidden lg:flex items-center ${isMinimized ? "justify-center" : "justify-between"} h-14 px-3 border-b border-white/10`}>
         <span className="font-semibold">{isMinimized ? "" : "SIMANIS"}</span>
         <button
           onClick={toggleDesktop}
@@ -102,7 +101,7 @@ export const SideBar = () => {
 
       {/* Nav items; klik item di mobile otomatis menutup overlay */}
       <nav
-        className="overflow-y-auto h-[calc(100vh-56px)]"
+        className="justify-center h-[calc(100vh-56px)]"
       >
         <NavItems isMinimized={isDesktop ? isMinimized : false} />
       </nav>

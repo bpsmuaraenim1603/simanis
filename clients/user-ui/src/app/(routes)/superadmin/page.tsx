@@ -10,8 +10,9 @@ import HUSelect from "@/src/components/HUSelect";
 const ROLE_OPTIONS = [
   { label: "Super Admin", value: "Superadmin" },
   { label: "Admin", value: "Admin" },
-  { label: "Supervisor", value: "Supervisor" },
-  { label: "User", value: "User" },
+  { label: "Pengawas", value: "Supervisor" },
+  { label: "Petugas", value: "User" },
+  { label: "Keuangan", value: "Keuangan" },
 ] as const;
 
 const ROLE_OPTIONS_FOR_SELECT = ROLE_OPTIONS.map((r) => ({
@@ -113,7 +114,7 @@ export default function SuperAdminManagePage() {
         </div>
       </div>
 
-      {/* Toolbar pencarian (dipisah dari thead supaya aman di mobile) */}
+      {/* Toolbar pencarian */}
       <div className="bg-white rounded-lg p-3 shadow flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
         <label className="text-sm font-medium">Cari pengguna</label>
         <input
@@ -125,7 +126,7 @@ export default function SuperAdminManagePage() {
         />
       </div>
 
-      {/* Tabel responsif */}
+      {/* Tabel */}
       <div className="relative shadow-md rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-[720px] w-full text-sm text-left text-gray-600">
@@ -145,7 +146,6 @@ export default function SuperAdminManagePage() {
                 </th>
               </tr>
             </thead>
-
             <tbody>
               {loading && (
                 <tr>
@@ -176,69 +176,70 @@ export default function SuperAdminManagePage() {
                 </tr>
               )}
 
-              <AnimatePresence>
-                {filteredUsers.map((user: any) => {
-                  const pendingRole = pending[user.id];
-                  const effectiveRole = pendingRole ?? user.role;
-                  const dirty = !!pendingRole && pendingRole !== user.role;
-                  const isSaving = !!updating[user.id];
+              {filteredUsers.map((user: any) => {
+                const pendingRole = pending[user.id];
+                const effectiveRole = pendingRole ?? user.role;
+                const dirty = !!pendingRole && pendingRole !== user.role;
+                const isSaving = !!updating[user.id];
 
-                  return (
-                    <tr
-                      key={user.id}
-                      className="bg-white border-t border-gray-200 align-top"
-                    >
-                      <td className="px-4 md:px-6 py-3 font-medium text-gray-900 break-words">
-                        <Cell>{user.name}</Cell>
-                      </td>
-                      <td className="px-4 md:px-6 py-3 break-words">
-                        <Cell>{user.email}</Cell>
-                      </td>
-                      <td className="px-4 md:px-6 py-3 align-middle">
-                        <HUSelect
-                          value={(effectiveRole ?? "") || null}
-                          onValueChange={(v) => handleChange(user.id, v ?? "")}
-                          options={ROLE_OPTIONS_FOR_SELECT}
-                          placeholder="-- Pilih Role --"
-                          className="text-sm [&_*]:text-sm" // opsional: biar tidak terlalu sempit
-                        />
-                      </td>
-                      <td className="px-4 md:px-6 py-3">
-                        <div className="flex flex-col sm:flex-row justify-end gap-2">
-                          <button
-                            onClick={() => handleSave(user)}
-                            disabled={!dirty || isSaving}
-                            className={`rounded-lg px-3 py-2 text-sm font-medium text-white shadow-sm transition ${
-                              !dirty || isSaving
-                                ? "cursor-not-allowed bg-gray-300"
-                                : "bg-blue-600 hover:bg-blue-700"
-                            }`}
-                            title={
-                              !dirty
-                                ? "Tidak ada perubahan"
-                                : "Simpan perubahan"
-                            }
-                          >
-                            {isSaving ? "Menyimpan…" : "Simpan"}
-                          </button>
-                          <button
-                            onClick={() => handleReset(user.id)}
-                            disabled={!dirty || isSaving}
-                            className={`rounded-lg px-3 py-2 text-sm font-medium shadow-sm transition ${
-                              !dirty || isSaving
-                                ? "cursor-not-allowed bg-gray-100 text-gray-400"
-                                : "bg-white text-gray-700 hover:bg-gray-50"
-                            }`}
-                            title="Batalkan perubahan"
-                          >
-                            Reset
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </AnimatePresence>
+                return (
+                  <tr
+                    key={user.id}
+                    className="bg-white border-t border-gray-200 align-top"
+                  >
+                    <td className="px-4 md:px-6 py-3 font-medium text-gray-900 break-words">
+                      {user.name}
+                    </td>
+                    <td className="px-4 md:px-6 py-3 break-words">
+                      {user.email}
+                    </td>
+                    <td className="px-4 md:px-6 py-3 align-middle">
+                      {/* Select sederhana */}
+                      <select
+                        value={effectiveRole}
+                        onChange={(e) => {
+                          setPending((p) =>
+                            p[user.id] === e.target.value ? p : { ...p, [user.id]: e.target.value }
+                          );
+                        }}
+                        className="border px-3 py-2 text-sm rounded-md bg-white"
+                      >
+                        {ROLE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-4 md:px-6 py-3">
+                      <div className="flex flex-col sm:flex-row justify-end gap-2">
+                        <button
+                          onClick={() => handleSave(user)}
+                          disabled={!dirty || isSaving}
+                          className={`rounded-lg px-3 py-2 text-sm font-medium text-white shadow-sm transition ${
+                            !dirty || isSaving
+                              ? "cursor-not-allowed bg-gray-300"
+                              : "bg-blue-600 hover:bg-blue-700"
+                          }`}
+                        >
+                          {isSaving ? "Menyimpan…" : "Simpan"}
+                        </button>
+                        <button
+                          onClick={() => handleReset(user.id)}
+                          disabled={!dirty || isSaving}
+                          className={`rounded-lg px-3 py-2 text-sm font-medium shadow-sm transition ${
+                            !dirty || isSaving
+                              ? "cursor-not-allowed bg-gray-100 text-gray-400"
+                              : "bg-white text-gray-700 hover:bg-gray-50"
+                          }`}
+                        >
+                          Reset
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

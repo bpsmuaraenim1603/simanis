@@ -198,6 +198,7 @@ export default function Partners() {
       if (
         user?.role !== "Admin" &&
         user?.role !== "Superadmin" &&
+        user?.role !== "Keuangan" &&
         jl.userId !== user?.id
       )
         return false;
@@ -622,7 +623,7 @@ export default function Partners() {
                 </span>
               </div>
 
-              {user?.role === "Admin" || user?.role === "Superadmin" ? (
+              {user?.role === "Keuangan" || user?.role === "Superadmin" ? (
                 <form
                   onSubmit={handleUpdate}
                   className="space-y-3 pt-4 border-t mt-2"

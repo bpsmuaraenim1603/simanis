@@ -56,6 +56,7 @@ type UserProgress = {
   submitCount: number;
   approvedCount: number;
   rejectedCount: number;
+  blockCount: string;
   lastUpdated: string;
   districtId: string;
 };
@@ -191,6 +192,7 @@ function Admin() {
     submitCount: 0,
     approvedCount: 0,
     rejectedCount: 0,
+    blockCount: "",
     lastUpdated: "",
     districtId: "",
   });
@@ -471,10 +473,10 @@ function Admin() {
           toast.error("Sisa sampel sudah habis untuk kegiatan ini.");
           return;
         }
-        if (usedUserIdsForAdd.has(userProgressForm.userId)) {
-          toast.error("Petugas ini sudah ditugaskan pada kegiatan ini.");
-          return;
-        }
+        // if (usedUserIdsForAdd.has(userProgressForm.userId)) {
+        //   toast.error("Petugas ini sudah ditugaskan pada kegiatan ini.");
+        //   return;
+        // }
       }
 
       await createUserSurveyProgress({
@@ -487,6 +489,7 @@ function Admin() {
             submitCount: Number(userProgressForm.submitCount),
             approvedCount: Number(userProgressForm.approvedCount),
             rejectedCount: Number(userProgressForm.rejectedCount),
+            blockCount: userProgressForm.blockCount,
             lastUpdated: new Date().toISOString(),
             districtId: userProgressForm.districtId,
           },
@@ -502,6 +505,7 @@ function Admin() {
         submitCount: 0,
         approvedCount: 0,
         rejectedCount: 0,
+        blockCount: "",
         lastUpdated: "",
         districtId: "",
         superVisorId: userProgressForm.superVisorId,
@@ -882,8 +886,8 @@ function Admin() {
       (userData?.getUsers ?? [])
         .filter((u: User) => u.role !== "Supervisor")
         .filter((u: User) => u.role !== "Admin")
-        .filter((u: User) => u.role !== "Superadmin")
-        .filter((u: User) => !usedUserIdsForAdd.has(u.id)),
+        .filter((u: User) => u.role !== "Superadmin"),
+        // .filter((u: User) => !usedUserIdsForAdd.has(u.id)),
     [userData, usedUserIdsForAdd]
   );
   const filteredEnumeratorsForAdd = useMemo(
@@ -1569,6 +1573,22 @@ function Admin() {
                   })
                 )}
                 placeholder="-- Pilih Kecamatan --"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="blockCount"
+                className="block text-sm font-bold mb-2"
+              >
+                Blok Pendataan
+              </label>
+              <input
+                id="blockCount"
+                type="text"
+                value={userProgressForm.blockCount}
+                onChange={handleChangeUserProgress}
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
 

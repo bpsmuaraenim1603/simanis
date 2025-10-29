@@ -120,6 +120,9 @@ export class UserProgressType {
   @Field()
   rejectedCount: number;
 
+  @Field({ nullable: true })
+  blockCount?: string;
+
   @Field()
   lastUpdated: Date;
 }

@@ -120,6 +120,9 @@ export class CreateUserProgressDTO {
   rejectedCount: number;
 
   @Field()
+  blockCount: string;
+
+  @Field()
   lastUpdated: Date;
 
   @Field()

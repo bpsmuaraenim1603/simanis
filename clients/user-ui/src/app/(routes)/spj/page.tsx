@@ -162,6 +162,7 @@ function SPJ() {
       if (
         user?.role !== "Admin" &&
         user?.role !== "Superadmin" &&
+        user?.role !== "Keuangan" &&
         spj.userId !== user?.id
       )
         return false;
@@ -530,7 +531,7 @@ function SPJ() {
                 </span>
               </div>
 
-              {user?.role === "Admin" || user?.role === "Superadmin" ? (
+              {user?.role === "Keuangan" || user?.role === "Superadmin" ? (
                 <form
                   onSubmit={handleUpdate}
                   className="space-y-3 pt-4 border-t mt-2"

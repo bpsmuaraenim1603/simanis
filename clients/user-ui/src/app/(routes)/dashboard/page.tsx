@@ -18,6 +18,10 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import HUComboBox from "@/src/components/HUCombobox";
+import { Dialog, Transition } from "@headlessui/react";
+import Datetime from "react-datetime";
+import "react-datetime/css/react-datetime.css";
+import { Fragment } from "react";
 
 interface CalendarEvent {
   title: string;
@@ -28,6 +32,31 @@ interface CalendarEvent {
   info: string;
   surveyEvent: string;
   _id?: number;
+}
+
+function formatDateTime(date: Date | string, use12h = true) {
+  const parts = new Intl.DateTimeFormat("id-ID", {
+    year: "numeric",
+    month: "numeric",
+    day: "2-digit",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: use12h,
+    // timeZone: "Asia/Jakarta", // opsional
+  }).formatToParts(new Date(date));
+
+  const get = (t: Intl.DateTimeFormatPart["type"]) =>
+    parts.find((p) => p.type === t)?.value ?? "";
+
+  const day = get("day");
+  const month = get("month");
+  const year = get("year");
+  const hour = get("hour");
+  const minute = get("minute");
+  const dayPeriod = (get("dayPeriod") || "").toUpperCase(); // AM/PM
+
+  // rakit manual: dd/mm/yyyy spasi hh.mm AM/PM (tanpa koma)
+  return `${month}/${day}/${year} ${hour}:${minute}${dayPeriod ? " " + dayPeriod : ""}`;
 }
 
 function Dashboard() {
@@ -70,6 +99,15 @@ function Dashboard() {
   const [selectedSurvey, setSelectedSurvey] = useState<string>("");
   const [selectedSubSurveyId, setSelectedSubSurveyId] = useState<string>("");
 
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null);
+
+  const [editTitle, setEditTitle] = useState("");
+  const [editInfo, setEditInfo] = useState("");
+  const [editAllDay, setEditAllDay] = useState(false);
+  const [editStart, setEditStart] = useState<Date | string>(new Date());
+  const [editEnd, setEditEnd] = useState<Date | string>(new Date());
+
   const { data: surveyPogressData } = useQuery<{
     getAllSubSurveyProgress: SubSurveyProgress[];
   }>(GET_REAL_ALL_SUB_SURVEY_PROGRESS);
@@ -90,6 +128,57 @@ function Dashboard() {
   const { data: userProgressData } = useQuery<{
     allUserSurveyProgress: UserProgress[];
   }>(GET_REAL_ALL_USER_PROGRESS);
+
+  const aggregatedUserProgress = useMemo(() => {
+    const rows = userProgressData?.allUserSurveyProgress ?? [];
+
+    const filtered = selectedSubSurveyId
+      ? rows.filter((r) => r.subSurveyActivity.id === selectedSubSurveyId)
+      : rows;
+
+    type Agg = {
+      user: { id: string; name: string };
+      totalAssigned: number;
+      submitCount: number;
+      approvedCount: number;
+      rejectedCount: number;
+      lastUpdated: string;
+      subSurveyNames: Set<string>;
+    };
+
+    const map = new Map<string, Agg>();
+
+    for (const r of filtered) {
+      const k = r.user.id;
+      const prev = map.get(k);
+      if (!prev) {
+        map.set(k, {
+          user: r.user,
+          totalAssigned: r.totalAssigned,
+          submitCount: r.submitCount,
+          approvedCount: r.approvedCount,
+          rejectedCount: r.rejectedCount,
+          lastUpdated: r.lastUpdated,
+          subSurveyNames: new Set([r.subSurveyActivity.name]),
+        });
+      } else {
+        prev.totalAssigned += r.totalAssigned;
+        prev.submitCount += r.submitCount;
+        prev.approvedCount += r.approvedCount;
+        prev.rejectedCount += r.rejectedCount;
+        // simpan lastUpdated terbaru
+        prev.lastUpdated =
+          new Date(r.lastUpdated) > new Date(prev.lastUpdated)
+            ? r.lastUpdated
+            : prev.lastUpdated;
+        prev.subSurveyNames.add(r.subSurveyActivity.name);
+      }
+    }
+
+    return Array.from(map.values())
+      .map((v) => ({ ...v, subSurveyNames: Array.from(v.subSurveyNames) }))
+      .sort((a, b) => b.approvedCount - a.approvedCount);
+  }, [userProgressData, selectedSubSurveyId]);
 
   const subSurveyIdOptions = useMemo(() => {
     const list = userProgressData?.allUserSurveyProgress ?? [];
@@ -166,6 +255,78 @@ function Dashboard() {
     groupedEntries.forEach(([key]) => (newState[key] = close));
     setIsMinimized(newState);
   };
+
+  // Buka modal dan isi form dengan data event terpilih
+  function openEdit(ev: CalendarEvent) {
+    setEditEvent(ev);
+    setEditTitle(ev.title || "");
+    setEditInfo(ev.info || "");
+    setEditAllDay(!!ev.allDay);
+    setEditStart(ev.start);
+    setEditEnd(ev.end);
+    setShowEditModal(true);
+  }
+
+  function closeEdit() {
+    setShowEditModal(false);
+    setEditEvent(null);
+  }
+
+  // Submit PUT ke /api/cals/:id sesuai signature kamu
+  async function handleUpdate(e: React.SyntheticEvent) {
+    e.preventDefault();
+    if (!editEvent || !("_id" in editEvent) || !editEvent._id) return;
+
+    try {
+      const payload = {
+        newTitle: editTitle,
+        newStart:
+          editStart instanceof Date
+            ? editStart.toISOString()
+            : new Date(editStart).toISOString(),
+        newEnd:
+          editEnd instanceof Date
+            ? editEnd.toISOString()
+            : new Date(editEnd).toISOString(),
+        newAllDay: editAllDay,
+        newInfo: editInfo,
+        // aku mapping ke "id" existing sebagai eveId (kalau kamu punya field lain, tinggal ganti di sini)
+        newEveId: editEvent.id,
+      };
+
+      const res = await axios.put(
+        `../../../../api/cals/${editEvent._id}`,
+        payload,
+        {
+          headers: { "Cache-Control": "no-store" },
+        }
+      );
+
+      if (res.status === 200) {
+        // update state lokal biar tabel langsung refresh
+        setEvents((prev) =>
+          prev.map((it) =>
+            it._id === editEvent._id
+              ? {
+                  ...it,
+                  title: editTitle,
+                  start: payload.newStart,
+                  end: payload.newEnd,
+                  allDay: editAllDay,
+                  info: editInfo,
+                }
+              : it
+          )
+        );
+        closeEdit();
+      } else {
+        throw new Error("Gagal update jadwal");
+      }
+    } catch (err) {
+      console.error("Error update:", err);
+      // boleh tambahkan toast kalau kamu pakai lib toast
+    }
+  }
 
   useEffect(() => {
     const grouped = filteredEvents.reduce<Record<string, CalendarEvent[]>>(
@@ -332,12 +493,12 @@ function Dashboard() {
                                 </motion.div>
                               </td>
                               <td className="px-6 py-2 text-right">
-                                <a
-                                  href="#"
+                                <button
+                                  onClick={() => openEdit(event)}
                                   className="font-medium text-blue-600 hover:underline"
                                 >
                                   Edit
-                                </a>
+                                </button>
                               </td>
                             </tr>
                           ))}
@@ -450,12 +611,12 @@ function Dashboard() {
                           </p>
                         )}
                         <div className="pt-2">
-                          <a
-                            href="#"
+                          <button
+                            onClick={() => openEdit(event)}
                             className="text-blue-600 text-sm font-medium"
                           >
                             Edit
-                          </a>
+                          </button>
                         </div>
                       </li>
                     ))}
@@ -546,6 +707,8 @@ function Dashboard() {
               <BarChart
                 data={filteredProgress}
                 margin={{ top: 20, right: 20, left: 4, bottom: 8 }}
+                barCategoryGap="100%"
+                barGap={100}
               >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
@@ -572,9 +735,7 @@ function Dashboard() {
         {/* Kanan: Pencapaian Petugas */}
         <div className="bg-orange-50 rounded-lg shadow-md p-4 w-full h-fit">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
-            <label className="font-semibold">
-              Pencapaian Petugas
-            </label>
+            <label className="font-semibold">Pencapaian Petugas</label>
             <HUComboBox
               value={selectedSubSurveyId || null}
               onValueChange={(v) => setSelectedSubSurveyId(v ?? "")}
@@ -584,50 +745,224 @@ function Dashboard() {
           </div>
 
           <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-            {userProgressData?.allUserSurveyProgress
-              ?.filter(
-                (progress) =>
-                  !selectedSubSurveyId ||
-                  progress.subSurveyActivity.id === selectedSubSurveyId
-              )
-              .map((progress, idx) => {
-                const percent =
-                  progress.totalAssigned > 0
-                    ? Math.round(
-                        (progress.submitCount / progress.totalAssigned) * 100
-                      )
-                    : 0;
-                const key = `${progress.user.id}-${progress.subSurveyActivity.id}-${idx}`;
-                return (
-                  <div key={key} className="space-y-1">
-                    <div className="flex justify-between font-semibold text-sm">
-                      <span className="truncate pr-2">
-                        {progress.user.name}
-                      </span>
-                      <span>{percent}%</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className={`h-2 rounded-full ${
-                          percent >= 80
-                            ? "bg-green-500"
-                            : percent >= 50
-                              ? "bg-yellow-400"
-                              : "bg-red-400"
-                        }`}
-                        style={{ width: `${percent}%` }}
-                      />
-                    </div>
-                    <p className="text-xs text-gray-600">
-                      Target: {progress.totalAssigned} sampel, Selesai:{" "}
-                      {progress.submitCount} sampel
-                    </p>
+            {aggregatedUserProgress.map((agg) => {
+              const percent =
+                agg.totalAssigned > 0
+                  ? Math.round(
+                      ((agg.submitCount + agg.approvedCount) /
+                        agg.totalAssigned) *
+                        100
+                    )
+                  : 0;
+
+              const percentApproved =
+                agg.totalAssigned > 0
+                  ? Math.round((agg.approvedCount / agg.totalAssigned) * 100)
+                  : 0;
+
+              const pct = Math.max(0, Math.min(100, percent));
+              const pctApproved = Math.max(0, Math.min(100, percentApproved));
+
+              return (
+                <div key={agg.user.id} className="space-y-1">
+                  <div className="flex justify-between font-semibold text-sm">
+                    <span className="truncate pr-2">{agg.user.name}</span>
+                    <span>{pct}%</span>
                   </div>
-                );
-              })}
+
+                  <div className="relative w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                    <div
+                      className={`absolute inset-y-0 left-0 rounded-full ${
+                        pct >= 80
+                          ? "bg-green-500"
+                          : pct >= 50
+                            ? "bg-yellow-400"
+                            : "bg-red-400"
+                      }`}
+                      style={{ width: `${pct}%` }}
+                      title={`Submit: ${pct}%`}
+                    />
+                    <div
+                      className="absolute inset-y-0 left-0 rounded-full z-10 bg-blue-600"
+                      style={{ width: `${pctApproved}%` }}
+                      title={`Approved: ${pctApproved}%`}
+                    />
+                  </div>
+
+                  <p className="text-xs text-gray-600">
+                    Target: {agg.totalAssigned} sampel, Selesai:{" "}
+                    {agg.submitCount} sampel, Disetujui: {agg.approvedCount}{" "}
+                    sampel
+                  </p>
+
+                  <p className="text-[11px] text-gray-500">
+                    {Array.isArray(agg.subSurveyNames)
+                      ? agg.subSurveyNames.join(" · ")
+                      : ""}
+                  </p>
+
+                  <div className="flex items-center gap-3 text-[11px] text-gray-600">
+                    <span className="relative inline-flex items-center gap-1">
+                      <span className="absolute inline-block w-9 h-2 rounded bg-green-500 align-middle" />
+                      <span className="absolute inline-block w-6 h-2 z-10 rounded bg-yellow-400 align-middle" />
+                      <span className="absolute inline-block w-3 h-2 z-20 rounded bg-red-400 align-middle" />
+                    </span>
+                    <p className="ml-7">Submit</p>
+                    <span className="inline-flex items-center gap-1">
+                      <span className="inline-block w-3 h-2 rounded bg-blue-600 align-middle" />{" "}
+                      Approved
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
+      {/* ===== Edit Modal ===== */}
+      <Transition.Root show={showEditModal} as={Fragment}>
+        <Dialog as="div" className="relative z-50" onClose={setShowEditModal}>
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-300"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="ease-in duration-200"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <div className="fixed inset-0 bg-gray-500/75 transition-opacity" />
+          </Transition.Child>
+
+          <div className="fixed inset-0 z-30 overflow-y-auto">
+            <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+              <Transition.Child
+                as={Fragment}
+                enter="ease-out duration-300"
+                enterFrom="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                enterTo="opacity-100 translate-y-0 sm:scale-100"
+                leave="ease-in duration-200"
+                leaveFrom="opacity-100 translate-y-0 sm:scale-100"
+                leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+              >
+                <Dialog.Panel className="relative transform overflow-visible rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 w-full max-w-md sm:max-w-lg">
+                  <div className="bg-white px-4 pb-4 pt-5 sm:p-6 sm:pb-4 rounded-lg">
+                    <Dialog.Title
+                      as="h3"
+                      className="text-base font-semibold leading-6 text-gray-900"
+                    >
+                      Edit Jadwal
+                    </Dialog.Title>
+
+                    <form className="mt-3 space-y-3" onSubmit={handleUpdate}>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          Judul
+                        </label>
+                        <input
+                          type="text"
+                          value={editTitle}
+                          onChange={(e) => setEditTitle(e.target.value)}
+                          className="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:outline-none sm:text-sm p-2"
+                          placeholder="Judul kegiatan"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          Keterangan
+                        </label>
+                        <textarea
+                          value={editInfo}
+                          onChange={(e) => setEditInfo(e.target.value)}
+                          className="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:outline-none sm:text-sm p-2"
+                          placeholder="Catatan / info tambahan"
+                        />
+                      </div>
+
+                      <div className="items-center gap-2 hidden">
+                        <input
+                          id="editAllDay"
+                          type="checkbox"
+                          checked={editAllDay}
+                          onChange={(e) => setEditAllDay(e.target.checked)}
+                          className="bg-white text-white"
+                        />
+                        <label
+                          htmlFor="editAllDay"
+                          className="text-sm text-gray-700"
+                        >
+                          Sepanjang hari (All day)
+                        </label>
+                      </div>
+
+                      <div className="relative">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Mulai
+                        </label>
+                        <Datetime
+                          inputProps={{
+                            readOnly: true,
+                            className:
+                              "mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:outline-none sm:text-sm p-2",
+                            placeholder: "Pilih tanggal & waktu",
+                          }}
+                          value={formatDateTime(editStart)}
+                          onChange={(d) => {
+                            if (typeof d === "object" && "toDate" in d)
+                              setEditStart(d.toDate());
+                            else setEditStart(d as Date | string);
+                          }}
+                          closeOnSelect
+                        />
+                      </div>
+
+                      <div className="relative">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Selesai
+                        </label>
+                        <Datetime
+                          inputProps={{
+                            readOnly: true,
+                            className:
+                              "mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:outline-none sm:text-sm p-2",
+                            placeholder: "Pilih tanggal & waktu",
+                          }}
+                          value={formatDateTime(editEnd)}
+                          onChange={(d) => {
+                            if (typeof d === "object" && "toDate" in d)
+                              setEditEnd(d.toDate());
+                            else setEditEnd(d as Date | string);
+                          }}
+                          closeOnSelect
+                        />
+                      </div>
+
+                      <div className="pt-2 sm:flex sm:flex-row-reverse sm:gap-2">
+                        <button
+                          type="submit"
+                          className="inline-flex w-full justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 sm:w-auto"
+                          disabled={!editEvent}
+                        >
+                          Simpan
+                        </button>
+                        <button
+                          type="button"
+                          onClick={closeEdit}
+                          className="mt-2 sm:mt-0 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:w-auto"
+                        >
+                          Batal
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </Dialog.Panel>
+              </Transition.Child>
+            </div>
+          </div>
+        </Dialog>
+      </Transition.Root>
     </div>
   );
 }

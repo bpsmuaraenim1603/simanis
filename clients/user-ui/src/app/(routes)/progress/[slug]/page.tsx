@@ -77,9 +77,63 @@ const ProgressTemplate = () => {
     return userProgress.filter((p) => p?.district?.city === selectedCity);
   }, [userProgress, selectedCity]);
 
+  const aggregatedUserProgress = useMemo(() => {
+    const rows =
+      selectedCity && selectedCity.length > 0
+        ? userProgress.filter((p) => p?.district?.city === selectedCity)
+        : userProgress;
+
+    type Agg = {
+      user: { id: string; name: string; email: string };
+      totalAssigned: number;
+      submitCount: number;
+      approvedCount: number;
+      rejectedCount: number;
+      districts: Set<string>;
+      cities: Set<string>;
+    };
+
+    const map = new Map<string, Agg>();
+
+    for (const r of rows) {
+      if (!r?.user?.id) continue;
+      const key = r.user.id;
+      const prev = map.get(key);
+      const distName = r?.district?.name ?? "-";
+      const cityName = r?.district?.city ?? "";
+
+      if (!prev) {
+        map.set(key, {
+          user: r.user,
+          totalAssigned: r.totalAssigned ?? 0,
+          submitCount: r.submitCount ?? 0,
+          approvedCount: r.approvedCount ?? 0,
+          rejectedCount: r.rejectedCount ?? 0,
+          districts: new Set(distName ? [distName] : []),
+          cities: new Set(cityName ? [cityName] : []),
+        });
+      } else {
+        prev.totalAssigned += r.totalAssigned ?? 0;
+        prev.submitCount += r.submitCount ?? 0;
+        prev.approvedCount += r.approvedCount ?? 0;
+        prev.rejectedCount += r.rejectedCount ?? 0;
+        if (distName) prev.districts.add(distName);
+        if (cityName) prev.cities.add(cityName);
+      }
+    }
+
+    return Array.from(map.values()).sort(
+      (a, b) => b.approvedCount - a.approvedCount
+    );
+  }, [userProgress, selectedCity]);
+
   const overallPercent =
     progress && progress.targetSample > 0
-      ? Math.round((progress.submitCount / progress.targetSample) * 100)
+      ? Math.round(
+          ((progress.submitCount + progress.approvedCount) /
+            progress.targetSample) *
+            100
+        )
       : 0;
   const cityOptions = useMemo(
     () => [
@@ -243,13 +297,27 @@ const ProgressTemplate = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {filteredUserProgress.map((row: any) => {
+                  {aggregatedUserProgress.map((row: any) => {
                     const percent =
                       row.totalAssigned > 0
                         ? Math.round(
-                            (row.submitCount / row.totalAssigned) * 100
+                            ((row.submitCount + row.approvedCount) /
+                              row.totalAssigned) *
+                              100
                           )
                         : 0;
+
+                    const percentApproved =
+                      row.totalAssigned > 0
+                        ? Math.round(
+                            (row.approvedCount / row.totalAssigned) * 100
+                          )
+                        : 0;
+
+                    const districtText =
+                      Array.from(row.districts ?? []).join(" · ") || "-";
+                    const cityText = Array.from(row.cities ?? []).join(" · ");
+
                     return (
                       <tr key={row.user.id}>
                         <td className="px-4 py-3 font-medium text-gray-800">
@@ -258,10 +326,13 @@ const ProgressTemplate = () => {
                             {row.user.email}
                           </p>
                         </td>
+
+                        {/* Wilayah tugas: gabungkan nama distrik & kota bila multi */}
                         <td className="px-4 py-3 text-gray-700">
-                          {row?.district?.name ?? "-"}
-                          {row?.district?.city ? `, ${row.district.city}` : ""}
+                          {districtText}
+                          {cityText ? `, ${cityText}` : ""}
                         </td>
+
                         <td className="px-4 py-3">{row.totalAssigned}</td>
                         <td className="px-4 py-3">{row.submitCount}</td>
                         <td className="px-4 py-3">{row.approvedCount}</td>
@@ -274,13 +345,22 @@ const ProgressTemplate = () => {
                             />
                           </div>
                           <p className="text-xs text-gray-600 mt-1">
-                            {percent}%
+                            {percent}% Submitted
+                          </p>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div
+                              className={`h-2 rounded-full ${percentApproved >= 80 ? "bg-green-500" : percentApproved >= 50 ? "bg-yellow-400" : "bg-red-400"}`}
+                              style={{ width: `${percentApproved}%` }}
+                            />
+                          </div>
+                          <p className="text-xs text-gray-600 mt-1">
+                            {percentApproved}% Approved
                           </p>
                         </td>
                       </tr>
                     );
                   })}
-                  {!filteredUserProgress.length && (
+                  {!aggregatedUserProgress.length && (
                     <tr>
                       <td className="px-4 py-3 text-gray-600" colSpan={7}>
                         Tidak ada data untuk wilayah yang dipilih.

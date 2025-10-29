@@ -10,6 +10,7 @@ export const GET_USER_PROGRESS_BY_USER_ID = gql`
       submitCount
       approvedCount
       rejectedCount
+      blockCount
       lastUpdated
       user {
         id
