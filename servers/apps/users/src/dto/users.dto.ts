@@ -133,6 +133,9 @@ export class UpdateUserDto {
 
   @Field({ nullable: true })
   address?: string;
+
+  @Field({ nullable: true })
+  limit_bill?: string;
 }
 
 @InputType()
@@ -142,4 +145,13 @@ export class UpdateRoleDto {
 
   @Field(() => Role, { nullable: false })
   role?: Role;
+}
+
+@InputType()
+export class UpdateBillLimitDto {
+  @Field({ nullable: false })
+  name?: string;
+
+  @Field({ nullable: false })
+  limit_bill?: string;
 }

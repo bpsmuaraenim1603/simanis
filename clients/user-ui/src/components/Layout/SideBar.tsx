@@ -77,7 +77,7 @@ export const SideBar = () => {
     <aside className={asideClass} aria-label="Sidebar">
       {/* Bar atas mobile */}
       <div className="lg:hidden flex items-center justify-between h-14 px-3 border-b border-white/10">
-        <span className="font-semibold font-Poppins">SIMANIS</span>
+        <span className="font-bold font-Poppins text-xl inset-0 text-white">SIMANIS</span>
         <button
           onClick={closeMobile}
           aria-label="Tutup sidebar"
@@ -88,8 +88,8 @@ export const SideBar = () => {
       </div>
 
       {/* Bar atas desktop (toggle 60/250) */}
-      <div className={`hidden lg:flex items-center ${isMinimized ? "justify-center" : "justify-between"} h-14 px-3 border-b border-white/10`}>
-        <span className="font-semibold">{isMinimized ? "" : "SIMANIS"}</span>
+      <div className={`hidden lg:flex items-center py-[29px] ${isMinimized ? "justify-center" : "justify-between"} h-14 px-3 border-b border-white/10`}>
+        <span className="font-semibold font-Poppins text-xl inset-0 text-white">{isMinimized ? "" : "SIMANIS"}</span>
         <button
           onClick={toggleDesktop}
           title={isMinimized ? "Perbesar" : "Kecilkan"}

@@ -11,6 +11,12 @@ export const authOptions: NextAuthOptions = {
   ],
   secret: process.env.NEXT_AUTH_SECRET,
 
+  session: {
+    strategy: "jwt",
+    maxAge: 60 * 60 * 24 * 30,
+    updateAge: 60 * 60 * 24,
+  },
+
   callbacks: {
     async redirect({ url, baseUrl }) {
       return `${baseUrl}/dashboard`;

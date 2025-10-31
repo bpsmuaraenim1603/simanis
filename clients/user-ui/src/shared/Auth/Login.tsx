@@ -33,6 +33,14 @@ const Login = ({ setActiveState }: { setActiveState: (e: string) => void }) => {
     resolver: zodResolver(formSchema),
   });
 
+  const isProd = process.env.NODE_ENV === "production";
+  const cookieOpts = {
+    expires: 30, // 30 hari
+    sameSite: "lax" as const,
+    path: "/",
+    secure: isProd, // wajib true hanya saat HTTPS (production)
+  };
+
   const [show, setShow] = useState(false);
 
   const onSubmit = async (data: LoginSchema) => {
@@ -45,8 +53,8 @@ const Login = ({ setActiveState }: { setActiveState: (e: string) => void }) => {
     });
 
     if (response.data.Login.user) {
-      Cookies.set("refresh_token", response.data.Login.refreshToken);
-      Cookies.set("access_token", response.data.Login.accessToken);
+      Cookies.set("refresh_token", response.data.Login.refreshToken, cookieOpts);
+      Cookies.set("access_token", response.data.Login.accessToken, cookieOpts);
       window.location.href = "/dashboard";
       toast.success("Login Berhasil!");
     } else {
@@ -122,8 +130,8 @@ const Login = ({ setActiveState }: { setActiveState: (e: string) => void }) => {
           className="flex items-center justify-center my-2"
           onClick={() => signIn()}
         > */}
-          {/* <FcGoogle size={30} className="cursor-pointer mr-2" /> */}
-          {/* <AiFillGithub size={30} className="cursor-pointer ml-2" /> */}
+        {/* <FcGoogle size={30} className="cursor-pointer mr-2" /> */}
+        {/* <AiFillGithub size={30} className="cursor-pointer ml-2" /> */}
         {/* </div> */}
         <h5 className="text-center pt-2 font-Poppins text-[14px] ">
           Belum punya akun?

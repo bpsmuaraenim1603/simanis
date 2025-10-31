@@ -14,10 +14,13 @@ export const GET_USER_PROGRESS_BY_SUBSURVEY_ID = gql`
       lastUpdated
       superVisorId
       blockCount
+      villageName
+      travelBill
       user {
         id
         name
         email
+        limit_bill
       }
       subSurveyActivity {
         id

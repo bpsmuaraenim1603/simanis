@@ -17,6 +17,7 @@ import {
   ForgotPasswordDto,
   RegisterDto,
   ResetPasswordDto,
+  UpdateBillLimitDto,
   UpdateRoleDto,
   UpdateUserDto,
 } from './dto/users.dto';
@@ -24,11 +25,36 @@ import { User } from './entities/users.entity';
 import { Response } from 'express';
 import { AuthGuard } from './guards/auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
+import { BulkSpjDefaultsInput, BulkSpjResult } from './dto/bulk-spj.dto';
+import { FileUpload, GraphQLUpload } from 'graphql-upload-ts';
 
 @Resolver('User')
 // @UseFilters()
 export class UsersResolver {
   constructor(private readonly usersService: UsersService) {}
+
+   @UseGuards(AuthGuard)
+  @Mutation(() => BulkSpjResult)
+  async bulkSubmitSpjHonor(
+    @Args({ name: 'file', type: () => GraphQLUpload }) file: FileUpload,
+    @Args('defaults', { type: () => BulkSpjDefaultsInput }) defaults: BulkSpjDefaultsInput,
+  ): Promise<BulkSpjResult> {
+    const chunks: Buffer[] = [];
+    const stream = file.createReadStream();
+    await new Promise<void>((resolve, reject) => {
+      stream.on('data', (d) => chunks.push(Buffer.isBuffer(d) ? d : Buffer.from(d)));
+      stream.on('end', () => resolve());
+      stream.on('error', reject);
+    });
+    const buffer = Buffer.concat(chunks);
+
+    return this.usersService.bulkSubmitSpjHonorFromFile(
+      buffer,
+      file.filename,
+      (file as any).mimetype,
+      defaults,
+    );
+  }
 
   @Mutation(() => UserResponse)
   async createUser(
@@ -127,5 +153,14 @@ export class UsersResolver {
     @Args('updateRole') updateRole: UpdateRoleDto,
   ): Promise<User> {
     return this.usersService.editUserRole(userId, updateRole);
+  }
+
+  @Mutation(() => User)
+  @UseGuards(AuthGuard)
+  async updateBillLimit(
+    @Args('userId') userId: string,
+    @Args('updateBillLimit') updateBillLimit: UpdateBillLimitDto,
+  ): Promise<User> {
+    return this.usersService.editUserBillLimit(userId, updateBillLimit);
   }
 }

@@ -31,8 +31,8 @@ const NavItems = ({ isMinimized = false }: { isMinimized?: boolean }) => {
     dataprogress?: { title: string; url: string }[]; logo?: LucideIcon;
   }[] = [
     { title: "Beranda", hovertitle: "Beranda", url: "/dashboard", style: "border-b-2 border-t-2 border-white py-2", logo: House },
-    ...(user?.role === "Superadmin" ? [{ title: "Super Admin", hovertitle: "Super Admin", url: "/superadmin", logo: User, style: "border-b-2 border-white pb-2" }] : []),
-    ...(user?.role === "Admin" || user?.role === "Superadmin" ? [{ title: "Admin", hovertitle: "Admin", url: "/admin", logo: User, style: "border-b-2 border-white pb-2" }] : []),
+    ...(user?.role === "Superadmin" || user?.role === "Keuangan" ? [{ title: "Kontrol Pengguna", hovertitle: "Kontrol Pengguna", url: "/superadmin", logo: User, style: "border-b-2 border-white pb-2" }] : []),
+    ...(user?.role === "Admin" || user?.role === "Superadmin" ? [{ title: "Manajemen Tim", hovertitle: "Manajemen Tim", url: "/admin", logo: User, style: "border-b-2 border-white pb-2" }] : []),
     ...(user?.role === "Supervisor" || user?.role === "Superadmin" || user?.role === "Admin" ? [{ title: "Pengawas", hovertitle: "Pengawas", url: "/supervisor", logo: User, style: "border-b-2 border-white pb-2" }] : []),
     ...(user?.role === "User" || user?.role === "Superadmin" ? [{ title: "Petugas", hovertitle: "Petugas", url: "/user", logo: User, style: "border-b-2 border-white pb-2" }] : []),
     { title: "KEGIATAN LAPANGAN", url: "#kegiatanlapangan", unhover: true },

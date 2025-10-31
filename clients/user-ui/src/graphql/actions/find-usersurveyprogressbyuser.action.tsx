@@ -11,10 +11,13 @@ export const GET_USER_PROGRESS_BY_USER_ID = gql`
       approvedCount
       rejectedCount
       blockCount
+      villageName
+      travelBill
       lastUpdated
       user {
         id
         name
+        limit_bill
       }
       subSurveyActivity {
         id

@@ -113,6 +113,7 @@ model User {
   password     String
   role         Role     @default(User)
   avatar       Avatar?
+  limit_bill   String
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -187,6 +188,8 @@ model UserProgress {
   lastUpdated         DateTime           @updatedAt
   districtId          String?
   district            District?          @relation(fields: [districtId], references: [id])
+  villageName         String?
+  travelBill          String?
 }
 
 model District {

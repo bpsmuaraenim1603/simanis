@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   useApolloClient,
   useLazyQuery,
@@ -19,6 +19,7 @@ import { CREATE_USER_PROGRESS } from "@/src/graphql/actions/create-userprogress.
 import { UPDATE_USER_PROGRESS } from "@/src/graphql/actions/update-userprogress.action";
 import { GET_ALL_USERS } from "@/src/graphql/actions/find-allusers.action";
 import { GET_USER_PROGRESS_BY_SUBSURVEY_ID } from "@/src/graphql/actions/find-usersurveyprogress.action";
+import { GET_USER_PROGRESS_BY_USER_ID } from "@/src/graphql/actions/find-usersurveyprogressbyuser.action";
 import { GET_ALL_DISTRICT } from "@/src/graphql/actions/find-alldistrict.action";
 import { LayoutGroup, motion } from "framer-motion";
 import HUComboBox from "@/src/components/HUCombobox";
@@ -59,9 +60,11 @@ type UserProgress = {
   blockCount: string;
   lastUpdated: string;
   districtId: string;
+  villageName: string;
+  travelBill: string;
 };
 type UserProgressWithUser = UserProgress & {
-  user?: { name: string; email: string };
+  user?: { name: string; email: string; limit_bill: number };
 };
 
 /* =============== Tabs Components (dioptimasi responsif) =============== */
@@ -195,6 +198,8 @@ function Admin() {
     blockCount: "",
     lastUpdated: "",
     districtId: "",
+    villageName: "",
+    travelBill: "",
   });
   const [updateUserProgressForm, setUpdateUserProgressForm] = useState({
     userProgressId: "",
@@ -207,6 +212,8 @@ function Admin() {
     rejectedCount: 0,
     lastUpdated: "",
     districtId: "",
+    villageName: "",
+    travelBill: "",
   });
   const [qSupervisor, setQSupervisor] = useState("");
   const [qEnumerator, setQEnumerator] = useState("");
@@ -257,6 +264,18 @@ function Admin() {
   const [fetchUserProgress, { data: userProgressData }] = useLazyQuery(
     GET_USER_PROGRESS_BY_SUBSURVEY_ID
   );
+  const [
+    fetchUserProgressByUser,
+    { data: upByUserData, loading: upByUserLoading },
+  ] = useLazyQuery(GET_USER_PROGRESS_BY_USER_ID, {
+    fetchPolicy: "network-only",
+  });
+  const [
+    fetchUserProgressByUserForUpdate,
+    { data: upByUserUpdateData, loading: upByUserUpdateLoading },
+  ] = useLazyQuery(GET_USER_PROGRESS_BY_USER_ID, {
+    fetchPolicy: "network-only",
+  });
   const [addSurveyActivity, { loading: loading1 }] =
     useMutation(ADD_SURVEY_ACTIVITY);
   const [addSubSurveyActivity, { loading: loading2 }] = useMutation(
@@ -295,6 +314,40 @@ function Admin() {
       ),
     [userProgressData]
   );
+  const toMoney = (v: any) => Number(v ?? 0);
+  const sumTravel = (rows: any[]) =>
+    rows.reduce((acc, r) => acc + toMoney(r.travelBill), 0);
+
+  // ===== Helpers tanggal untuk filter bulan aktif =====
+  const isSameMonthYear = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
+
+  const inRangeInclusive = (now: Date, start?: string, end?: string) => {
+    if (!start || !end) return null;
+    const s = new Date(start);
+    const e = new Date(end);
+    return now >= s && now <= e;
+  };
+
+  const getSubInfo = (subId?: string) => {
+    if (!subId) return undefined;
+    return subMap[subId];
+  };
+
+  const includeForThisMonth = (row: any, now = new Date()) => {
+    const sub = getSubInfo(row?.subSurveyActivityId);
+    if (sub?.startDate && sub?.endDate) {
+      const ok = inRangeInclusive(now, sub.startDate, sub.endDate);
+      if (ok !== null) return ok;
+    }
+    if (row?.lastUpdated) {
+      const lu = new Date(row.lastUpdated);
+      return isSameMonthYear(lu, now);
+    }
+    return false;
+  };
+
+  const prevSurveyIdRefUpdate = useRef<string | null>(null);
 
   const handleChangeF1 = (e: React.ChangeEvent<HTMLInputElement>) =>
     setFormStateF1((prev) => ({ ...prev, [e.target.id]: e.target.value }));
@@ -479,6 +532,24 @@ function Admin() {
         // }
       }
 
+      // Validasi limit_bill (lintas kegiatan)
+      if (userProgressForm.userId) {
+        // pastikan data akumulasi sudah ada; kalau belum, aman panggil dulu (edge)
+        if (!upByUserData) {
+          await fetchUserProgressByUser({
+            variables: { userId: userProgressForm.userId },
+          });
+        }
+        if (willExceedAdd) {
+          toast.error(
+            `Honor perjalanan melebihi limit pengguna.\n` +
+              `Limit: ${limitBillAdd.toLocaleString("id-ID")} • Terpakai: ${usedTravelAdd.toLocaleString("id-ID")} • ` +
+              `Sisa: ${remainTravelAdd.toLocaleString("id-ID")}`
+          );
+          return;
+        }
+      }
+
       await createUserSurveyProgress({
         variables: {
           input: {
@@ -490,6 +561,8 @@ function Admin() {
             approvedCount: Number(userProgressForm.approvedCount),
             rejectedCount: Number(userProgressForm.rejectedCount),
             blockCount: userProgressForm.blockCount,
+            villageName: userProgressForm.villageName,
+            travelBill: userProgressForm.travelBill,
             lastUpdated: new Date().toISOString(),
             districtId: userProgressForm.districtId,
           },
@@ -508,6 +581,8 @@ function Admin() {
         blockCount: "",
         lastUpdated: "",
         districtId: "",
+        villageName: "",
+        travelBill: "",
         superVisorId: userProgressForm.superVisorId,
       });
     } catch (err) {
@@ -546,6 +621,23 @@ function Admin() {
           return;
         }
 
+        // Validasi limit_bill (lintas kegiatan) untuk update
+        if (currentUP?.userId) {
+          if (!upByUserUpdateData) {
+            await fetchUserProgressByUserForUpdate({
+              variables: { userId: currentUP.userId },
+            });
+          }
+          if (willExceedUpdate) {
+            toast.error(
+              `Honor perjalanan melebihi limit pengguna.\n` +
+                `Limit: ${limitBillUpdate.toLocaleString("id-ID")} • Terpakai (kegiatan lain): ${usedTravelUpdateOthers.toLocaleString("id-ID")} • ` +
+                `Sisa untuk baris ini: ${remainTravelUpdate.toLocaleString("id-ID")}`
+            );
+            return;
+          }
+        }
+
         await updateUserSurveyProgress({
           variables: {
             userProgressId: updateUserProgressForm.userProgressId,
@@ -558,6 +650,8 @@ function Admin() {
                 updateUserProgressForm.lastUpdated
               ).toISOString(),
               districtId: updateUserProgressForm.districtId,
+              villageName: updateUserProgressForm.villageName,
+              travelBill: updateUserProgressForm.travelBill,
             },
           },
         });
@@ -579,6 +673,8 @@ function Admin() {
         rejectedCount: 0,
         lastUpdated: "",
         districtId: "",
+        villageName: "",
+        travelBill: "",
       });
     } catch (err) {
       toast.error("Gagal perbarui petugas");
@@ -775,6 +871,8 @@ function Admin() {
         rejectedCount: Number(up.rejectedCount ?? 0),
         lastUpdated: toDateInput(up.lastUpdated),
         districtId: up.districtId ?? "",
+        villageName: up.villageName ?? "",
+        travelBill: up.travelBill ?? "",
       }));
     } else {
       setUpdateUserProgressForm((prev) => ({
@@ -785,6 +883,8 @@ function Admin() {
         rejectedCount: 0,
         lastUpdated: "",
         districtId: "",
+        villageName: "",
+        travelBill: "",
       }));
     }
   }, [updateUserProgressForm.userProgressId, upMap]);
@@ -794,6 +894,26 @@ function Admin() {
   }, [updateUserProgressForm.subSurveyActivityId]);
 
   useEffect(() => {
+    const curr = updateUserProgressForm?.surveyActivityId || "";
+    const prev = prevSurveyIdRefUpdate.current || "";
+
+    // Kalau nilai tim BERUBAH (termasuk jadi kosong), kosongkan field dependent
+    if (curr !== prev) {
+      setUpdateUserProgressForm((s: any) => ({
+        ...s,
+        subSurveyActivityId: "", // reset kegiatan
+        userId: "", // reset petugas
+        // travelBill: "",       // ← kalau mau sekalian reset nominal, buka baris ini
+      }));
+
+      // (opsional) jika kamu memuat daftar petugas/kegiatan berdasar tim:
+      // refetchPetugas({ subSurveyActivityId: "" }); // atau refetch sesuai tim baru
+    }
+
+    prevSurveyIdRefUpdate.current = curr;
+  }, [updateUserProgressForm?.surveyActivityId, setUpdateUserProgressForm]);
+
+  useEffect(() => {
     if (userProgressForm.subSurveyActivityId)
       fetchUserProgress({
         variables: {
@@ -801,6 +921,14 @@ function Admin() {
         },
       });
   }, [userProgressForm.subSurveyActivityId, fetchUserProgress]);
+
+  useEffect(() => {
+    if (userProgressForm.userId) {
+      fetchUserProgressByUser({
+        variables: { userId: userProgressForm.userId },
+      });
+    }
+  }, [userProgressForm.userId, fetchUserProgressByUser]);
 
   /*===================== LOGIC ===================== */
   const selectedSubForAdd = useMemo(
@@ -887,13 +1015,57 @@ function Admin() {
         .filter((u: User) => u.role !== "Supervisor")
         .filter((u: User) => u.role !== "Admin")
         .filter((u: User) => u.role !== "Superadmin"),
-        // .filter((u: User) => !usedUserIdsForAdd.has(u.id)),
+    // .filter((u: User) => !usedUserIdsForAdd.has(u.id)),
     [userData, usedUserIdsForAdd]
   );
   const filteredEnumeratorsForAdd = useMemo(
     () => enumeratorsForAdd.filter((u) => matchesSearch(u, qEnumerator)),
     [enumeratorsForAdd, qEnumerator]
   );
+  // ==== Tambah ====
+  const selectedUserForAdd = useMemo(
+    () =>
+      (userData?.getUsers ?? []).find(
+        (u: any) => u.id === userProgressForm.userId
+      ),
+    [userData, userProgressForm.userId]
+  );
+  const limitBillAdd = toMoney(selectedUserForAdd?.limit_bill);
+  const usedTravelAdd = useMemo(() => {
+    const rows = upByUserData?.userProgressSurveyByUserId ?? [];
+    const filtered = rows.filter((r: any) => includeForThisMonth(r));
+    return sumTravel(filtered);
+  }, [upByUserData, subMap]);
+  const newTravelAdd = toMoney(userProgressForm.travelBill);
+  const remainTravelAdd = Math.max(0, limitBillAdd - usedTravelAdd);
+  const willExceedAdd = newTravelAdd > remainTravelAdd;
+
+  // ==== Ubah ====
+  const selectedUserForUpdate = currentUP
+    ? (userData?.getUsers ?? []).find((u: any) => u.id === currentUP.userId)
+    : null;
+
+  const limitBillUpdate = toMoney(selectedUserForUpdate?.limit_bill);
+
+  const usedTravelUpdateAll = useMemo(() => {
+    const rows = upByUserUpdateData?.userProgressSurveyByUserId ?? [];
+    const filtered = rows.filter((r: any) => includeForThisMonth(r));
+    return sumTravel(filtered);
+  }, [upByUserUpdateData, subMap]);
+
+  // Kurangi travelBill baris yang sedang diedit *hanya jika* baris itu juga terhitung bulan ini
+  const currentRowCounted = currentUP ? includeForThisMonth(currentUP) : false;
+  const currentRowOldTravel = toMoney(currentUP?.travelBill);
+  const usedTravelUpdateOthers = Math.max(
+    0,
+    usedTravelUpdateAll - (currentRowCounted ? currentRowOldTravel : 0)
+  );
+  const newTravelUpdate = toMoney(updateUserProgressForm.travelBill);
+  const remainTravelUpdate = Math.max(
+    0,
+    limitBillUpdate - usedTravelUpdateOthers
+  );
+  const willExceedUpdate = newTravelUpdate > remainTravelUpdate;
 
   useEffect(() => {
     if (isListingUpdate) {
@@ -910,20 +1082,19 @@ function Admin() {
     updateUserProgressForm.subSurveyActivityId,
   ]);
 
+  useEffect(() => {
+    const uid = currentUP?.userId;
+    if (uid) {
+      fetchUserProgressByUserForUpdate({ variables: { userId: uid } });
+    }
+  }, [currentUP?.userId, fetchUserProgressByUserForUpdate]);
+
   /* ===================== UI ===================== */
   return (
     <div className="max-w-screen-xl mx-auto px-3 sm:px-6 md:px-8 py-6 space-y-4 font-Poppins">
       {/* Main Tabs + actions */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-        <Tabs
-          tabs={[
-            { key: "tim", label: "Tim" },
-            { key: "kegiatan", label: "Kegiatan Survei" },
-            { key: "petugas", label: "Petugas" },
-          ]}
-          value={section}
-          onChange={setSection}
-        />
+      <div className="bg-orange-50 rounded-lg p-3 md:p-4 font-bold text-lg md:text-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 shadow-md">
+        <span>Panel Manajemen Tim</span>
         <div className="flex items-center gap-2">
           {loading && (
             <span className="text-xs text-gray-500">Memuat data…</span>
@@ -940,16 +1111,27 @@ function Admin() {
           </button>
         </div>
       </div>
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+        <Tabs
+          tabs={[
+            { key: "tim", label: "Tim" },
+            { key: "kegiatan", label: "Kegiatan Survei" },
+            { key: "petugas", label: "Petugas" },
+          ]}
+          value={section}
+          onChange={setSection}
+        />
 
-      {/* Sub Tabs */}
-      <SubTabs
-        tabs={[
-          { key: "add", label: "Tambah" },
-          { key: "update", label: "Ubah" },
-        ]}
-        value={mode}
-        onChange={setMode}
-      />
+        {/* Sub Tabs */}
+        <SubTabs
+          tabs={[
+            { key: "add", label: "Tambah" },
+            { key: "update", label: "Ubah" },
+          ]}
+          value={mode}
+          onChange={setMode}
+        />
+      </div>
 
       {/* ---------- TIM ---------- */}
       {section === "tim" && mode === "add" && (
@@ -1479,6 +1661,16 @@ function Admin() {
                 }))}
                 placeholder="-- Pilih Petugas --"
               />
+              {userProgressForm.userId && (
+                <p className="mt-1 text-xs">
+                  Limit: <b>{limitBillAdd.toLocaleString("id-ID")}</b> •
+                  Terpakai: <b>{usedTravelAdd.toLocaleString("id-ID")}</b> •
+                  Sisa:{" "}
+                  <b className={remainTravelAdd <= 0 ? "text-red-600" : ""}>
+                    {remainTravelAdd.toLocaleString("id-ID")}
+                  </b>
+                </p>
+              )}
             </div>
 
             <div>
@@ -1578,6 +1770,22 @@ function Admin() {
 
             <div>
               <label
+                htmlFor="villageName"
+                className="block text-sm font-bold mb-2"
+              >
+                Desa
+              </label>
+              <input
+                id="villageName"
+                type="text"
+                value={userProgressForm.villageName}
+                onChange={handleChangeUserProgress}
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              />
+            </div>
+
+            <div>
+              <label
                 htmlFor="blockCount"
                 className="block text-sm font-bold mb-2"
               >
@@ -1590,6 +1798,31 @@ function Admin() {
                 onChange={handleChangeUserProgress}
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               />
+            </div>
+
+            <div>
+              <label
+                htmlFor="travelBill"
+                className="block text-sm font-bold mb-2"
+              >
+                Honor Perjalanan
+              </label>
+              <input
+                id="travelBill"
+                type="number"
+                value={userProgressForm.travelBill}
+                onChange={handleChangeUserProgress}
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              />
+              {userProgressForm.userId && (
+                <p
+                  className={`mt-1 text-xs ${willExceedAdd ? "text-red-600" : "text-gray-600"}`}
+                >
+                  Akan terpakai:{" "}
+                  {(usedTravelAdd + newTravelAdd).toLocaleString("id-ID")}{" "}
+                  {willExceedAdd && "— Melebihi limit!"}
+                </p>
+              )}
             </div>
 
             <div className="md:col-span-2">
@@ -1657,7 +1890,7 @@ function Admin() {
                     ? UpdateUPData?.subSurveyActivityById?.map(
                         (s: SubSurveyActivity) => ({
                           value: s.id,
-                          label: s.name ?? "-",
+                          label: s.name,
                         })
                       )
                     : []
@@ -1698,6 +1931,17 @@ function Admin() {
                 )}
                 placeholder="-- Pilih Petugas --"
               />
+              {currentUP?.userId && (
+                <p className="mt-1 text-xs">
+                  Limit: <b>{limitBillUpdate.toLocaleString("id-ID")}</b> •
+                  Terpakai (kegiatan lain):{" "}
+                  <b>{usedTravelUpdateOthers.toLocaleString("id-ID")}</b> • Sisa
+                  untuk baris ini:{" "}
+                  <b className={remainTravelUpdate <= 0 ? "text-red-600" : ""}>
+                    {remainTravelUpdate.toLocaleString("id-ID")}
+                  </b>
+                </p>
+              )}
             </div>
 
             <div>
@@ -1799,6 +2043,49 @@ function Admin() {
                 )}
                 placeholder="-- Pilih Kecamatan --"
               />
+            </div>
+
+            <div>
+              <label
+                htmlFor="villageName"
+                className="block text-sm font-bold mb-2"
+              >
+                Desa
+              </label>
+              <input
+                id="villageName"
+                type="text"
+                value={updateUserProgressForm.villageName}
+                onChange={handleChangeUpdateUserProgress}
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="travelBill"
+                className="block text-sm font-bold mb-2"
+              >
+                Honor Perjalanan
+              </label>
+              <input
+                id="travelBill"
+                type="number"
+                value={updateUserProgressForm.travelBill}
+                onChange={handleChangeUpdateUserProgress}
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              />
+              {currentUP?.userId && (
+                <p
+                  className={`mt-1 text-xs ${willExceedUpdate ? "text-red-600" : "text-gray-600"}`}
+                >
+                  Akan terpakai:{" "}
+                  {(usedTravelUpdateOthers + newTravelUpdate).toLocaleString(
+                    "id-ID"
+                  )}{" "}
+                  {willExceedUpdate && "— Melebihi limit!"}
+                </p>
+              )}
             </div>
 
             <div className="md:col-span-2">

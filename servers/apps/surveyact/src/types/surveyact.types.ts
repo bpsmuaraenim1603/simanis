@@ -122,6 +122,12 @@ export class UserProgressType {
 
   @Field({ nullable: true })
   blockCount?: string;
+  
+  @Field({ nullable: true })
+  villageName?: string;
+
+  @Field({ nullable: true })
+  travelBill?: string;
 
   @Field()
   lastUpdated: Date;

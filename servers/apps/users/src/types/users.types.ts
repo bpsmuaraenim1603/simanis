@@ -96,8 +96,11 @@ export class UserType {
     @Field(() => String, { nullable: true })
     phone_number?: string;
 
+    @Field(() => String)
+    role: string;
+
     @Field(() => String, { nullable: true })
-    role?: string;
+    limit_bill?: string;
 
     @Field(() => Date, { nullable: true })
     createdAt?: Date;

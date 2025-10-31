@@ -7,6 +7,7 @@ import {
   LoginDto,
   RegisterDto,
   ResetPasswordDto,
+  UpdateBillLimitDto,
   UpdateRoleDto,
   UpdateUserDto,
 } from './dto/users.dto';
@@ -16,6 +17,10 @@ import * as bcrypt from 'bcryptjs';
 import { EmailService } from './email/email.service';
 import { TokenSender } from './utils/sendToken';
 import { Prisma, User } from '@prisma/client';
+import * as crypto from 'crypto';
+import * as XLSX from 'xlsx';
+import dayjs from 'dayjs';
+import { BulkSpjDefaultsInput, BulkSpjResult } from './dto/bulk-spj.dto';
 
 interface UserData {
   name: string;
@@ -23,6 +28,28 @@ interface UserData {
   password: string;
   phone_number: string;
   address: string;
+}
+
+async function saveEvidenceFile(
+  buf: Buffer,
+  filename: string,
+  mimeType?: string,
+): Promise<{ path: string; originalName: string; mimeType?: string; size: number; publicUrl?: string }> {
+  const fs = await import('fs/promises');
+  const path = await import('path');
+  const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
+  await fs.mkdir(uploadDir, { recursive: true });
+  const safeName = `${Date.now()}-${filename.replace(/\s+/g, '_')}`;
+  const full = path.join(uploadDir, safeName);
+  await fs.writeFile(full, buf);
+  const publicBase = process.env.PUBLIC_UPLOAD_BASE_URL; // mis. https://your.host/uploads
+  return {
+    path: full,
+    originalName: filename,
+    mimeType,
+    size: buf.length,
+    publicUrl: publicBase ? `${publicBase}/${safeName}` : undefined,
+  };
 }
 
 @Injectable()
@@ -34,6 +61,17 @@ export class UsersService {
     private readonly emailService: EmailService,
   ) {}
 
+  private genBatchCode(prefix = 'HON') {
+    const rand = Math.floor(1000 + Math.random() * 9000);
+    return `${prefix}-${dayjs().format('YYYYMMDD-HHmm')}-${rand}`;
+  }
+
+  private parseTanggalLokal(input?: string): Date | null {
+    if (!input) return null;
+    const parsed = dayjs(input, 'D MMMM YYYY', 'id', true);
+    return parsed.isValid() ? parsed.toDate() : null;
+  }
+
   async createUser(registerDto: RegisterDto) {
     const { name, email, phone_number, password, address } = registerDto;
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -43,6 +81,7 @@ export class UsersService {
       phone_number,
       password: hashedPassword,
       address,
+      limit_bill: '0',
     };
     return this.prisma.user.create({
       data: user,
@@ -138,6 +177,7 @@ export class UsersService {
         password,
         phone_number,
         address,
+        limit_bill: '0',
       },
     });
 
@@ -309,5 +349,117 @@ export class UsersService {
         role: updateRole.role,
       },
     });
+  }
+
+  async editUserBillLimit(userId: string, updateBillLimit: UpdateBillLimitDto): Promise<User> {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        name: updateBillLimit.name,
+        limit_bill: updateBillLimit.limit_bill,
+      },
+    });
+  }
+
+  async bulkSubmitSpjHonorFromFile(
+    fileBuffer: Buffer,
+    fileName: string,
+    fileMime?: string,
+    defaults?: BulkSpjDefaultsInput,
+  ): Promise<BulkSpjResult> {
+    const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+    if (!defaults?.subSurveyActivityId) {
+      throw new Error('defaults.subSurveyActivityId wajib diisi.');
+    }
+
+    // Simpan bukti 1x untuk semua baris
+    const evidence = await saveEvidenceFile(fileBuffer, fileName, fileMime);
+
+    const batchCode = this.genBatchCode();
+    const subSurveyActivityId = defaults.subSurveyActivityId;
+    const submitState = defaults?.submitState || 'Menunggu';
+    const defaultSubmitDate = this.parseTanggalLokal(defaults?.submitDate) || new Date();
+
+    let inserted = 0;
+    let skippedDuplicates = 0;
+    const errors: { rowIndex: number; message: string }[] = [];
+
+    await this.prisma.$transaction(async (tx) => {
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
+        try {
+          const userId = String(r.userId || '').trim();
+          // const NIP = String(r.NIP || '').trim();
+          let targetUserId = userId;
+
+          // if (!targetUserId && NIP) {
+          //   // lookup user by NIP (ubah sesuai model Users kamu)
+          //   const user = await tx.user.findFirst({ where: { nip: NIP }, select: { id: true } });
+          //   if (user) targetUserId = user.id;
+          // }
+          if (!targetUserId) throw new Error('petugas tidak ditemukan.');
+
+          const _tanggal = String(r.tanggal || '').trim();
+          const submitDate = this.parseTanggalLokal(_tanggal) || defaultSubmitDate;
+
+          // metadata honor & catatan disimpan di verifyNote JSON string
+          const honorNominal = r.honorNominal ? Number(r.honorNominal) : undefined;
+          const noteObj = {
+            batch: batchCode,
+            noSurat: defaults?.noSurat || null,
+            keterangan: defaults?.keterangan || null,
+            honorNominal: Number.isFinite(honorNominal) ? honorNominal : null,
+            uraian: r.uraian || null,
+            catatanBaris: r.catatanBaris || null,
+          };
+          const noteJson = JSON.stringify(noteObj);
+
+          // checksum idempoten
+          const checksumBase = `${targetUserId}|${subSurveyActivityId}|${dayjs(submitDate).format('YYYY-MM-DD')}|${honorNominal ?? ''}|${defaults?.noSurat ?? ''}`;
+          const checksum = crypto.createHash('sha256').update(checksumBase).digest('hex');
+
+          // Cek duplikat via verifyNote yang mengandung checksum
+          const existed = await tx.submitSPJ.findFirst({
+            where: { verifyNote: { contains: checksum } },
+            select: { id: true },
+          });
+          if (existed) { skippedDuplicates++; continue; }
+
+          await tx.submitSPJ.create({
+            data: {
+              userId: targetUserId,
+              subSurveyActivityId,
+              verifyNote: `${noteJson} | checksum=${checksum}`,
+              submitState,
+              submitDate,
+              approveDate: null,
+
+              eviDocumentPath: evidence.path,
+              eviOriginalName: evidence.originalName,
+              eviMimeType: evidence.mimeType || null,
+              eviSize: evidence.size,
+              eviDocumentSignedUrl: evidence.publicUrl || null,
+
+              // createdAt/updatedAt biar diisi otomatis oleh Prisma/DB jika ada default
+            } as any,
+          });
+
+          inserted++;
+        } catch (e: any) {
+          errors.push({ rowIndex: i + 2, message: e?.message || 'Row error' });
+        }
+      }
+    });
+
+    return {
+      batchCode,
+      inserted,
+      skippedDuplicates,
+      errors,
+      evidenceUrl: evidence.publicUrl,
+    };
   }
 }

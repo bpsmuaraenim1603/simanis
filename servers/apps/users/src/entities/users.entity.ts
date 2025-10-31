@@ -34,6 +34,8 @@ export class User {
   avatar?: Avatars | null;
   @Field(() => Role)
   role: Role;
+  @Field()
+  limit_bill: string;
   @Field(() => String, { nullable: true })
   address?: string | null;
   @Field({ nullable: true })

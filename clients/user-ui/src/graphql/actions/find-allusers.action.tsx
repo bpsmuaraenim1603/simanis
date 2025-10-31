@@ -10,6 +10,7 @@ export const GET_ALL_USERS = gql`
       role
       address
       phone_number
+      limit_bill
       updatedAt
     }
   }

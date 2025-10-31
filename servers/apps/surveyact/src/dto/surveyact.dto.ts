@@ -127,6 +127,12 @@ export class CreateUserProgressDTO {
 
   @Field()
   districtId: string;
+
+  @Field({ nullable: true })
+  villageName?: string;
+
+  @Field({ nullable: true })
+  travelBill?: string;
 }
 
 @InputType()
@@ -148,6 +154,12 @@ export class UpdateUserProgressDTO {
 
   @Field()
   districtId: string;
+
+  @Field({ nullable: true })
+  villageName?: string;
+
+  @Field({ nullable: true })
+  travelBill?: string;
 }
 
 @InputType()

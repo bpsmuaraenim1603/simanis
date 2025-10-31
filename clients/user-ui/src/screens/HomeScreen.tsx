@@ -1,9 +1,21 @@
-// src/app/HomeScreen.tsx
-import React from 'react'
+"use client";
+import React, { useEffect } from 'react'
 import BPS from '../../public/BPS.png'
 import AuthScreen from './AuthScreen'
+import useUser from '../hooks/useUser';
+import { useRouter } from 'next/navigation';
 
 function HomeScreen() {
+
+  const { user, loading } = useUser();
+  const router = useRouter();
+
+  useEffect(() => {
+      if (user) {
+        router.replace("/dashboard");
+      }
+    }, [user, loading, router]);
+
   return (
     <div className="w-full">
       {/* Header */}
