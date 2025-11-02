@@ -137,47 +137,51 @@ function Dashboard() {
       : rows;
 
     type Agg = {
+      key: string; // userId__ssaId
       user: { id: string; name: string };
+      subSurveyActivity: { id: string; name: string };
       totalAssigned: number;
       submitCount: number;
       approvedCount: number;
       rejectedCount: number;
       lastUpdated: string;
-      subSurveyNames: Set<string>;
     };
 
     const map = new Map<string, Agg>();
 
     for (const r of filtered) {
-      const k = r.user.id;
-      const prev = map.get(k);
+      const key = `${r.user.id}__${r.subSurveyActivity.id}`;
+      const prev = map.get(key);
       if (!prev) {
-        map.set(k, {
+        map.set(key, {
+          key,
           user: r.user,
+          subSurveyActivity: {
+            id: r.subSurveyActivity.id,
+            name: r.subSurveyActivity.name,
+          },
           totalAssigned: r.totalAssigned,
           submitCount: r.submitCount,
           approvedCount: r.approvedCount,
           rejectedCount: r.rejectedCount,
           lastUpdated: r.lastUpdated,
-          subSurveyNames: new Set([r.subSurveyActivity.name]),
         });
       } else {
+        // jika ada multi baris (mis. beda blok) untuk kegiatan yang sama → jumlahkan
         prev.totalAssigned += r.totalAssigned;
         prev.submitCount += r.submitCount;
         prev.approvedCount += r.approvedCount;
         prev.rejectedCount += r.rejectedCount;
-        // simpan lastUpdated terbaru
         prev.lastUpdated =
           new Date(r.lastUpdated) > new Date(prev.lastUpdated)
             ? r.lastUpdated
             : prev.lastUpdated;
-        prev.subSurveyNames.add(r.subSurveyActivity.name);
       }
     }
 
-    return Array.from(map.values())
-      .map((v) => ({ ...v, subSurveyNames: Array.from(v.subSurveyNames) }))
-      .sort((a, b) => b.approvedCount - a.approvedCount);
+    return Array.from(map.values()).sort(
+      (a, b) => b.approvedCount - a.approvedCount
+    );
   }, [userProgressData, selectedSubSurveyId]);
 
   const subSurveyIdOptions = useMemo(() => {
@@ -651,7 +655,7 @@ function Dashboard() {
       {/* ======= Headline Cards ======= */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="p-3 md:p-4 bg-orange-50 rounded-lg shadow-md font-bold">
-          <h2>PROGRES PENDATAAN BULAN INI</h2>
+          <h2>PROGRES PENDATAAN</h2>
         </div>
         <div className="p-3 md:p-4 bg-orange-50 rounded-lg shadow-md font-bold">
           <h2>PENCAPAIAN PETUGAS</h2>
@@ -665,26 +669,22 @@ function Dashboard() {
           <h2 className="font-bold text-2xl">
             {monthlyStats?.getMonthlySurveyStats?.totalActiveUsers ?? "-"}
           </h2>
-          <p className="text-sm">Selama sebulan ini</p>
         </div>
         <div className="p-4 bg-orange-50 rounded-lg shadow-md">
           <p className="text-sm font-semibold">Kendala Petugas</p>
           <h2 className="font-bold text-2xl">0</h2>
-          <p className="text-sm">Selama sebulan ini</p>
         </div>
         <div className="p-4 bg-orange-50 rounded-lg shadow-md">
           <p className="text-sm font-semibold">Pengumpulan ST</p>
           <h2 className="font-bold text-2xl">
             {monthlyStats?.getMonthlySurveyStats?.totalJobLetters ?? "-"}
           </h2>
-          <p className="text-sm">Selama sebulan ini</p>
         </div>
         <div className="p-4 bg-orange-50 rounded-lg shadow-md">
           <p className="text-sm font-semibold">Pengajuan Honor</p>
           <h2 className="font-bold text-2xl">
             {monthlyStats?.getMonthlySurveyStats?.totalSPJ ?? "-"}
           </h2>
-          <p className="text-sm">Selama sebulan ini</p>
         </div>
       </div>
 
@@ -764,9 +764,14 @@ function Dashboard() {
               const pctApproved = Math.max(0, Math.min(100, percentApproved));
 
               return (
-                <div key={agg.user.id} className="space-y-1">
+                <div key={agg.key} className="space-y-1">
                   <div className="flex justify-between font-semibold text-sm">
-                    <span className="truncate pr-2">{agg.user.name}</span>
+                    <span className="truncate pr-2">
+                      {agg.user.name} ·{" "}
+                      <span className="text-gray-700">
+                        {agg.subSurveyActivity.name}
+                      </span>{" "}
+                    </span>
                     <span>{pct}%</span>
                   </div>
 
@@ -793,12 +798,6 @@ function Dashboard() {
                     Target: {agg.totalAssigned} sampel, Selesai:{" "}
                     {agg.submitCount} sampel, Disetujui: {agg.approvedCount}{" "}
                     sampel
-                  </p>
-
-                  <p className="text-[11px] text-gray-500">
-                    {Array.isArray(agg.subSurveyNames)
-                      ? agg.subSurveyNames.join(" · ")
-                      : ""}
                   </p>
 
                   <div className="flex items-center gap-3 text-[11px] text-gray-600">

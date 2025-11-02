@@ -7,6 +7,7 @@ import { GET_ALL_JOBLETTERS } from "@/src/graphql/actions/find-alljobletter.acti
 import { UPDATE_JOB_LETTER_STATUS } from "@/src/graphql/actions/update-jobletterstatus.action";
 import { GET_ALL_OF_SUB_SURVEY_ACTIVITIES } from "@/src/graphql/actions/find-realallsubsurvey.action";
 import { GET_USER_PROGRESS_BY_SUBSURVEY_ID } from "@/src/graphql/actions/find-usersurveyprogress.action";
+import { DELETE_JOBLETTER } from "@/src/graphql/actions/delete";
 import toast from "react-hot-toast";
 import styles from "@/src/utils/style";
 import useUser from "@/src/hooks/useUser";
@@ -38,6 +39,27 @@ type JobLetterWithUserNSubSurvey = JobLetter & {
   subSurveyActivity?: { id: string; name: string } | null;
 };
 
+function groupPetugasByUserId(items: UserProgressForSelect[]) {
+  const map = new Map<
+    string,
+    { userId: string; name: string; subLabels: Set<string> }
+  >();
+  for (const it of items) {
+    const key = it.userId;
+    const name = it.user?.name || it.userId;
+    const sub =
+      it.district?.city?.trim() || "" || it.district?.name?.trim() || "";
+    if (!map.has(key))
+      map.set(key, { userId: key, name, subLabels: new Set() });
+    if (sub) map.get(key)!.subLabels.add(sub);
+  }
+  return Array.from(map.values()).map((v) => ({
+    value: v.userId,
+    label: v.name,
+    subLabel: v.subLabels.size ? Array.from(v.subLabels).join(", ") : undefined,
+  }));
+}
+
 export default function Partners() {
   const { user } = useUser();
 
@@ -64,6 +86,7 @@ export default function Partners() {
   const [selectedJobLetter, setSelectedJobLetter] =
     useState<JobLetterWithUserNSubSurvey | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [deleteMode, setDeleteMode] = useState(false);
 
   // GQL
   const [createJobLetter, { loading }] = useMutation(ADD_JOBLETTER, {
@@ -79,6 +102,41 @@ export default function Partners() {
     GET_USER_PROGRESS_BY_SUBSURVEY_ID,
     { fetchPolicy: "network-only" }
   );
+  const [deleteJobLetter, { loading: deletingJL }] = useMutation(
+    DELETE_JOBLETTER,
+    {
+      refetchQueries: [{ query: GET_ALL_JOBLETTERS }],
+    }
+  );
+
+  const canDeleteJL = (jl: JobLetterWithUserNSubSurvey) =>
+    user?.role === "Admin" ||
+    user?.role === "Superadmin" ||
+    user?.role === "Keuangan" ||
+    jl.userId === user?.id;
+
+  const handleDeleteJobLetter = async (id: string) => {
+    if (!id) return;
+    if (
+      !window.confirm("Hapus pengajuan surat tugas ini beserta file buktinya?")
+    )
+      return;
+    try {
+      const { data } = await deleteJobLetter({ variables: { input: { id } } });
+      if (data?.deleteJobLetter?.success) {
+        toast.success(data.deleteJobLetter.message ?? "Surat Tugas terhapus.");
+        if (selectedJobLetter?.id === id) {
+          setIsModalOpen(false);
+          setSelectedJobLetter(null);
+        }
+      } else {
+        toast.error("Gagal menghapus Surat Tugas.");
+      }
+    } catch (e: any) {
+      toast.error(e?.message || "Gagal menghapus Surat Tugas.");
+      console.error(e);
+    }
+  };
 
   // Helpers
   const handleChange = (
@@ -102,10 +160,29 @@ export default function Partners() {
     }
   }, [input.subSurveyActivityId, fetchUPBySub]);
 
-  const petugasList: UserProgressForSelect[] = useMemo(
-    () => upData?.userProgressBySubSurveyActivityId ?? [],
-    [upData]
-  );
+  const supervisorId = user?.id ?? "";
+
+  const petugasList: UserProgressForSelect[] = useMemo(() => {
+    const raw = upData?.userProgressBySubSurveyActivityId ?? [];
+    if (!user) return [];
+
+    // superadmin / admin bebas lihat semua
+    if (
+      user.role === "Superadmin" ||
+      user.role === "Admin" ||
+      user.role === "Keuangan"
+    ) {
+      return raw;
+    }
+
+    // supervisor hanya melihat petugas di bawah pengawasan dirinya
+    if (user.role === "Supervisor") {
+      return raw.filter((p: any) => (p.superVisorId ?? "") === supervisorId);
+    }
+
+    // petugas biasa hanya dirinya sendiri
+    return raw.filter((p: any) => p.userId === supervisorId);
+  }, [upData, user]);
 
   const regionOptions = useMemo(() => {
     const raw: string[] = (petugasList ?? [])
@@ -231,16 +308,10 @@ export default function Partners() {
     []
   );
 
-  const petugasOptions = useMemo(
-    () =>
-      petugasList.map((p) => ({
-        value: p.userId,
-        label: p.user?.name ?? p.userId,
-        subLabel:
-          p.district?.city?.trim() || p.district?.name?.trim() || undefined,
-      })),
-    [petugasList]
-  );
+  const petugasOptions = useMemo(() => {
+    // satukan per userId persis seperti di SPJ
+    return groupPetugasByUserId(petugasList);
+  }, [petugasList]);
 
   return (
     <div className="max-w-screen-xl mx-auto px-3 sm:px-6 md:px-8 py-4 space-y-4 font-Poppins">
@@ -386,9 +457,10 @@ export default function Partners() {
                       </span>
                     </div>
                   </td>
-                  <td className="px-6 py-3 text-right">
+                  <td className="px-3 py-4 text-right space-x-2">
                     <button
                       onClick={() => {
+                        setDeleteMode(false);
                         setSelectedJobLetter(jl);
                         setUpdate((p) => ({ ...p, id: jl.id }));
                         setIsModalOpen(true);
@@ -397,6 +469,17 @@ export default function Partners() {
                     >
                       Lihat Detail
                     </button>
+
+                    {deleteMode && canDeleteJL(jl) && (
+                      <button
+                        onClick={() => handleDeleteJobLetter(jl.id)}
+                        disabled={deletingJL}
+                        className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+                        title="Hapus Surat Tugas"
+                      >
+                        {deletingJL ? "Menghapus..." : "Hapus"}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -427,16 +510,28 @@ export default function Partners() {
                     {jl.subSurveyActivity?.name ?? "-"}
                   </p>
                 </div>
-                <button
-                  onClick={() => {
-                    setSelectedJobLetter(jl);
-                    setUpdate((p) => ({ ...p, id: jl.id }));
-                    setIsModalOpen(true);
-                  }}
-                  className="px-3 py-1 bg-blue-600 text-white rounded text-sm"
-                >
-                  Detail
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setDeleteMode(false);
+                      setSelectedJobLetter(jl);
+                      setUpdate((p) => ({ ...p, id: jl.id }));
+                      setIsModalOpen(true);
+                    }}
+                    className={`px-3 py-1 ${deleteMode && "my-4"} my-2 bg-blue-600 text-white rounded text-sm`}
+                  >
+                    Detail
+                  </button>
+                  {deleteMode && canDeleteJL(jl) && (
+                    <button
+                      onClick={() => handleDeleteJobLetter(jl.id)}
+                      disabled={deletingJL}
+                      className="px-3 py-1 my-4 bg-red-600 text-white rounded text-sm disabled:opacity-50"
+                    >
+                      {deletingJL ? "..." : "Hapus"}
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
                 <div>
@@ -467,28 +562,42 @@ export default function Partners() {
           ))
         )}
       </div>
+      <div className="w-full flex justify-end">
+        {(user?.role === "Admin" || user?.role === "Superadmin") && (
+          <button
+            type="button"
+            onClick={() => setDeleteMode((v) => !v)}
+            className={`px-3 py-2 rounded-md text-white text-sm md:text-base
+              ${deleteMode ? "bg-red-600 hover:bg-red-700" : "bg-gray-700 hover:bg-gray-800"}`}
+            title={deleteMode ? "Matikan Mode Hapus" : "Aktifkan Mode Hapus"}
+          >
+            {deleteMode ? "Matikan Mode Hapus" : "Aktifkan Mode Hapus"}
+          </button>
+        )}
+      </div>
 
       {/* Form Pengajuan */}
-      <div className="bg-white rounded-lg p-4 shadow">
-        <h2 className="font-bold text-lg mb-3">Form Pengajuan Surat Tugas</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-semibold mb-1">
-              Kegiatan Survei
-            </label>
-            <HUComboBox
-              value={input.subSurveyActivityId || null}
-              onValueChange={(v) =>
-                setInput((prev) => ({
-                  ...prev,
-                  subSurveyActivityId: (v ?? "") as string,
-                }))
-              }
-              options={activityOptions}
-              placeholder="-- Pilih Kegiatan Survei --"
-            />
-          </div>
-          {canSeeForm && (
+      {canSeeForm && (
+        <div className="bg-white rounded-lg p-4 shadow">
+          <h2 className="font-bold text-lg mb-3">Form Pengajuan Surat Tugas</h2>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-semibold mb-1">
+                Kegiatan Survei
+              </label>
+              <HUComboBox
+                value={input.subSurveyActivityId || null}
+                onValueChange={(v) =>
+                  setInput((prev) => ({
+                    ...prev,
+                    subSurveyActivityId: (v ?? "") as string,
+                  }))
+                }
+                options={activityOptions}
+                placeholder="-- Pilih Kegiatan Survei --"
+              />
+            </div>
+
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-semibold mb-1">
@@ -528,7 +637,9 @@ export default function Partners() {
                   input.subSurveyActivityId &&
                   petugasList.length === 0 && (
                     <p className="text-xs text-red-600 mt-1">
-                      Belum ada petugas untuk kegiatan ini.
+                      {user?.role === "Supervisor"
+                        ? "Anda tidak memiliki petugas yang diawasi pada kegiatan ini."
+                        : "Belum ada petugas untuk kegiatan ini."}
                     </p>
                   )}
               </div>
@@ -555,20 +666,21 @@ export default function Partners() {
                          file:bg-white file:text-black hover:file:bg-gray-100"
                 />
                 <p className="text-xs text-gray-600 mt-1">
-                  Format: PDF/JPG/PNG. Maks 1MB.
+                  Format: PDF/JPG/PNG. Sesuaikan dengan kebutuhan (Maks. 5MB)
                 </p>
               </div>
             </div>
-          )}
-          <button
-            type="submit"
-            disabled={loading}
-            className={`${styles.button} my-2 text-white`}
-          >
-            {loading ? "Mengirim..." : "Ajukan Surat Tugas"}
-          </button>
-        </form>
-      </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className={`${styles.button} my-2 text-white`}
+            >
+              {loading ? "Mengirim..." : "Ajukan Surat Tugas"}
+            </button>
+          </form>
+        </div>
+      )}
 
       {/* Modal Detail */}
       {isModalOpen && selectedJobLetter && (

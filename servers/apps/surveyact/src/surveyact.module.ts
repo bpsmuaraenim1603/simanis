@@ -11,6 +11,7 @@ import { HttpModule } from '@nestjs/axios';
 import { SubmitSPJResolver } from './submit-spj.resolver';
 import { GraphQLUpload } from 'graphql-upload-ts';
 import { JobLetterResolver } from './jobletter.resolver';
+import { StorageService } from './storage.service';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { JobLetterResolver } from './jobletter.resolver';
     SurveyActivityService,
     SubmitSPJResolver,
     JobLetterResolver,
+    StorageService,
     SurveyActivityResolver,
     PrismaService,
   ],

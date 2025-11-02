@@ -6,6 +6,7 @@ import { UPDATE_USER_PROGRESS } from "@/src/graphql/actions/update-userprogress.
 import useUser from "@/src/hooks/useUser";
 import styles from "@/src/utils/style";
 import { useLazyQuery, useMutation } from "@apollo/client";
+import { useRouter } from "next/navigation";
 import React, { useEffect, useState } from "react";
 import { useMemo } from "react";
 import toast from "react-hot-toast";
@@ -20,7 +21,22 @@ export default function UserPage() {
     up?.subSurveyActivity?.district?.id ??
     "";
 
-  const { user } = useUser();
+  const { user, loading } = useUser();
+
+  const router = useRouter();
+
+  // roles yang diizinkan
+  const ALLOWED = new Set(["Superadmin", "User"]);
+
+  React.useEffect(() => {
+    if (loading) return;
+    const role = user?.role ?? "";
+
+    if (!ALLOWED.has(role)) {
+      toast.error("Akses ditolak. Mengarahkan ke Beranda");
+      router.replace("/dashboard");
+    }
+  }, [loading, user?.role, router]);
 
   // ===== Update user progress =====
   const [updateUserProgressForm, setUpdateUserProgressForm] = useState({
@@ -341,6 +357,18 @@ export default function UserPage() {
       console.error(err);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="max-w-screen-xl mx-auto px-3 py-6 font-Poppins">
+        Memuat…
+      </div>
+    );
+  }
+  if (!user || !ALLOWED.has(user.role ?? "")) {
+    return null;
+  }
+
   return (
     <div className="max-w-screen-xl mx-auto px-3 sm:px-6 md:px-8 py-4 space-y-4 font-Poppins">
       <div className="bg-orange-50 rounded-lg p-3 md:p-4 font-bold text-lg md:text-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 shadow-md">

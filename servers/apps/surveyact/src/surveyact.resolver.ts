@@ -45,8 +45,8 @@ import {
   UserProgress,
 } from '@prisma/client';
 import { UserType } from 'apps/users/src/types/users.types';
-import { NotFoundException } from '@nestjs/common';
 import { FileUpload, GraphQLUpload } from 'graphql-upload-ts';
+import { DeleteByIdInput, DeleteResult } from './dto/delete.input';
 
 @Resolver(() => SurveyActivityType)
 export class SurveyActivityResolver {
@@ -296,5 +296,40 @@ export class SurveyActivityResolver {
     @Args('contentId', { type: () => ID }) contentId: string,
   ) {
     return this.service.listIssueCommentsByContent(contentId);
+  }
+
+  @Mutation(() => DeleteResult)
+  async deleteSurveyActivity(
+    @Args('input') input: DeleteByIdInput,
+  ): Promise<DeleteResult> {
+    return this.service.deleteSurveyActivity(input);
+  }
+
+  @Mutation(() => DeleteResult)
+  async deleteSubSurveyActivity(
+    @Args('input') input: DeleteByIdInput,
+  ): Promise<DeleteResult> {
+    return this.service.deleteSubSurveyActivity(input);
+  }
+
+  @Mutation(() => DeleteResult)
+  async deleteUserSurveyProgress(
+    @Args('input') input: DeleteByIdInput,
+  ): Promise<DeleteResult> {
+    return this.service.deleteUserSurveyProgress(input);
+  }
+
+  @Mutation(() => DeleteResult)
+  async deleteJobLetter(
+    @Args('input') input: DeleteByIdInput,
+  ): Promise<DeleteResult> {
+    return this.service.deleteJobLetter(input);
+  }
+
+  @Mutation(() => DeleteResult)
+  async deleteSubmitSPJ(
+    @Args('input') input: DeleteByIdInput,
+  ): Promise<DeleteResult> {
+    return this.service.deleteSubmitSPJ(input);
   }
 }

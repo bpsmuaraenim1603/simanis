@@ -21,9 +21,16 @@ import { GET_ALL_USERS } from "@/src/graphql/actions/find-allusers.action";
 import { GET_USER_PROGRESS_BY_SUBSURVEY_ID } from "@/src/graphql/actions/find-usersurveyprogress.action";
 import { GET_USER_PROGRESS_BY_USER_ID } from "@/src/graphql/actions/find-usersurveyprogressbyuser.action";
 import { GET_ALL_DISTRICT } from "@/src/graphql/actions/find-alldistrict.action";
+import {
+  DELETE_SURVEY_ACTIVITY,
+  DELETE_SUBSURVEY_ACTIVITY,
+  DELETE_USER_SURVEY_PROGRESS,
+} from "@/src/graphql/actions/delete";
 import { LayoutGroup, motion } from "framer-motion";
 import HUComboBox from "@/src/components/HUCombobox";
 import HUSelect from "@/src/components/HUSelect";
+import useUser from "@/src/hooks/useUser";
+import { useRouter } from "next/navigation";
 
 /* ====== (type definitions sama persis dengan punyamu) ====== */
 type SurveyActivity = { id: string; name: string; slug: string };
@@ -148,6 +155,23 @@ function SubTabs<T extends string>({
 
 /* ===================== Main ===================== */
 function Admin() {
+  const { user: currentUser, loading: userLoading } = useUser();
+  const router = useRouter();
+
+  // Tentukan role yang boleh masuk halaman ini
+  // (saran: manajemen tim = Superadmin & Admin)
+  const ALLOWED = new Set(["Superadmin", "Admin"]);
+
+  React.useEffect(() => {
+    if (userLoading) return; // tunggu data user siap
+    const role = currentUser?.role ?? "";
+    if (!ALLOWED.has(role)) {
+      // Opsional: kasih notifikasi
+      // toast.error("Akses ditolak. Mengarahkan ke Dashboard…");
+      router.replace("/dashboard");
+    }
+  }, [userLoading, currentUser?.role, router]);
+
   const [section, setSection] = useState<"tim" | "kegiatan" | "petugas">("tim");
   const [mode, setMode] = useState<"add" | "update">("add");
   useEffect(() => {
@@ -218,6 +242,7 @@ function Admin() {
   const [qSupervisor, setQSupervisor] = useState("");
   const [qEnumerator, setQEnumerator] = useState("");
   const [qUPUser, setQUPUser] = useState("");
+  const [deleteMode, setDeleteMode] = useState(false);
   const qSupervisorDeb = useDebounced(qSupervisor);
 
   function matchesSearch(u: Partial<User>, q: string) {
@@ -285,6 +310,9 @@ function Admin() {
   const [updateSubSurveyActivity] = useMutation(UPDATE_SUB_SURVEY_ACTIVITY);
   const [createUserSurveyProgress] = useMutation(CREATE_USER_PROGRESS);
   const [updateUserSurveyProgress] = useMutation(UPDATE_USER_PROGRESS);
+  const [deleteSurveyActivity] = useMutation(DELETE_SURVEY_ACTIVITY);
+  const [deleteSubSurveyActivity] = useMutation(DELETE_SUBSURVEY_ACTIVITY);
+  const [deleteUserProgressMut] = useMutation(DELETE_USER_SURVEY_PROGRESS);
 
   const toDateInput = (d?: string | Date) =>
     d ? new Date(d).toISOString().slice(0, 10) : "";
@@ -682,6 +710,99 @@ function Admin() {
     }
   };
 
+  const handleDeleteSurveyAct = async () => {
+    const id = updateStateF1.surveyActivityId;
+    if (!id) return toast.error("Pilih Tim terlebih dahulu.");
+    if (!window.confirm("Hapus Tim beserta seluruh turunannya?")) return;
+
+    try {
+      const { data } = await deleteSurveyActivity({
+        variables: { input: { id } },
+      });
+      if (data?.deleteSurveyActivity?.success) {
+        toast.success(data?.deleteSurveyActivity?.message ?? "Tim terhapus.");
+        // reset form & refresh
+        setUpdateStateF1({ surveyActivityId: "", name: "", slug: "" });
+        await handleRefresh();
+      } else {
+        toast.error("Gagal menghapus Tim.");
+      }
+    } catch (e: any) {
+      toast.error(e.message ?? "Gagal menghapus Tim.");
+      console.error(e);
+    }
+  };
+
+  const handleDeleteSubSurveyAct = async () => {
+    const id = updateStateF2.subSurveyActivityId;
+    if (!id) return toast.error("Pilih Kegiatan terlebih dahulu.");
+    if (!window.confirm("Hapus Kegiatan & data terkait (SPJ, JobLetter, dsb)?"))
+      return;
+
+    try {
+      const { data } = await deleteSubSurveyActivity({
+        variables: { input: { id } },
+      });
+      if (data?.deleteSubSurveyActivity?.success) {
+        toast.success(
+          data?.deleteSubSurveyActivity?.message ?? "Kegiatan terhapus."
+        );
+        setUpdateStateF2({
+          subSurveyActivityId: "",
+          name: "",
+          slug: "",
+          surveyActivityId: "",
+          startDate: "",
+          endDate: "",
+          targetSample: 0,
+          sampleType: "",
+          activityType: "",
+        });
+        await handleRefresh();
+      } else {
+        toast.error("Gagal menghapus Kegiatan.");
+      }
+    } catch (e: any) {
+      toast.error(e.message ?? "Gagal menghapus Kegiatan.");
+      console.error(e);
+    }
+  };
+
+  const handleDeleteUserProgress = async () => {
+    const id = updateUserProgressForm.userProgressId;
+    if (!id) return toast.error("Pilih Petugas terlebih dahulu.");
+    if (!window.confirm("Hapus Petugas?")) return;
+
+    try {
+      const { data } = await deleteUserProgressMut({
+        variables: { input: { id } },
+      });
+      if (data?.deleteUserSurveyProgress?.success) {
+        toast.success(
+          data?.deleteUserSurveyProgress?.message ?? "Petugas terhapus."
+        );
+        setUpdateUserProgressForm((prev) => ({
+          ...prev,
+          userProgressId: "",
+          totalAssigned: 0,
+          submitCount: 0,
+          approvedCount: 0,
+          rejectedCount: 0,
+          lastUpdated: "",
+          districtId: "",
+          villageName: "",
+          travelBill: "",
+        }));
+        await handleRefresh();
+      } else {
+        toast.error("Gagal menghapus Petugas.");
+      }
+    } catch (e: any) {
+      toast.error(e.message ?? "Gagal menghapus Petugas.");
+      console.error(e);
+    }
+  };
+
   const handleRefresh = async () => {
     try {
       setRefreshing(true);
@@ -930,6 +1051,14 @@ function Admin() {
     }
   }, [userProgressForm.userId, fetchUserProgressByUser]);
 
+  useEffect(() => {
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDeleteMode(false);
+    };
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  }, []);
+
   /*===================== LOGIC ===================== */
   const selectedSubForAdd = useMemo(
     () =>
@@ -1090,6 +1219,19 @@ function Admin() {
   }, [currentUP?.userId, fetchUserProgressByUserForUpdate]);
 
   /* ===================== UI ===================== */
+  if (userLoading) {
+    return (
+      <div className="max-w-screen-xl mx-auto px-3 py-6 font-Poppins">
+        Memuat…
+      </div>
+    );
+  }
+
+  if (!currentUser || !ALLOWED.has(currentUser.role ?? "")) {
+    // sudah dipicu redirect; cegah render satu frame pun
+    return null;
+  }
+  
   return (
     <div className="max-w-screen-xl mx-auto px-3 sm:px-6 md:px-8 py-6 space-y-4 font-Poppins">
       {/* Main Tabs + actions */}
@@ -1122,15 +1264,34 @@ function Admin() {
           onChange={setSection}
         />
 
-        {/* Sub Tabs */}
-        <SubTabs
-          tabs={[
-            { key: "add", label: "Tambah" },
-            { key: "update", label: "Ubah" },
-          ]}
-          value={mode}
-          onChange={setMode}
-        />
+        <div
+          className={`flex ${mode === "update" ? "justify-between" : "justify-end"} space-x-3`}
+        >
+          {mode === "update" && (
+            <button
+              type="button"
+              onClick={() => setDeleteMode((v) => !v)}
+              className={`px-4 py-1 my-3 rounded-lg text-sm text-white ${
+                deleteMode
+                  ? "bg-red-600 hover:bg-red-700"
+                  : "bg-gray-700 hover:bg-gray-800"
+              }`}
+              title={
+                deleteMode ? "Matikan Mode Hapus (Esc)" : "Aktifkan Mode Hapus"
+              }
+            >
+              {deleteMode ? "Selesai Hapus" : "Mode Hapus"}
+            </button>
+          )}
+          <SubTabs
+            tabs={[
+              { key: "add", label: "Tambah" },
+              { key: "update", label: "Ubah" },
+            ]}
+            value={mode}
+            onChange={setMode}
+          />
+        </div>
       </div>
 
       {/* ---------- TIM ---------- */}
@@ -1169,7 +1330,7 @@ function Admin() {
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
-            <div className="md:col-span-2">
+            <div className="md:col-span-2 flex justify-end">
               <button
                 disabled={loading1}
                 type="submit"
@@ -1233,13 +1394,23 @@ function Admin() {
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
-            <div className="md:col-span-2">
-              <button
-                type="submit"
-                className={`${styles.button} my-2 text-white w-full sm:w-auto`}
-              >
-                Perbarui Tim
-              </button>
+            <div className="md:col-span-2 flex items-center gap-4">
+              {deleteMode ? (
+                <button
+                  type="button"
+                  onClick={handleDeleteSurveyAct}
+                  className="px-4 py-2 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 w-full"
+                >
+                  Hapus Tim
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  className={`${styles.button} my-2 text-white`}
+                >
+                  Perbarui Tim
+                </button>
+              )}
             </div>
           </form>
         </div>
@@ -1376,7 +1547,7 @@ function Admin() {
                 placeholder="-- Pilih Jenis Kegiatan --"
               />
             </div>
-            <div className="md:col-span-2">
+            <div className="md:col-span-2 flex justify-end">
               <button
                 disabled={loading2}
                 type="submit"
@@ -1545,13 +1716,23 @@ function Admin() {
                 placeholder="-- Pilih Jenis Kegiatan --"
               />
             </div>
-            <div className="md:col-span-2">
-              <button
-                type="submit"
-                className={`${styles.button} my-2 text-white w-full sm:w-auto`}
-              >
-                Perbarui Kegiatan
-              </button>
+            <div className="md:col-span-2 flex gap-2">
+              {deleteMode ? (
+                <button
+                  type="button"
+                  onClick={handleDeleteSubSurveyAct}
+                  className="px-4 py-2 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 w-full"
+                >
+                  Hapus Kegiatan
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  className={`${styles.button} my-2 text-white`}
+                >
+                  Perbarui Kegiatan
+                </button>
+              )}
             </div>
           </form>
         </div>
@@ -1825,7 +2006,7 @@ function Admin() {
               )}
             </div>
 
-            <div className="md:col-span-2">
+            <div className="md:col-span-2 flex justify-end">
               <button
                 type="submit"
                 className={`${styles.button} my-2 text-white w-full sm:w-auto`}
@@ -2088,13 +2269,23 @@ function Admin() {
               )}
             </div>
 
-            <div className="md:col-span-2">
-              <button
-                type="submit"
-                className={`${styles.button} my-2 text-white w-full sm:w-auto`}
-              >
-                Update
-              </button>
+            <div className="md:col-span-2 flex gap-2">
+              {deleteMode ? (
+                <button
+                  type="button"
+                  onClick={handleDeleteUserProgress}
+                  className="px-4 py-2 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 w-full"
+                >
+                  Hapus Petugas
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  className={`${styles.button} my-2 text-white`}
+                >
+                  Perbarui Petugas
+                </button>
+              )}
             </div>
           </form>
         </div>

@@ -179,7 +179,7 @@ model UserProgress {
   superVisorId        String?
   supervisor          User?              @relation("UserProgress_Supervisor", fields: [superVisorId], references: [id])
   subSurveyActivityId String?
-  subSurveyActivity   SubSurveyActivity? @relation(fields: [subSurveyActivityId], references: [id])
+  subSurveyActivity   SubSurveyActivity? @relation(fields: [subSurveyActivityId], references: [id], onDelete: Cascade)
   totalAssigned       Int                @default(0)
   submitCount         Int                @default(0)
   approvedCount       Int                @default(0)

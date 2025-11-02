@@ -36,6 +36,8 @@ import {
 import { FileUpload } from 'graphql-upload-ts';
 import { randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
+import { DeleteByIdInput } from './dto/delete.input';
+import { StorageService } from './storage.service';
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -65,6 +67,7 @@ export class SurveyActivityService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly httpService: HttpService,
+    private readonly storage: StorageService,
   ) {}
 
   async create(input: CreateSurveyActivityDTO) {
@@ -706,5 +709,118 @@ export class SurveyActivityService {
   private async ensureCommentExists(id: string) {
     const exists = await this.prisma.issueComment.findUnique({ where: { id } });
     if (!exists) throw new NotFoundException('IssueComment not found');
+  }
+
+  async deleteSurveyActivity({ id }: { id: string }) {
+    const team = await this.prisma.surveyActivity.findUnique({ where: { id } });
+    if (!team) throw new NotFoundException('SurveyActivity (tim) tidak ditemukan');
+
+    const subs = await this.prisma.subSurveyActivity.findMany({
+      where: { surveyActivityId: id },
+      select: { id: true },
+    });
+    const subIds = subs.map((s) => s.id);
+    if (subIds.length > 0) {
+      const [spjs, jls] = await Promise.all([
+        this.prisma.submitSPJ.findMany({
+          where: { subSurveyActivityId: { in: subIds } },
+          select: { eviDocumentPath: true },
+        }),
+        this.prisma.jobLetter.findMany({
+          where: { subSurveyActivityId: { in: subIds } },
+          select: { eviFieldUrl: true, eviSTUrl: true, /* eviLetterPath: true */ } as any,
+        }),
+      ]);
+
+      await Promise.all([
+        this.storage.removeSpjFiles(spjs.map((x) => x.eviDocumentPath)),
+        this.storage.removeJobLetterFiles(
+          jls.flatMap((x: any) => [x.eviFieldUrl, x.eviSTUrl, x.eviLetterPath]),
+        ),
+      ]);
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.issueComment.deleteMany({ where: { subSurveyActivityId: { in: subIds } } }),
+      this.prisma.contentIssue.deleteMany({ where: { subSurveyActivityId: { in: subIds } } }),
+      this.prisma.jobLetter.deleteMany({ where: { subSurveyActivityId: { in: subIds } } }),
+      this.prisma.submitSPJ.deleteMany({ where: { subSurveyActivityId: { in: subIds } } }),
+      this.prisma.userProgress.deleteMany({ where: { subSurveyActivityId: { in: subIds } } }),
+      this.prisma.subSurveyActivity.deleteMany({ where: { id: { in: subIds } } }),
+      this.prisma.surveyActivity.delete({ where: { id } }),
+    ]);
+
+    return { success: true, message: 'Tim dan semua yang terkait sudah terhapus.' };
+  }
+
+  async deleteSubSurveyActivity({ id }: { id: string }) {
+    const exists = await this.prisma.subSurveyActivity.findUnique({ where: { id } });
+    if (!exists) throw new NotFoundException('SubSurveyActivity tidak ditemukan');
+
+    // ambil semua SPJ & JL untuk SSA ini (kumpulkan path/URL berkas)
+    const [spjs, jls] = await Promise.all([
+      this.prisma.submitSPJ.findMany({
+        where: { subSurveyActivityId: id },
+        select: { eviDocumentPath: true },
+      }),
+      this.prisma.jobLetter.findMany({
+        where: { subSurveyActivityId: id },
+        select: { eviFieldUrl: true, eviSTUrl: true, /* kalau ada: */  /* eviLetterPath: true */ } as any,
+      }),
+    ]);
+
+    // hapus file-file terkait
+    await Promise.all([
+      this.storage.removeSpjFiles(spjs.map((x) => x.eviDocumentPath)),
+      this.storage.removeJobLetterFiles(
+        jls.flatMap((x: any) => [x.eviFieldUrl, x.eviSTUrl, x.eviLetterPath]),
+      ),
+    ]);
+
+    // lalu hapus DB child → parent (seperti versi sebelumnya)
+    await this.prisma.$transaction([
+      this.prisma.issueComment.deleteMany({ where: { subSurveyActivityId: id } }),
+      this.prisma.contentIssue.deleteMany({ where: { subSurveyActivityId: id } }),
+      this.prisma.jobLetter.deleteMany({ where: { subSurveyActivityId: id } }),
+      this.prisma.submitSPJ.deleteMany({ where: { subSurveyActivityId: id } }),
+      this.prisma.userProgress.deleteMany({ where: { subSurveyActivityId: id } }),
+      this.prisma.subSurveyActivity.delete({ where: { id } }),
+    ]);
+
+    return { success: true, message: 'Kegiatan survei semua yang terkait sudah terhapus.' };
+  }
+
+  async deleteUserSurveyProgress({ id }: { id: string }) {
+    const up = await this.prisma.userProgress.findUnique({ where: { id } });
+    if (!up) throw new NotFoundException('UserProgress tidak ditemukan');
+    await this.prisma.userProgress.delete({ where: { id } });
+    return { success: true, message: 'Petugas sudah dihapus.' };
+  }
+
+  async deleteJobLetter({ id }: { id: string }) {
+    const jl = await this.prisma.jobLetter.findUnique({ where: { id } });
+    if (!jl) throw new NotFoundException('JobLetter tidak ditemukan');
+
+    // Kamu punya beberapa field bukti: eviLetterPath (path), eviFieldUrl (URL), eviSTUrl (URL)
+    await this.storage.removeJobLetterFiles([
+      (jl as any).eviLetterPath, // jika ada path file utama
+      jl.eviFieldUrl,            // URL bukti lapangan
+      jl.eviSTUrl,               // URL bukti surat tugas
+    ]);
+
+    await this.prisma.jobLetter.delete({ where: { id } });
+    return { success: true, message: 'Surat Tugas dan file sudah terhapus.' };
+  }
+
+  async deleteSubmitSPJ({ id }: { id: string }) {
+    const spj = await this.prisma.submitSPJ.findUnique({ where: { id } });
+    if (!spj) throw new NotFoundException('SubmitSPJ tidak ditemukan');
+
+    // 1) hapus file di storage (eviDocumentPath bisa path relatif atau URL)
+    await this.storage.removeSpjFiles([spj.eviDocumentPath]);
+
+    // 2) hapus row
+    await this.prisma.submitSPJ.delete({ where: { id } });
+    return { success: true, message: 'Pengajuan Honor dan file sudah terhapus.' };
   }
 }

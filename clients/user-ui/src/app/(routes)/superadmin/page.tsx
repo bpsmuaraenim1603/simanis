@@ -3,11 +3,12 @@
 import React, { useMemo, useState, useCallback } from "react";
 import { useQuery, useMutation, useLazyQuery } from "@apollo/client";
 import toast from "react-hot-toast";
-
 import { GET_ALL_USERS } from "@/src/graphql/actions/find-allusers.action";
 import { UPDATE_ROLE } from "@/src/graphql/actions/update-role.action";
 import { UPDATE_BILL_LIMIT } from "@/src/graphql/actions/update-limitbill.action";
 import { GET_USER_PROGRESS_BY_USER_ID } from "@/src/graphql/actions/find-usersurveyprogressbyuser.action";
+import useUser from "@/src/hooks/useUser";
+import { useRouter } from "next/navigation";
 
 const ROLE_OPTIONS = [
   { label: "Super Admin", value: "Superadmin" },
@@ -71,6 +72,21 @@ export default function SuperAdminManagePage() {
     fetchPolicy: "cache-and-network",
   });
   const users = data?.getUsers ?? [];
+  const { user: currentUser, loading: userLoading } = useUser();
+  const router = useRouter();
+
+  // roles yang diizinkan
+  const ALLOWED = new Set(["Superadmin", "Keuangan"]);
+
+  React.useEffect(() => {
+    if (userLoading) return;
+    const role = currentUser?.role ?? "";
+
+    if (!ALLOWED.has(role)) {
+      toast.error("Akses ditolak. Mengarahkan ke Beranda");
+      router.replace("/dashboard");
+    }
+  }, [userLoading, currentUser?.role, router]);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [pendingRole, setPendingRole] = useState<Record<string, string>>({});
@@ -262,17 +278,28 @@ export default function SuperAdminManagePage() {
   const usedTotal = honorGrandTotal; // total honor terpakai (sudah kamu hitung)
   const remain = Math.max(0, limitBill - usedTotal);
 
+  if (userLoading) {
+    return (
+      <div className="max-w-screen-xl mx-auto px-3 py-6 font-Poppins">
+        Memuat…
+      </div>
+    );
+  }
+  if (!currentUser || !ALLOWED.has(currentUser.role ?? "")) {
+    return null;
+  }
+
   return (
     <div className="max-w-screen-xl mx-auto px-3 sm:px-6 md:px-8 py-4 space-y-4 font-Poppins">
       {/* Header */}
       <div className="bg-orange-50 rounded-lg p-3 md:p-4 font-bold text-lg md:text-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 shadow-md">
         <span>Panel Kontrol Pengguna</span>
-        <button
+        {/* <button
           onClick={() => refetch()}
           className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700 transition font-semibold"
         >
           Refresh
-        </button>
+        </button> */}
       </div>
 
       {/* Search */}
@@ -372,7 +399,8 @@ export default function SuperAdminManagePage() {
                         onChange={(e) =>
                           handleRoleChange(user.id, e.target.value)
                         }
-                        className="border px-3 py-2 text-sm rounded-md bg-white"
+                        disabled={currentUser?.role !== "Superadmin"}
+                        className={`border px-3 py-2 text-sm rounded-md bg-white ${currentUser?.role !== "Superadmin" ? "cursor-default" : "cursor-pointer"} focus:outline-none`}
                       >
                         {ROLE_OPTIONS.map((o) => (
                           <option key={o.value} value={o.value}>
@@ -384,7 +412,7 @@ export default function SuperAdminManagePage() {
 
                     {/* LIMIT BILL */}
                     <td className="px-4 md:px-6 py-3 align-middle">
-                      <div className="inline-flex items-stretch rounded-md shadow-sm focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-offset-0">
+                      <div className="inline-flex items-stretch rounded-md shadow-sm">
                         <span className="inline-flex items-center justify-center px-3 h-10 text-sm font-semibold text-white select-none bg-gray-400 border border-gray-300 rounded-l-md">
                           Rp
                         </span>
@@ -401,7 +429,7 @@ export default function SuperAdminManagePage() {
                               e.currentTarget.value.length
                             )
                           }
-                          className="h-10 w-40 border border-gray-300 -ml-px rounded-r-md bg-white px-3 text-sm text-left outline-none focus:border-blue-500"
+                          className="h-10 w-40 border border-gray-300 -ml-px rounded-r-md bg-white px-3 text-sm text-left outline-none"
                           title="Masukkan angka (rupiah tanpa titik/koma)"
                         />
                       </div>

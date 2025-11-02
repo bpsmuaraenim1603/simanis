@@ -11,6 +11,7 @@ import { UPDATE_USER_PROGRESS } from "@/src/graphql/actions/update-userprogress.
 import styles from "@/src/utils/style";
 import HUComboBox from "@/src/components/HUCombobox";
 import HUSelect from "@/src/components/HUSelect";
+import { useRouter } from "next/navigation";
 
 /* ==== (type definitions sama persis dengan punyamu) ==== */
 type SurveyActivity = { id: string; name: string };
@@ -42,8 +43,23 @@ type UserProgressRow = {
 };
 
 export default function SupervisorManagePage() {
-  const { user: me } = useUser();
+  const { user: currentUser, loading: userLoading } = useUser();
   const apollo = useApolloClient();
+
+  const router = useRouter();
+
+  // roles yang diizinkan
+  const ALLOWED = new Set(["Superadmin", "Supervisor", "Admin"]);
+
+  React.useEffect(() => {
+    if (userLoading) return;
+    const role = currentUser?.role ?? "";
+
+    if (!ALLOWED.has(role)) {
+      toast.error("Akses ditolak. Mengarahkan ke Beranda");
+      router.replace("/dashboard");
+    }
+  }, [userLoading, currentUser?.role, router]);
 
   const {
     data: saData,
@@ -98,7 +114,7 @@ export default function SupervisorManagePage() {
   const allUPRows: UserProgressRow[] =
     upData?.userProgressBySubSurveyActivityId ?? [];
 
-  const supervisorId = me?.id ?? "";
+  const supervisorId = currentUser?.id ?? "";
   const myUPRows = React.useMemo(() => {
     const rowsForSub = allUPRows.filter(
       (r) => r.subSurveyActivityId === subSurveyActivityId
@@ -111,7 +127,7 @@ export default function SupervisorManagePage() {
       (r) => (r.superVisorId ?? "") === supervisorId
     );
 
-    if (me?.role === "Superadmin") return rowsForSub;
+    if (currentUser?.role === "Superadmin") return rowsForSub;
     return mine.length ? mine : [];
   }, [allUPRows, subSurveyActivityId, supervisorId]);
 
@@ -403,6 +419,17 @@ export default function SupervisorManagePage() {
 
   const disabled = saLoading || subsLoading || upLoading;
 
+  if (userLoading) {
+    return (
+      <div className="max-w-screen-xl mx-auto px-3 py-6 font-Poppins">
+        Memuat…
+      </div>
+    );
+  }
+  if (!currentUser || !ALLOWED.has(currentUser.role ?? "")) {
+    return null;
+  }
+
   return (
     <div className="max-w-screen-xl mx-auto px-3 sm:px-6 md:px-8 py-6 space-y-4 font-Poppins">
       <div className="bg-orange-50 rounded-lg p-3 md:p-4 shadow flex items-center justify-between">
@@ -481,7 +508,7 @@ export default function SupervisorManagePage() {
               <p className="text-[11px] text-gray-500 mt-1">
                 {myUPRows.some((r) => (r.superVisorId ?? "") === supervisorId)
                   ? "Menampilkan petugas di bawah pengawasan Anda."
-                  : me?.role === "Superadmin"
+                  : currentUser?.role === "Superadmin"
                     ? "Menampilkan semua petugas."
                     : "Anda tidak bertugas mengawasi petugas pada kegiatan ini."}
               </p>
