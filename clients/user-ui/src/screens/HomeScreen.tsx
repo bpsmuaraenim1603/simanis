@@ -1,20 +1,21 @@
 "use client";
-import React, { useEffect } from 'react'
-import BPS from '../../public/BPS.png'
-import AuthScreen from './AuthScreen'
-import useUser from '../hooks/useUser';
-import { useRouter } from 'next/navigation';
+import React, { useEffect } from "react";
+import BPS from "../../public/BPS.png";
+import AuthScreen from "./AuthScreen";
+import useUser from "../hooks/useUser";
+import { useRouter } from "next/navigation";
+import toast from "react-hot-toast";
 
 function HomeScreen() {
-
   const { user, loading } = useUser();
   const router = useRouter();
 
   useEffect(() => {
-      if (user) {
-        router.replace("/dashboard");
-      }
-    }, [user, loading, router]);
+    if (user) {
+      toast.success("Anda sudah login. Mengarahkan ke Beranda");
+      router.replace("/dashboard");
+    }
+  }, [user, loading, router]);
 
   return (
     <div className="w-full">
@@ -27,7 +28,8 @@ function HomeScreen() {
             className="h-10 sm:h-12 w-auto"
           />
           <h1 className="uppercase text-white font-Poppins font-semibold italic leading-tight text-sm sm:text-base lg:text-lg">
-            Badan Pusat Statistik <br className="hidden sm:block" /> Kabupaten Muara Enim
+            Badan Pusat Statistik <br className="hidden sm:block" /> Kabupaten
+            Muara Enim
           </h1>
         </div>
       </div>
@@ -35,7 +37,6 @@ function HomeScreen() {
       {/* Hero */}
       <div className="bg-orange-500 w-full min-h-screen">
         <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12 lg:py-20 flex flex-col items-center gap-8 lg:gap-20 lg:flex lg:flex-row lg:justify-between">
-          
           {/* Teks & CTA */}
           <div className="w-full text-center space-y-4 sm:space-y-6">
             <h2 className="text-white text-2xl sm:text-3xl lg:text-4xl font-semibold font-Poppins">
@@ -60,7 +61,7 @@ function HomeScreen() {
         </div>
       </div>
     </div>
-  )
+  );
 }
 
-export default HomeScreen
+export default HomeScreen;

@@ -157,17 +157,13 @@ function SubTabs<T extends string>({
 function Admin() {
   const { user: currentUser, loading: userLoading } = useUser();
   const router = useRouter();
-
-  // Tentukan role yang boleh masuk halaman ini
-  // (saran: manajemen tim = Superadmin & Admin)
   const ALLOWED = new Set(["Superadmin", "Admin"]);
 
   React.useEffect(() => {
-    if (userLoading) return; // tunggu data user siap
+    if (userLoading) return;
     const role = currentUser?.role ?? "";
     if (!ALLOWED.has(role)) {
-      // Opsional: kasih notifikasi
-      // toast.error("Akses ditolak. Mengarahkan ke Dashboard…");
+      toast.error("Akses ditolak. Mengarahkan ke Beranda");
       router.replace("/dashboard");
     }
   }, [userLoading, currentUser?.role, router]);
@@ -1228,7 +1224,6 @@ function Admin() {
   }
 
   if (!currentUser || !ALLOWED.has(currentUser.role ?? "")) {
-    // sudah dipicu redirect; cegah render satu frame pun
     return null;
   }
   

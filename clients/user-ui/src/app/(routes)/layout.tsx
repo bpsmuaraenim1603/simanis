@@ -4,6 +4,7 @@ import { ReactNode, useEffect, useMemo, useState } from "react";
 import Header from "@/src/components/Layout/Header";
 import useUser from "@/src/hooks/useUser";
 import { useRouter } from "next/navigation";
+import toast from "react-hot-toast";
 
 type SidebarEventDetail =
   | boolean
@@ -63,6 +64,7 @@ export default function RouteLayout({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!loading && !user) {
+      toast.error("Silakan login terlebih dahulu!");
       router.replace("/");
     }
   }, [user, loading, router]);
