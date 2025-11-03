@@ -161,7 +161,7 @@ function Dashboard() {
             name: r.subSurveyActivity.name,
           },
           totalAssigned: r.totalAssigned,
-          submitCount: r.submitCount,
+          submitCount: r.submitCount+r.approvedCount+r.rejectedCount,
           approvedCount: r.approvedCount,
           rejectedCount: r.rejectedCount,
           lastUpdated: r.lastUpdated,
@@ -169,7 +169,7 @@ function Dashboard() {
       } else {
         // jika ada multi baris (mis. beda blok) untuk kegiatan yang sama → jumlahkan
         prev.totalAssigned += r.totalAssigned;
-        prev.submitCount += r.submitCount;
+        prev.submitCount += r.submitCount+r.approvedCount+r.rejectedCount;
         prev.approvedCount += r.approvedCount;
         prev.rejectedCount += r.rejectedCount;
         prev.lastUpdated =
@@ -795,7 +795,7 @@ function Dashboard() {
                   </div>
 
                   <p className="text-xs text-gray-600">
-                    Target: {agg.totalAssigned} sampel, Selesai:{" "}
+                    Target: {agg.totalAssigned} sampel, Disubmit:{" "}
                     {agg.submitCount} sampel, Disetujui: {agg.approvedCount}{" "}
                     sampel
                   </p>
