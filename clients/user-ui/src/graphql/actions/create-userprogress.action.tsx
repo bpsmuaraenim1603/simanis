@@ -10,6 +10,15 @@ export const CREATE_USER_PROGRESS = gql`
       submitCount
       approvedCount
       rejectedCount
+      samples {
+        id
+        nus
+        cacahStatus
+        approvalStatus
+        geoLat
+        geoLng
+        geoCapturedAt
+      }
       lastUpdated
     }
   }

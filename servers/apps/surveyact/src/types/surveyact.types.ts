@@ -8,6 +8,7 @@ import {
 } from '@nestjs/graphql';
 import {
   AgreeState,
+  CacahStatus,
   IssueStatus,
   StatusST,
 } from '@prisma/client';
@@ -129,9 +130,37 @@ export class UserProgressType {
   @Field({ nullable: true })
   travelBill?: string;
 
+  @Field(() => [UserSampleType], { nullable: 'itemsAndList' })
+  samples?: UserSampleType[];
+
   @Field()
   lastUpdated: Date;
 }
+
+@ObjectType()
+export class UserSampleType {
+  @Field(() => ID)
+  id: string;
+
+  @Field()
+  nus: string;
+
+  @Field(() => CacahStatus)
+  cacahStatus: CacahStatus;
+
+  @Field(() => AgreeState)
+  approvalStatus: AgreeState;
+
+  @Field({ nullable: true })
+  geoLat?: number;
+
+  @Field({ nullable: true })
+  geoLng?: number;
+
+  @Field(() => GraphQLISODateTime, { nullable: true })
+  geoCapturedAt?: Date;
+}
+
 
 @ObjectType()
 export class SubSurveyProgressType {

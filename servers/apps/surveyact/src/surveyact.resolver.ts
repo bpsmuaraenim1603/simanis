@@ -19,6 +19,7 @@ import {
   SubSurveyProgressType,
   SurveyActivityType,
   UserProgressType,
+  UserSampleType,
 } from './types/surveyact.types';
 import {
   CreateContentIssueDto,
@@ -114,6 +115,11 @@ export class SurveyActivityResolver {
     return this.service.createUserSurveyProgress(input);
   }
 
+  @ResolveField(() => [UserSampleType], { name: 'samples' })
+  async getSamples(@Parent() progress: UserProgress) {
+    return this.service.getSamplesByUserProgressId(progress.id);
+  }
+
   @ResolveField(() => UserType, { nullable: true })
   async user(@Parent() progress: UserProgress): Promise<UserType | null> {
     const userId = progress.userId;
@@ -169,11 +175,8 @@ export class SurveyActivityResolver {
   }
 
   @Mutation(() => UserProgressType)
-  async updateUserSurveyProgress(
-    @Args('userProgressId') userProgressId: string,
-    @Args('input') input: UpdateUserProgressDTO,
-  ) {
-    return this.service.updateUserProgress(userProgressId, input);
+  async updateUserSurveyProgress(@Args('input') input: UpdateUserProgressDTO) {
+    return this.service.updateUserProgress(input);
   }
 
   @Mutation(() => DistrictType)

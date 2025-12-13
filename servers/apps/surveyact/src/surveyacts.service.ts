@@ -22,10 +22,12 @@ import {
   UpdateUserProgressDTO,
 } from './dto/surveyact.dto';
 import {
+  AgreeState,
+  CacahStatus,
   IssueStatus,
   JobLetter,
   SubmitSPJ,
-  User
+  User,
 } from '@prisma/client';
 import { HttpService } from '@nestjs/axios';
 import { lastValueFrom } from 'rxjs';
@@ -153,8 +155,49 @@ export class SurveyActivityService {
   }
 
   async createUserSurveyProgress(input: CreateUserProgressDTO) {
+    const { samples, ...rest } = input;
+
+    // Hitung agregat dari samples kalau dikirim dari FE
+    let totalAssigned = rest.totalAssigned ?? 0;
+    let submitCount = rest.submitCount ?? 0;
+    let approvedCount = rest.approvedCount ?? 0;
+    let rejectedCount = rest.rejectedCount ?? 0;
+
+    if (samples && samples.length > 0) {
+      totalAssigned = samples.length;
+      submitCount = samples.filter(
+        (s) => s.cacahStatus === CacahStatus.Selesai,
+      ).length;
+      approvedCount = samples.filter(
+        (s) => s.approvalStatus === AgreeState.Disetujui,
+      ).length;
+      rejectedCount = samples.filter(
+        (s) => s.approvalStatus === AgreeState.Ditolak,
+      ).length;
+    }
+
     return this.prisma.userProgress.create({
-      data: input,
+      data: {
+        ...rest,
+        totalAssigned,
+        submitCount,
+        approvedCount,
+        rejectedCount,
+        samples: samples
+          ? {
+              create: samples,
+            }
+          : undefined,
+      },
+      include: {
+        samples: true,
+      },
+    });
+  }
+
+  async getSamplesByUserProgressId(userProgressId: string) {
+    return this.prisma.userSample.findMany({
+      where: { userProgressId },
     });
   }
 
@@ -252,17 +295,115 @@ export class SurveyActivityService {
     });
   }
 
-  async updateUserProgress(
-    userProgressId: string,
-    updateData: UpdateUserProgressDTO,
-  ) {
-    const cleanedData = Object.fromEntries(
-      Object.entries(updateData).filter(([_, value]) => value != null),
-    );
+  async updateUserProgress(input: UpdateUserProgressDTO) {
+    const { id, samples, deleteSampleIds, ...rest } = input;
 
-    return this.prisma.userProgress.update({
-      where: { id: userProgressId },
-      data: cleanedData,
+    // 1) update field progress dulu (tanpa samples)
+    //    (jangan include samples dulu biar transaksi rapi)
+    // NOTE: kita akan hitung agregat dari samples kalau samples dikirim.
+    let totalAssigned = rest.totalAssigned;
+    let submitCount = rest.submitCount;
+    let approvedCount = rest.approvedCount;
+    let rejectedCount = rest.rejectedCount;
+
+    if (samples) {
+      totalAssigned = samples.length;
+      submitCount = samples.filter(
+        (s) => s.cacahStatus === CacahStatus.Selesai,
+      ).length;
+      approvedCount = samples.filter(
+        (s) => s.approvalStatus === AgreeState.Disetujui,
+      ).length;
+      rejectedCount = samples.filter(
+        (s) => s.approvalStatus === AgreeState.Ditolak,
+      ).length;
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      // 2) update parent progress
+      const updatedProgress = await tx.userProgress.update({
+        where: { id },
+        data: {
+          ...rest,
+          ...(samples
+            ? {
+                totalAssigned: totalAssigned ?? 0,
+                submitCount: submitCount ?? 0,
+                approvedCount: approvedCount ?? 0,
+                rejectedCount: rejectedCount ?? 0,
+              }
+            : {}),
+        },
+      });
+
+      // 3) kalau samples dikirim => replace semua child samples
+      if (samples) {
+        await tx.userSample.deleteMany({ where: { userProgressId: id } });
+
+        // validasi kecil: buang baris kosong (NUS kosong)
+        const cleaned = samples.filter(
+          (s) => String(s.nus ?? '').trim().length > 0,
+        );
+
+        if (cleaned.length > 0) {
+          await tx.userSample.createMany({
+            data: cleaned.map((s) => ({
+              userProgressId: id,
+              nus: s.nus,
+              cacahStatus: s.cacahStatus,
+              approvalStatus: s.approvalStatus,
+              geoLat: s.geoLat ?? null,
+              geoLng: s.geoLng ?? null,
+              geoCapturedAt: s.geoCapturedAt ?? null,
+            })),
+          });
+        }
+      }
+
+      // 4) (opsional) patch delete spesifik kalau kamu mau pakai deleteSampleIds
+      if (deleteSampleIds && deleteSampleIds.length > 0) {
+        await tx.userSample.deleteMany({
+          where: {
+            userProgressId: id,
+            id: { in: deleteSampleIds },
+          },
+        });
+
+        // Kalau deleteSampleIds dipakai tanpa `samples`,
+        // agregat harus dihitung ulang berdasarkan DB:
+        if (!samples) {
+          const remain = await tx.userSample.findMany({
+            where: { userProgressId: id },
+          });
+
+          const ta = remain.length;
+          const sc = remain.filter(
+            (s) => s.cacahStatus === CacahStatus.Selesai,
+          ).length;
+          const ac = remain.filter(
+            (s) => s.approvalStatus === AgreeState.Disetujui,
+          ).length;
+          const rc = remain.filter(
+            (s) => s.approvalStatus === AgreeState.Ditolak,
+          ).length;
+
+          await tx.userProgress.update({
+            where: { id },
+            data: {
+              totalAssigned: ta,
+              submitCount: sc,
+              approvedCount: ac,
+              rejectedCount: rc,
+            },
+          });
+        }
+      }
+
+      // 5) return lengkap
+      return tx.userProgress.findUnique({
+        where: { id },
+        include: { samples: true },
+      });
     });
   }
 
@@ -713,7 +854,8 @@ export class SurveyActivityService {
 
   async deleteSurveyActivity({ id }: { id: string }) {
     const team = await this.prisma.surveyActivity.findUnique({ where: { id } });
-    if (!team) throw new NotFoundException('SurveyActivity (tim) tidak ditemukan');
+    if (!team)
+      throw new NotFoundException('SurveyActivity (tim) tidak ditemukan');
 
     const subs = await this.prisma.subSurveyActivity.findMany({
       where: { surveyActivityId: id },
@@ -728,7 +870,10 @@ export class SurveyActivityService {
         }),
         this.prisma.jobLetter.findMany({
           where: { subSurveyActivityId: { in: subIds } },
-          select: { eviFieldUrl: true, eviSTUrl: true, /* eviLetterPath: true */ } as any,
+          select: {
+            eviFieldUrl: true,
+            eviSTUrl: true /* eviLetterPath: true */,
+          } as any,
         }),
       ]);
 
@@ -741,21 +886,39 @@ export class SurveyActivityService {
     }
 
     await this.prisma.$transaction([
-      this.prisma.issueComment.deleteMany({ where: { subSurveyActivityId: { in: subIds } } }),
-      this.prisma.contentIssue.deleteMany({ where: { subSurveyActivityId: { in: subIds } } }),
-      this.prisma.jobLetter.deleteMany({ where: { subSurveyActivityId: { in: subIds } } }),
-      this.prisma.submitSPJ.deleteMany({ where: { subSurveyActivityId: { in: subIds } } }),
-      this.prisma.userProgress.deleteMany({ where: { subSurveyActivityId: { in: subIds } } }),
-      this.prisma.subSurveyActivity.deleteMany({ where: { id: { in: subIds } } }),
+      this.prisma.issueComment.deleteMany({
+        where: { subSurveyActivityId: { in: subIds } },
+      }),
+      this.prisma.contentIssue.deleteMany({
+        where: { subSurveyActivityId: { in: subIds } },
+      }),
+      this.prisma.jobLetter.deleteMany({
+        where: { subSurveyActivityId: { in: subIds } },
+      }),
+      this.prisma.submitSPJ.deleteMany({
+        where: { subSurveyActivityId: { in: subIds } },
+      }),
+      this.prisma.userProgress.deleteMany({
+        where: { subSurveyActivityId: { in: subIds } },
+      }),
+      this.prisma.subSurveyActivity.deleteMany({
+        where: { id: { in: subIds } },
+      }),
       this.prisma.surveyActivity.delete({ where: { id } }),
     ]);
 
-    return { success: true, message: 'Tim dan semua yang terkait sudah terhapus.' };
+    return {
+      success: true,
+      message: 'Tim dan semua yang terkait sudah terhapus.',
+    };
   }
 
   async deleteSubSurveyActivity({ id }: { id: string }) {
-    const exists = await this.prisma.subSurveyActivity.findUnique({ where: { id } });
-    if (!exists) throw new NotFoundException('SubSurveyActivity tidak ditemukan');
+    const exists = await this.prisma.subSurveyActivity.findUnique({
+      where: { id },
+    });
+    if (!exists)
+      throw new NotFoundException('SubSurveyActivity tidak ditemukan');
 
     // ambil semua SPJ & JL untuk SSA ini (kumpulkan path/URL berkas)
     const [spjs, jls] = await Promise.all([
@@ -765,7 +928,10 @@ export class SurveyActivityService {
       }),
       this.prisma.jobLetter.findMany({
         where: { subSurveyActivityId: id },
-        select: { eviFieldUrl: true, eviSTUrl: true, /* kalau ada: */  /* eviLetterPath: true */ } as any,
+        select: {
+          eviFieldUrl: true,
+          eviSTUrl: true /* kalau ada: */ /* eviLetterPath: true */,
+        } as any,
       }),
     ]);
 
@@ -779,15 +945,24 @@ export class SurveyActivityService {
 
     // lalu hapus DB child → parent (seperti versi sebelumnya)
     await this.prisma.$transaction([
-      this.prisma.issueComment.deleteMany({ where: { subSurveyActivityId: id } }),
-      this.prisma.contentIssue.deleteMany({ where: { subSurveyActivityId: id } }),
+      this.prisma.issueComment.deleteMany({
+        where: { subSurveyActivityId: id },
+      }),
+      this.prisma.contentIssue.deleteMany({
+        where: { subSurveyActivityId: id },
+      }),
       this.prisma.jobLetter.deleteMany({ where: { subSurveyActivityId: id } }),
       this.prisma.submitSPJ.deleteMany({ where: { subSurveyActivityId: id } }),
-      this.prisma.userProgress.deleteMany({ where: { subSurveyActivityId: id } }),
+      this.prisma.userProgress.deleteMany({
+        where: { subSurveyActivityId: id },
+      }),
       this.prisma.subSurveyActivity.delete({ where: { id } }),
     ]);
 
-    return { success: true, message: 'Kegiatan survei semua yang terkait sudah terhapus.' };
+    return {
+      success: true,
+      message: 'Kegiatan survei semua yang terkait sudah terhapus.',
+    };
   }
 
   async deleteUserSurveyProgress({ id }: { id: string }) {
@@ -804,8 +979,8 @@ export class SurveyActivityService {
     // Kamu punya beberapa field bukti: eviLetterPath (path), eviFieldUrl (URL), eviSTUrl (URL)
     await this.storage.removeJobLetterFiles([
       (jl as any).eviLetterPath, // jika ada path file utama
-      jl.eviFieldUrl,            // URL bukti lapangan
-      jl.eviSTUrl,               // URL bukti surat tugas
+      jl.eviFieldUrl, // URL bukti lapangan
+      jl.eviSTUrl, // URL bukti surat tugas
     ]);
 
     await this.prisma.jobLetter.delete({ where: { id } });
@@ -821,6 +996,9 @@ export class SurveyActivityService {
 
     // 2) hapus row
     await this.prisma.submitSPJ.delete({ where: { id } });
-    return { success: true, message: 'Pengajuan Honor dan file sudah terhapus.' };
+    return {
+      success: true,
+      message: 'Pengajuan Honor dan file sudah terhapus.',
+    };
   }
 }

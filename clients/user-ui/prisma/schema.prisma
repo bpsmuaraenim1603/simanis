@@ -38,6 +38,12 @@ enum AgreeState {
   Ditolak
 }
 
+enum CacahStatus {
+  Belum_Cacah
+  Selesai
+  Drop_Out
+}
+
 enum NotificationType {
   SUBMIT_SPJ_CREATED
   SUBMIT_SPJ_APPROVED
@@ -190,6 +196,24 @@ model UserProgress {
   district            District?          @relation(fields: [districtId], references: [id])
   villageName         String?
   travelBill          String?
+
+  samples UserSample[]
+}
+
+model UserSample {
+  id             String       @id @default(uuid())
+  userProgressId String
+  userProgress   UserProgress @relation(fields: [userProgressId], references: [id], onDelete: Cascade)
+  nus            String
+  cacahStatus    CacahStatus  @default(Belum_Cacah)
+  approvalStatus AgreeState   @default(Menunggu)
+  geoLat         Float?
+  geoLng         Float?
+  geoCapturedAt  DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([userProgressId, nus])
 }
 
 model District {

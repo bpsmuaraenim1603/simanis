@@ -1,5 +1,5 @@
 import { InputType, Field, ID, registerEnumType, GraphQLISODateTime } from '@nestjs/graphql';
-import { AgreeState, IssueStatus, StatusST } from '@prisma/client';
+import { AgreeState, CacahStatus, IssueStatus, StatusST } from '@prisma/client';
 import {
   IsDateString,
   IsNotEmpty,
@@ -133,34 +133,68 @@ export class CreateUserProgressDTO {
 
   @Field({ nullable: true })
   travelBill?: string;
+
+  @Field(() => [UserSampleInput], { nullable: true })
+  samples?: UserSampleInput[];
+}
+
+@InputType()
+export class UserSampleInput {
+  @Field()
+  nus: string;
+
+  @Field(() => CacahStatus, { defaultValue: CacahStatus.Belum_Cacah })
+  cacahStatus: CacahStatus;
+
+  @Field(() => AgreeState, { defaultValue: AgreeState.Menunggu })
+  approvalStatus: AgreeState;
+
+  @Field({ nullable: true })
+  geoLat?: number;
+
+  @Field({ nullable: true })
+  geoLng?: number;
+
+  @Field({ nullable: true })
+  geoCapturedAt?: Date;
 }
 
 @InputType()
 export class UpdateUserProgressDTO {
   @Field()
-  totalAssigned: number;
+  id: string;
 
-  @Field()
-  submitCount: number;
-
-  @Field()
-  approvedCount: number;
-
-  @Field()
-  rejectedCount: number;
-
-  @Field()
-  lastUpdated: Date;
-
-  @Field()
-  districtId: string;
+  @Field({ nullable: true })
+  districtId?: string;
 
   @Field({ nullable: true })
   villageName?: string;
 
   @Field({ nullable: true })
   travelBill?: string;
+
+  // agregat lama optional (boleh tetap ada)
+  @Field({ nullable: true })
+  totalAssigned?: number;
+
+  @Field({ nullable: true })
+  submitCount?: number;
+
+  @Field({ nullable: true })
+  approvedCount?: number;
+
+  @Field({ nullable: true })
+  rejectedCount?: number;
+
+  // NEW: list sampel (optional)
+  @Field(() => [UserSampleInput], { nullable: true })
+  samples?: UserSampleInput[];
+
+  // OPTIONAL: kalau kamu mau delete spesifik (patch mode)
+  @Field(() => [String], { nullable: true })
+  deleteSampleIds?: string[];
 }
+
 
 @InputType()
 export class CreateDistrictDTO {
