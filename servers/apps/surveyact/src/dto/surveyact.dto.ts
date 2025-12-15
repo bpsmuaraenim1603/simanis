@@ -107,26 +107,26 @@ export class CreateUserProgressDTO {
   @Field()
   superVisorId: string;
 
-  @Field()
-  totalAssigned: number;
+  @Field({ nullable: true })
+  totalAssigned?: number;
 
-  @Field()
-  submitCount: number;
+  @Field({ nullable: true })
+  submitCount?: number;
 
-  @Field()
-  approvedCount: number;
+  @Field({ nullable: true })
+  approvedCount?: number;
 
-  @Field()
-  rejectedCount: number;
+  @Field({ nullable: true })
+  rejectedCount?: number;
 
-  @Field()
-  blockCount: string;
+  @Field({ nullable: true })
+  blockCount?: string;
 
-  @Field()
-  lastUpdated: Date;
+  @Field(() => GraphQLISODateTime, { nullable: true })
+  lastUpdated?: Date; // sebenernya bisa kamu hapus total, karena DB @updatedAt
 
-  @Field()
-  districtId: string;
+  @Field({ nullable: true })
+  districtId?: string;
 
   @Field({ nullable: true })
   villageName?: string;
@@ -137,6 +137,7 @@ export class CreateUserProgressDTO {
   @Field(() => [UserSampleInput], { nullable: true })
   samples?: UserSampleInput[];
 }
+
 
 @InputType()
 export class UserSampleInput {

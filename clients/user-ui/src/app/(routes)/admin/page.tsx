@@ -688,8 +688,8 @@ function Admin() {
 
         await updateUserSurveyProgress({
           variables: {
-            userProgressId: updateUserProgressForm.userProgressId,
             input: {
+              id: updateUserProgressForm.userProgressId,
               totalAssigned: cappedTotalAssigned,
               submitCount: Number(updateUserProgressForm.submitCount),
               approvedCount: Number(updateUserProgressForm.approvedCount),
@@ -700,6 +700,13 @@ function Admin() {
               districtId: updateUserProgressForm.districtId,
               villageName: updateUserProgressForm.villageName,
               travelBill: updateUserProgressForm.travelBill,
+              sampels: sampleList.map((s) => ({
+                nus: s.nus,
+                cacahStatus: s.cacahStatus,
+                approvalStatus: s.approvalStatus,
+                geoLat: s.geoLat ? Number(s.geoLat) : null,
+                geoLng: s.geoLng ? Number(s.geoLng) : null,
+              })),
             },
           },
         });

@@ -26,6 +26,8 @@ registerEnumType(IssueStatus, {
   name: 'IssueStatus', // akan muncul di GraphQL schema
 });
 
+registerEnumType(CacahStatus, { name: 'CacahStatus' });
+
 @ObjectType()
 export class SurveyActivityType {
   @Field(() => ID)

@@ -1,8 +1,8 @@
 import { gql } from "@apollo/client";
 
 export const UPDATE_USER_PROGRESS = gql`
-  mutation UpdateUserProgress($input: UpdateUserProgressDTO!) {
-    updateUserProgress(input: $input) {
+  mutation UpdateUserSurveyProgress($input: UpdateUserProgressDTO!) {
+    updateUserSurveyProgress(input: $input) {
       id
       userId
       subSurveyActivityId
