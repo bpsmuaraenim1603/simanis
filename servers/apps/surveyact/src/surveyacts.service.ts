@@ -13,6 +13,7 @@ import {
   CreateSubSurveyActivityDTO,
   CreateSurveyActivityDTO,
   CreateUserProgressDTO,
+  PatchUserSamplesDTO,
   UpdateContentIssueDto,
   updateIssueCommentDto,
   UpdateJobLetterStatusDTO,
@@ -402,6 +403,73 @@ export class SurveyActivityService {
       // 5) return lengkap
       return tx.userProgress.findUnique({
         where: { id },
+        include: { samples: true },
+      });
+    });
+  }
+
+  async patchUserSamples(input: PatchUserSamplesDTO) {
+    const { userProgressId, updateSamples, createSamples, deleteSampleIds } =
+      input;
+
+    return this.prisma.$transaction(async (tx) => {
+      // 1. UPDATE existing samples
+      if (updateSamples?.length) {
+        for (const s of updateSamples) {
+          await tx.userSample.update({
+            where: { id: s.id },
+            data: {
+              ...(s.cacahStatus && { cacahStatus: s.cacahStatus }),
+              ...(s.approvalStatus && { approvalStatus: s.approvalStatus }),
+              ...(s.geoLat !== undefined && { geoLat: s.geoLat }),
+              ...(s.geoLng !== undefined && { geoLng: s.geoLng }),
+              ...(s.geoCapturedAt && { geoCapturedAt: s.geoCapturedAt }),
+            },
+          });
+        }
+      }
+
+      // 2. CREATE new samples
+      if (createSamples?.length) {
+        await tx.userSample.createMany({
+          data: createSamples.map((s) => ({
+            userProgressId,
+            nus: s.nus,
+            cacahStatus: s.cacahStatus,
+            approvalStatus: s.approvalStatus,
+            geoLat: s.geoLat ?? null,
+            geoLng: s.geoLng ?? null,
+            geoCapturedAt: s.geoCapturedAt ?? null,
+          })),
+        });
+      }
+
+      // 3. DELETE samples
+      if (deleteSampleIds?.length) {
+        await tx.userSample.deleteMany({
+          where: { id: { in: deleteSampleIds } },
+        });
+      }
+
+      // 4. HITUNG ULANG AGREGAT
+      const all = await tx.userSample.findMany({
+        where: { userProgressId },
+      });
+
+      await tx.userProgress.update({
+        where: { id: userProgressId },
+        data: {
+          totalAssigned: all.length,
+          submitCount: all.filter((s) => s.cacahStatus === 'Selesai').length,
+          approvedCount: all.filter((s) => s.approvalStatus === 'Disetujui')
+            .length,
+          rejectedCount: all.filter((s) => s.approvalStatus === 'Ditolak')
+            .length,
+        },
+      });
+
+      return tx.userProgress.findUnique({
+        where: { id: userProgressId },
         include: { samples: true },
       });
     });

@@ -1,4 +1,10 @@
-import { InputType, Field, ID, registerEnumType, GraphQLISODateTime } from '@nestjs/graphql';
+import {
+  InputType,
+  Field,
+  ID,
+  registerEnumType,
+  GraphQLISODateTime,
+} from '@nestjs/graphql';
 import { AgreeState, CacahStatus, IssueStatus, StatusST } from '@prisma/client';
 import {
   IsDateString,
@@ -15,6 +21,42 @@ registerEnumType(AgreeState, {
 registerEnumType(StatusST, {
   name: 'StatusST',
 });
+
+@InputType()
+export class PatchUserSampleInput {
+  @Field()
+  id: string;
+
+  @Field(() => CacahStatus, { nullable: true })
+  cacahStatus?: CacahStatus;
+
+  @Field(() => AgreeState, { nullable: true })
+  approvalStatus?: AgreeState;
+
+  @Field({ nullable: true })
+  geoLat?: number;
+
+  @Field({ nullable: true })
+  geoLng?: number;
+
+  @Field(() => GraphQLISODateTime, { nullable: true })
+  geoCapturedAt?: Date;
+}
+
+@InputType()
+export class PatchUserSamplesDTO {
+  @Field()
+  userProgressId: string;
+
+  @Field(() => [PatchUserSampleInput], { nullable: true })
+  updateSamples?: PatchUserSampleInput[];
+
+  @Field(() => [UserSampleInput], { nullable: true })
+  createSamples?: UserSampleInput[];
+
+  @Field(() => [String], { nullable: true })
+  deleteSampleIds?: string[];
+}
 
 @InputType()
 export class CreateSurveyActivityDTO {
@@ -138,7 +180,6 @@ export class CreateUserProgressDTO {
   samples?: UserSampleInput[];
 }
 
-
 @InputType()
 export class UserSampleInput {
   @Field()
@@ -195,7 +236,6 @@ export class UpdateUserProgressDTO {
   @Field(() => [String], { nullable: true })
   deleteSampleIds?: string[];
 }
-
 
 @InputType()
 export class CreateDistrictDTO {

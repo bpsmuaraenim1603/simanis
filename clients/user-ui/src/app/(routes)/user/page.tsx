@@ -342,7 +342,7 @@ export default function UserPage() {
           input: {
             id: currentUP.id,
             samples: currentUP.samples.map((s: any) => ({
-              id: s.id, // kalau backend kamu belum pakai id, boleh skip, tapi lebih bagus ada
+              id: s.id,
               nus: s.nus,
               cacahStatus: s.cacahStatus,
               approvalStatus: s.approvalStatus,

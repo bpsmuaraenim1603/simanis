@@ -30,6 +30,7 @@ import {
   CreateSubSurveyActivityDTO,
   CreateSurveyActivityDTO,
   CreateUserProgressDTO,
+  PatchUserSamplesDTO,
   UpdateContentIssueDto,
   updateIssueCommentDto,
   UpdateJobLetterStatusDTO,
@@ -177,6 +178,11 @@ export class SurveyActivityResolver {
   @Mutation(() => UserProgressType)
   async updateUserSurveyProgress(@Args('input') input: UpdateUserProgressDTO) {
     return this.service.updateUserProgress(input);
+  }
+
+  @Mutation(() => UserProgressType)
+  patchUserSamples(@Args('input') input: PatchUserSamplesDTO) {
+    return this.service.patchUserSamples(input);
   }
 
   @Mutation(() => DistrictType)
