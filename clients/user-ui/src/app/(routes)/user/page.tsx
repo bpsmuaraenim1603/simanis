@@ -339,14 +339,17 @@ export default function UserPage() {
           : v0.totalAssigned;
       await updateUserSurveyProgress({
         variables: {
-          userProgressId: v0.userProgressId,
           input: {
-            totalAssigned: Number(updateTotalAssigned),
-            submitCount: Number(v0.submitCount),
-            approvedCount: Number(v0.approvedCount),
-            rejectedCount: Number(v0.rejectedCount),
-            lastUpdated: new Date().toISOString(),
-            districtId: v0.districtId,
+            id: currentUP.id,
+            samples: currentUP.samples.map((s: any) => ({
+              id: s.id, // kalau backend kamu belum pakai id, boleh skip, tapi lebih bagus ada
+              nus: s.nus,
+              cacahStatus: s.cacahStatus,
+              approvalStatus: s.approvalStatus,
+              geoLat: s.geoLat,
+              geoLng: s.geoLng,
+              geoCapturedAt: s.geoCapturedAt,
+            })),
           },
         },
       });

@@ -694,13 +694,10 @@ function Admin() {
               submitCount: Number(updateUserProgressForm.submitCount),
               approvedCount: Number(updateUserProgressForm.approvedCount),
               rejectedCount: Number(updateUserProgressForm.rejectedCount),
-              lastUpdated: new Date(
-                updateUserProgressForm.lastUpdated
-              ).toISOString(),
               districtId: updateUserProgressForm.districtId,
               villageName: updateUserProgressForm.villageName,
               travelBill: updateUserProgressForm.travelBill,
-              sampels: sampleList.map((s) => ({
+              samples: sampleList.map((s) => ({
                 nus: s.nus,
                 cacahStatus: s.cacahStatus,
                 approvalStatus: s.approvalStatus,

@@ -28,6 +28,15 @@ export const GET_USER_PROGRESS_BY_USER_ID = gql`
         id
         name
       }
+      samples {
+        id
+        nus
+        cacahStatus
+        approvalStatus
+        geoLat
+        geoLng
+        geoCapturedAt
+      }
     }
   }
 `;
