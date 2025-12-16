@@ -2,6 +2,7 @@
 
 import HUComboBox from "@/src/components/HUCombobox";
 import { GET_USER_PROGRESS_BY_USER_ID } from "@/src/graphql/actions/find-usersurveyprogressbyuser.action";
+import { PATCH_USER_SAMPLES } from "@/src/graphql/actions/patch-usersamples.action";
 import { UPDATE_USER_PROGRESS } from "@/src/graphql/actions/update-userprogress.action";
 import useUser from "@/src/hooks/useUser";
 import styles from "@/src/utils/style";
@@ -106,6 +107,13 @@ export default function UserPage() {
 
   const clamp = (x: number, min = 0, max = Number.POSITIVE_INFINITY) =>
     Math.min(max, Math.max(min, Number.isFinite(x) ? x : 0));
+
+  const [patchUserSamples, { loading: patching }] = useMutation(
+    PATCH_USER_SAMPLES,
+    {
+      refetchQueries: ["GetMyUserProgress"], // sesuaikan nama query kamu
+    }
+  );
 
   const applyConstraints = (draft: typeof updateUserProgressForm) => {
     let totalAssigned = clamp(Number(draft.totalAssigned), 0);
@@ -370,6 +378,45 @@ export default function UserPage() {
   }
   if (!user || !ALLOWED.has(user.role ?? "")) {
     return null;
+  }
+
+  async function patchSample(sample: any) {
+    await patchUserSamples({
+      variables: {
+        input: {
+          userProgressId: userProgress.id,
+          updateSamples: [
+            {
+              id: sample.id,
+              cacahStatus: sample.cacahStatus,
+              geoLat: sample.geoLat,
+              geoLng: sample.geoLng,
+              geoCapturedAt: new Date().toISOString(),
+            },
+          ],
+        },
+      },
+    });
+  }
+
+  function ambilLokasi(sampleId: string) {
+    navigator.geolocation.getCurrentPosition((pos) => {
+      patchUserSamples({
+        variables: {
+          input: {
+            userProgressId: userProgress.id,
+            updateSamples: [
+              {
+                id: sampleId,
+                geoLat: pos.coords.latitude,
+                geoLng: pos.coords.longitude,
+                geoCapturedAt: new Date().toISOString(),
+              },
+            ],
+          },
+        },
+      });
+    });
   }
 
   return (
