@@ -31,6 +31,7 @@ import HUComboBox from "@/src/components/HUCombobox";
 import HUSelect from "@/src/components/HUSelect";
 import useUser from "@/src/hooks/useUser";
 import { useRouter } from "next/navigation";
+import { PATCH_USER_SAMPLES } from "@/src/graphql/actions/patch-usersamples.action";
 
 /* ====== (type definitions sama persis dengan punyamu) ====== */
 type SurveyActivity = { id: string; name: string; slug: string };
@@ -237,6 +238,7 @@ function Admin() {
   });
   const [sampleList, setSampleList] = useState<
     {
+      id?: string;
       nus: string;
       cacahStatus: string;
       approvalStatus: string;
@@ -326,6 +328,8 @@ function Admin() {
   const [deleteSurveyActivity] = useMutation(DELETE_SURVEY_ACTIVITY);
   const [deleteSubSurveyActivity] = useMutation(DELETE_SUBSURVEY_ACTIVITY);
   const [deleteUserProgressMut] = useMutation(DELETE_USER_SURVEY_PROGRESS);
+  const [patchUserSamples, { loading: patching }] =
+    useMutation(PATCH_USER_SAMPLES);
 
   const toDateInput = (d?: string | Date) =>
     d ? new Date(d).toISOString().slice(0, 10) : "";
@@ -600,7 +604,7 @@ function Admin() {
             districtId: userProgressForm.districtId,
             villageName: userProgressForm.villageName,
             travelBill: userProgressForm.travelBill,
-            // boleh kirim 0; backend akan override dari samples
+            blockCount: userProgressForm.blockCount,
             totalAssigned: 0,
             submitCount: 0,
             approvedCount: 0,
@@ -633,6 +637,15 @@ function Admin() {
         travelBill: "",
         superVisorId: userProgressForm.superVisorId,
       });
+      setSampleList([
+        {
+          nus: "",
+          cacahStatus: "Belum_Cacah",
+          approvalStatus: "Menunggu",
+          geoLat: "",
+          geoLng: "",
+        },
+      ]);
     } catch (err) {
       toast.error("Gagal tambah user progress");
       console.error(err);
@@ -728,6 +741,15 @@ function Admin() {
         villageName: "",
         travelBill: "",
       });
+      setSampleList([
+        {
+          nus: "",
+          cacahStatus: "Belum_Cacah",
+          approvalStatus: "Menunggu",
+          geoLat: "",
+          geoLng: "",
+        },
+      ]);
     } catch (err) {
       toast.error("Gagal perbarui petugas");
       console.error(err);
@@ -771,8 +793,8 @@ function Admin() {
         toast.success(
           data?.deleteSubSurveyActivity?.message ?? "Kegiatan terhapus."
         );
-        setUpdateStateF2({
-          subSurveyActivityId: "",
+        setUpdateStateF2((prev) => ({
+          ...prev,
           name: "",
           slug: "",
           surveyActivityId: "",
@@ -781,7 +803,7 @@ function Admin() {
           targetSample: 0,
           sampleType: "",
           activityType: "",
-        });
+        }));
         await handleRefresh();
       } else {
         toast.error("Gagal menghapus Kegiatan.");
@@ -817,6 +839,15 @@ function Admin() {
           villageName: "",
           travelBill: "",
         }));
+        setSampleList([
+          {
+            nus: "",
+            cacahStatus: "Belum_Cacah",
+            approvalStatus: "Menunggu",
+            geoLat: "",
+            geoLng: "",
+          },
+        ]);
         await handleRefresh();
       } else {
         toast.error("Gagal menghapus Petugas.");
@@ -1001,6 +1032,7 @@ function Admin() {
     setUserProgressForm((prev) => ({
       ...prev,
       subSurveyActivityId: "",
+      superVisorId: "",
       userId: "",
     }));
   }, [userProgressForm.surveyActivityId]);
@@ -1042,17 +1074,12 @@ function Admin() {
     const curr = updateUserProgressForm?.surveyActivityId || "";
     const prev = prevSurveyIdRefUpdate.current || "";
 
-    // Kalau nilai tim BERUBAH (termasuk jadi kosong), kosongkan field dependent
     if (curr !== prev) {
       setUpdateUserProgressForm((s: any) => ({
         ...s,
         subSurveyActivityId: "", // reset kegiatan
         userId: "", // reset petugas
-        // travelBill: "",       // ← kalau mau sekalian reset nominal, buka baris ini
       }));
-
-      // (opsional) jika kamu memuat daftar petugas/kegiatan berdasar tim:
-      // refetchPetugas({ subSurveyActivityId: "" }); // atau refetch sesuai tim baru
     }
 
     prevSurveyIdRefUpdate.current = curr;
@@ -1242,6 +1269,33 @@ function Admin() {
     }
   }, [currentUP?.userId, fetchUserProgressByUserForUpdate]);
 
+  useEffect(() => {
+    if (!currentUP) return;
+
+    const samples = (currentUP as any)?.samples ?? [];
+    if (Array.isArray(samples) && samples.length > 0) {
+      setSampleList(
+        samples.map((s: any) => ({
+          nus: s.nus ?? "",
+          cacahStatus: s.cacahStatus ?? "Belum_Cacah",
+          approvalStatus: s.approvalStatus ?? "Menunggu",
+          geoLat: s.geoLat != null ? String(s.geoLat) : "",
+          geoLng: s.geoLng != null ? String(s.geoLng) : "",
+        }))
+      );
+    } else {
+      setSampleList([
+        {
+          nus: "",
+          cacahStatus: "Belum_Cacah",
+          approvalStatus: "Menunggu",
+          geoLat: "",
+          geoLng: "",
+        },
+      ]);
+    }
+  }, [currentUP?.id]);
+
   /* ===================== UI ===================== */
   if (userLoading) {
     return (
@@ -1422,7 +1476,7 @@ function Admin() {
                 <button
                   type="button"
                   onClick={handleDeleteSurveyAct}
-                  className="px-4 py-2 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 w-full"
+                  className="my-2 px-6 py-3 rounded-full bg-red-600 text-white font-semibold hover:bg-red-700 w-full"
                 >
                   Hapus Tim
                 </button>
@@ -1744,7 +1798,7 @@ function Admin() {
                 <button
                   type="button"
                   onClick={handleDeleteSubSurveyAct}
-                  className="px-4 py-2 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 w-full"
+                  className="my-2 px-6 py-3 rounded-full bg-red-600 text-white font-semibold hover:bg-red-700 w-full"
                 >
                   Hapus Kegiatan
                 </button>
@@ -1876,189 +1930,6 @@ function Admin() {
                 </p>
               )}
             </div>
-
-            <div className="md:col-span-2 border rounded-md p-3 bg-white">
-              <div className="flex justify-between items-center mb-2">
-                <h4 className="font-bold text-sm">Daftar Sampel Petugas</h4>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setSampleList((prev) => [
-                      ...prev,
-                      {
-                        nus: "",
-                        cacahStatus: "Belum_Cacah",
-                        approvalStatus: "Menunggu",
-                        geoLat: "",
-                        geoLng: "",
-                      },
-                    ])
-                  }
-                  className="text-xs px-2 py-1 border rounded-md"
-                >
-                  + Tambah Baris
-                </button>
-              </div>
-
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {sampleList.map((row, idx) => (
-                  <div
-                    key={idx}
-                    className="grid grid-cols-1 md:grid-cols-5 gap-2 items-center"
-                  >
-                    <input
-                      placeholder="NUS"
-                      value={row.nus}
-                      onChange={(e) =>
-                        setSampleList((prev) =>
-                          prev.map((r, i) =>
-                            i === idx ? { ...r, nus: e.target.value } : r
-                          )
-                        )
-                      }
-                      className="px-2 py-1 border rounded-md text-xs"
-                    />
-
-                    {/* status pencacahan */}
-                    <select
-                      value={row.cacahStatus}
-                      onChange={(e) =>
-                        setSampleList((prev) =>
-                          prev.map((r, i) =>
-                            i === idx
-                              ? { ...r, cacahStatus: e.target.value }
-                              : r
-                          )
-                        )
-                      }
-                      className="px-2 py-1 border rounded-md text-xs"
-                    >
-                      <option value="Belum_Cacah">Belum Dicacah</option>
-                      <option value="Selesai">Selesai</option>
-                      <option value="Drop_Out">Drop Out</option>
-                    </select>
-
-                    {/* status persetujuan */}
-                    <select
-                      value={row.approvalStatus}
-                      onChange={(e) =>
-                        setSampleList((prev) =>
-                          prev.map((r, i) =>
-                            i === idx
-                              ? { ...r, approvalStatus: e.target.value }
-                              : r
-                          )
-                        )
-                      }
-                      className="px-2 py-1 border rounded-md text-xs"
-                    >
-                      <option value="Menunggu">Menunggu</option>
-                      <option value="Disetujui">Disetujui</option>
-                      <option value="Ditolak">Ditolak</option>
-                    </select>
-
-                    {/* geotag */}
-                    <input
-                      placeholder="Lat"
-                      value={row.geoLat ?? ""}
-                      onChange={(e) =>
-                        setSampleList((prev) =>
-                          prev.map((r, i) =>
-                            i === idx ? { ...r, geoLat: e.target.value } : r
-                          )
-                        )
-                      }
-                      className="px-2 py-1 border rounded-md text-xs"
-                    />
-                    <input
-                      placeholder="Lng"
-                      value={row.geoLng ?? ""}
-                      onChange={(e) =>
-                        setSampleList((prev) =>
-                          prev.map((r, i) =>
-                            i === idx ? { ...r, geoLng: e.target.value } : r
-                          )
-                        )
-                      }
-                      className="px-2 py-1 border rounded-md text-xs"
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* <div>
-              <label
-                htmlFor="totalAssigned"
-                className="block text-sm font-bold mb-2"
-              >
-                Total Sampel Petugas
-              </label>
-              <input
-                type="number"
-                id="totalAssigned"
-                min={0}
-                value={userProgressForm.totalAssigned}
-                onChange={(e) => {
-                  const raw = Number(e.target.value);
-                  const capped = userProgressForm.subSurveyActivityId
-                    ? Math.min(Math.max(0, raw), remainingQuotaForAdd)
-                    : Math.max(0, raw);
-                  setUserProgressForm((prev) => ({
-                    ...prev,
-                    totalAssigned: capped,
-                  }));
-                }}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="submitCount"
-                className="block text-sm font-bold mb-2"
-              >
-                Jumlah Submit
-              </label>
-              <input
-                id="submitCount"
-                type="number"
-                value={userProgressForm.submitCount}
-                onChange={handleChangeUserProgress}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="approvedCount"
-                className="block text-sm font-bold mb-2"
-              >
-                Jumlah Approved
-              </label>
-              <input
-                id="approvedCount"
-                type="number"
-                value={userProgressForm.approvedCount}
-                onChange={handleChangeUserProgress}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="rejectedCount"
-                className="block text-sm font-bold mb-2"
-              >
-                Jumlah Rejected
-              </label>
-              <input
-                id="rejectedCount"
-                type="number"
-                value={userProgressForm.rejectedCount}
-                onChange={handleChangeUserProgress}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
-            </div> */}
-
             <div>
               <label
                 htmlFor="districtId"
@@ -2094,6 +1965,7 @@ function Admin() {
                 type="text"
                 value={userProgressForm.villageName}
                 onChange={handleChangeUserProgress}
+                placeholder="Tuliskan Nama Desa"
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
@@ -2110,6 +1982,7 @@ function Admin() {
                 type="text"
                 value={userProgressForm.blockCount}
                 onChange={handleChangeUserProgress}
+                placeholder="Tuliskan Nama Blok"
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
@@ -2126,6 +1999,7 @@ function Admin() {
                 type="number"
                 value={userProgressForm.travelBill}
                 onChange={handleChangeUserProgress}
+                placeholder="Sertakan Jumlah Honor"
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               />
               {userProgressForm.userId && (
@@ -2137,6 +2011,129 @@ function Admin() {
                   {willExceedAdd && "— Melebihi limit!"}
                 </p>
               )}
+            </div>
+            <div className="md:col-span-2 border rounded-md p-3 bg-white">
+              <div className="flex justify-between items-center mb-2">
+                <h4 className="font-bold text-sm">Daftar Sampel Petugas</h4>
+                <div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSampleList((prev) => [
+                        ...prev,
+                        {
+                          nus: "",
+                          cacahStatus: "Belum_Cacah",
+                          approvalStatus: "Menunggu",
+                          geoLat: "",
+                          geoLng: "",
+                        },
+                      ])
+                    }
+                    className="flex flex-row items-center justify-center px-3 rounded-md cursor-pointer bg-[#2190ff] min-h-[30px] w-full font-Poppins font-semibold text-white hover:bg-[#1977cc] transition-colors text-sm"
+                  >
+                    + Tambah Baris
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                <div className="overflow-x-auto">
+                  <div className="min-w-[720px] md:min-w-0 px-1">
+                    {sampleList.map((row, idx) => (
+                      <div
+                        key={idx}
+                        className="flex gap-2 items-center my-2 w-full"
+                      >
+                        <input
+                          placeholder="NUS"
+                          value={row.nus}
+                          onChange={(e) =>
+                            setSampleList((prev) =>
+                              prev.map((r, i) =>
+                                i === idx ? { ...r, nus: e.target.value } : r
+                              )
+                            )
+                          }
+                          className="w-full sm:col-span-2 md:col-span-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                        />
+
+                        <select
+                          value={row.cacahStatus}
+                          onChange={(e) =>
+                            setSampleList((prev) =>
+                              prev.map((r, i) =>
+                                i === idx
+                                  ? { ...r, cacahStatus: e.target.value }
+                                  : r
+                              )
+                            )
+                          }
+                          className="w-full px-3 py-2 border rounded-md bg-white text-sm"
+                        >
+                          <option value="Belum_Cacah">Belum Dicacah</option>
+                          <option value="Selesai">Selesai</option>
+                          {/* <option value="Drop_Out">Drop Out</option> */}
+                        </select>
+
+                        <select
+                          value={row.approvalStatus}
+                          onChange={(e) =>
+                            setSampleList((prev) =>
+                              prev.map((r, i) =>
+                                i === idx
+                                  ? { ...r, approvalStatus: e.target.value }
+                                  : r
+                              )
+                            )
+                          }
+                          className="w-full px-3 py-2 border rounded-md bg-white text-sm"
+                        >
+                          <option value="Menunggu">Menunggu</option>
+                          <option value="Disetujui">Disetujui</option>
+                          <option value="Ditolak">Ditolak</option>
+                        </select>
+
+                        <input
+                          placeholder="Lat"
+                          value={row.geoLat ?? ""}
+                          onChange={(e) =>
+                            setSampleList((prev) =>
+                              prev.map((r, i) =>
+                                i === idx ? { ...r, geoLat: e.target.value } : r
+                              )
+                            )
+                          }
+                          className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                        />
+                        <input
+                          placeholder="Lng"
+                          value={row.geoLng ?? ""}
+                          onChange={(e) =>
+                            setSampleList((prev) =>
+                              prev.map((r, i) =>
+                                i === idx ? { ...r, geoLng: e.target.value } : r
+                              )
+                            )
+                          }
+                          className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSampleList((prev) =>
+                              prev.filter((_, i) => i !== idx)
+                            );
+                          }}
+                          className="px-3 py-2 border rounded-md text-sm bg-red-500 text-white hover:bg-red-600 transition-colors font-semibold"
+                        >
+                          Hapus
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="md:col-span-2 flex justify-end">
@@ -2257,85 +2254,6 @@ function Admin() {
                 </p>
               )}
             </div>
-
-            <div>
-              <label
-                htmlFor="totalAssigned"
-                className="block text-sm font-bold mb-2"
-              >
-                Total Sampel Petugas
-              </label>
-              <input
-                id="totalAssigned"
-                type="number"
-                min={0}
-                value={updateUserProgressForm.totalAssigned}
-                onChange={(e) => {
-                  const raw = Number(e.target.value);
-                  const capped = updateUserProgressForm.subSurveyActivityId
-                    ? Math.min(Math.max(0, raw), allowedMaxForUpdate)
-                    : Math.max(0, raw);
-                  setUpdateUserProgressForm((prev) => ({
-                    ...prev,
-                    totalAssigned: capped,
-                  }));
-                }}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
-              {updateUserProgressForm.subSurveyActivityId && (
-                <p className="mt-1 text-xs text-gray-600">
-                  Maksimal alokasi terbaru untuk petugas ini:{" "}
-                  <b>{allowedMaxForUpdate}</b>
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label
-                htmlFor="submitCount"
-                className="block text-sm font-bold mb-2"
-              >
-                Jumlah Submit
-              </label>
-              <input
-                id="submitCount"
-                type="number"
-                value={updateUserProgressForm.submitCount}
-                onChange={handleChangeUpdateUserProgress}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="approvedCount"
-                className="block text-sm font-bold mb-2"
-              >
-                Jumlah Approved
-              </label>
-              <input
-                id="approvedCount"
-                type="number"
-                value={updateUserProgressForm.approvedCount}
-                onChange={handleChangeUpdateUserProgress}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="rejectedCount"
-                className="block text-sm font-bold mb-2"
-              >
-                Jumlah Rejected
-              </label>
-              <input
-                id="rejectedCount"
-                type="number"
-                value={updateUserProgressForm.rejectedCount}
-                onChange={handleChangeUpdateUserProgress}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
-            </div>
-
             <div>
               <label
                 htmlFor="districtId"
@@ -2371,6 +2289,7 @@ function Admin() {
                 type="text"
                 value={updateUserProgressForm.villageName}
                 onChange={handleChangeUpdateUserProgress}
+                placeholder="Tuliskan Nama Desa"
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
@@ -2387,6 +2306,7 @@ function Admin() {
                 type="number"
                 value={updateUserProgressForm.travelBill}
                 onChange={handleChangeUpdateUserProgress}
+                placeholder="Sertakan Jumlah Honor"
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               />
               {currentUP?.userId && (
@@ -2401,13 +2321,154 @@ function Admin() {
                 </p>
               )}
             </div>
+            {/* === Daftar Sampel Petugas (UPDATE) === */}
+            <div className="md:col-span-2 border rounded-md p-3 bg-white">
+              <div className="flex justify-between items-center mb-2">
+                <h4 className="font-bold text-sm">Daftar Sampel Petugas</h4>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSampleList((prev) => [
+                      ...prev,
+                      {
+                        nus: "",
+                        cacahStatus: "Belum_Cacah",
+                        approvalStatus: "Menunggu",
+                        geoLat: "",
+                        geoLng: "",
+                      },
+                    ])
+                  }
+                  className="flex flex-row items-center justify-center px-3 rounded-md cursor-pointer bg-[#2190ff] min-h-[30px] font-Poppins font-semibold text-white hover:bg-[#1977cc] transition-colors text-sm"
+                  disabled={!updateUserProgressForm.userProgressId}
+                  title={
+                    !updateUserProgressForm.userProgressId
+                      ? "Pilih Petugas dulu"
+                      : ""
+                  }
+                >
+                  + Tambah Baris
+                </button>
+              </div>
+
+              {!updateUserProgressForm.userProgressId ? (
+                <div className="text-xs text-gray-600">
+                  Pilih Petugas terlebih dahulu untuk memuat sampel.
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  <div className="overflow-x-auto">
+                    <div className="min-w-[720px] md:min-w-0 px-1">
+                      {sampleList.map((row, idx) => (
+                        <div
+                          key={idx}
+                          className="flex gap-2 items-center my-2 w-full"
+                        >
+                          <input
+                            placeholder="NUS"
+                            value={row.nus}
+                            onChange={(e) =>
+                              setSampleList((prev) =>
+                                prev.map((r, i) =>
+                                  i === idx ? { ...r, nus: e.target.value } : r
+                                )
+                              )
+                            }
+                            className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                          />
+
+                          <select
+                            value={row.cacahStatus}
+                            onChange={(e) =>
+                              setSampleList((prev) =>
+                                prev.map((r, i) =>
+                                  i === idx
+                                    ? { ...r, cacahStatus: e.target.value }
+                                    : r
+                                )
+                              )
+                            }
+                            className="w-full px-3 py-2 border rounded-md bg-white text-sm"
+                          >
+                            <option value="Belum_Cacah">Belum Dicacah</option>
+                            <option value="Selesai">Selesai</option>
+                            {/* <option value="Drop_Out">Drop Out</option> */}
+                          </select>
+
+                          <select
+                            value={row.approvalStatus}
+                            onChange={(e) =>
+                              setSampleList((prev) =>
+                                prev.map((r, i) =>
+                                  i === idx
+                                    ? { ...r, approvalStatus: e.target.value }
+                                    : r
+                                )
+                              )
+                            }
+                            className="w-full px-3 py-2 border rounded-md bg-white text-sm"
+                          >
+                            <option value="Menunggu">Menunggu</option>
+                            <option value="Disetujui">Disetujui</option>
+                            <option value="Ditolak">Ditolak</option>
+                          </select>
+
+                          <input
+                            placeholder="Lat"
+                            value={row.geoLat ?? ""}
+                            onChange={(e) =>
+                              setSampleList((prev) =>
+                                prev.map((r, i) =>
+                                  i === idx
+                                    ? { ...r, geoLat: e.target.value }
+                                    : r
+                                )
+                              )
+                            }
+                            className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                          />
+
+                          <input
+                            placeholder="Lng"
+                            value={row.geoLng ?? ""}
+                            onChange={(e) =>
+                              setSampleList((prev) =>
+                                prev.map((r, i) =>
+                                  i === idx
+                                    ? { ...r, geoLng: e.target.value }
+                                    : r
+                                )
+                              )
+                            }
+                            className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                          />
+
+                          {/* Hapus baris dari UI */}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSampleList((prev) =>
+                                prev.filter((_, i) => i !== idx)
+                              )
+                            }
+                            className="px-3 py-2 border rounded-md text-sm bg-red-500 text-white hover:bg-red-600 transition-colors font-semibold"
+                          >
+                            Hapus
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
 
             <div className="md:col-span-2 flex gap-2">
               {deleteMode ? (
                 <button
                   type="button"
                   onClick={handleDeleteUserProgress}
-                  className="px-4 py-2 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 w-full"
+                  className="my-2 px-6 py-3 rounded-full bg-red-600 text-white font-semibold hover:bg-red-700 w-full"
                 >
                   Hapus Petugas
                 </button>

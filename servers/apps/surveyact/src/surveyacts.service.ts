@@ -257,6 +257,7 @@ export class SurveyActivityService {
         subSurveyActivity: true,
         district: true,
         supervisor: true,
+        samples: true,
       },
     });
   }
@@ -269,6 +270,7 @@ export class SurveyActivityService {
         subSurveyActivity: true,
         district: true,
         supervisor: true,
+        samples: true,
       },
     });
   }

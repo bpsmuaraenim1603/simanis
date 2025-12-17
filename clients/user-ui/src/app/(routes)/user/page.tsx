@@ -3,7 +3,7 @@
 import HUComboBox from "@/src/components/HUCombobox";
 import { GET_USER_PROGRESS_BY_USER_ID } from "@/src/graphql/actions/find-usersurveyprogressbyuser.action";
 import { PATCH_USER_SAMPLES } from "@/src/graphql/actions/patch-usersamples.action";
-import { UPDATE_USER_PROGRESS } from "@/src/graphql/actions/update-userprogress.action";
+// import { UPDATE_USER_PROGRESS } from "@/src/graphql/actions/update-userprogress.action";
 import useUser from "@/src/hooks/useUser";
 import styles from "@/src/utils/style";
 import { useLazyQuery, useMutation } from "@apollo/client";
@@ -60,7 +60,8 @@ export default function UserPage() {
     if (user?.id) fetchUserProgress({ variables: { userId: user.id } });
   }, [user?.id, fetchUserProgress]);
 
-  const [updateUserSurveyProgress] = useMutation(UPDATE_USER_PROGRESS);
+  const [patchUserSamples, { loading: patching }] =
+    useMutation(PATCH_USER_SAMPLES);
 
   const currentUP = useMemo(() => {
     const rows = userProgressData?.userProgressSurveyByUserId ?? [];
@@ -87,176 +88,15 @@ export default function UserPage() {
   const rawType = currentUP?.subSurveyActivity?.activityType ?? "";
   const isListing = rawType.toLowerCase() === "listing";
 
-  const sum =
-    updateUserProgressForm.submitCount +
-    updateUserProgressForm.approvedCount +
-    updateUserProgressForm.rejectedCount;
-
-  const canIncSubmit = isListing
-    ? true
-    : sum < updateUserProgressForm.totalAssigned;
-  const canDecSubmit = updateUserProgressForm.submitCount > 0;
-
-  const canIncApproved = updateUserProgressForm.submitCount > 0;
-  const canDecApproved = updateUserProgressForm.approvedCount > 0;
-
-  const canIncRejected = updateUserProgressForm.submitCount > 0;
-  const canDecRejected = updateUserProgressForm.rejectedCount > 0;
-
-  const canFixSubmit = updateUserProgressForm.rejectedCount > 0;
-
-  const clamp = (x: number, min = 0, max = Number.POSITIVE_INFINITY) =>
-    Math.min(max, Math.max(min, Number.isFinite(x) ? x : 0));
-
-  const [patchUserSamples, { loading: patching }] = useMutation(
-    PATCH_USER_SAMPLES,
-    {
-      refetchQueries: ["GetMyUserProgress"], // sesuaikan nama query kamu
-    }
-  );
-
-  const applyConstraints = (draft: typeof updateUserProgressForm) => {
-    let totalAssigned = clamp(Number(draft.totalAssigned), 0);
-    let submitCount = clamp(Number(draft.submitCount), 0);
-    let approvedCount = clamp(Number(draft.approvedCount), 0);
-    let rejectedCount = clamp(Number(draft.rejectedCount), 0);
-    let s = submitCount + approvedCount + rejectedCount;
-
-    if (isListing && s > totalAssigned) {
-      totalAssigned = s;
-    } else if (s > totalAssigned) {
-      let overflow = s - totalAssigned;
-      const takeFromSubmit = Math.min(overflow, submitCount);
-      submitCount -= takeFromSubmit;
-      overflow -= takeFromSubmit;
-      if (overflow > 0) {
-        const t = Math.min(overflow, rejectedCount);
-        rejectedCount -= t;
-        overflow -= t;
-      }
-      if (overflow > 0) {
-        const t = Math.min(overflow, approvedCount);
-        approvedCount -= t;
-      }
-    }
-
-    return {
-      ...draft,
-      totalAssigned,
-      submitCount,
-      approvedCount,
-      rejectedCount,
-    };
-  };
+  const [editableSamples, setEditableSamples] = useState<any[]>([]);
 
   useEffect(() => {
-    if (currentUP) {
-      setUpdateUserProgressForm((prev) =>
-        applyConstraints({
-          ...prev,
-          userProgressId: currentUP.id,
-          subSurveyActivityId: currentUP.subSurveyActivity?.id ?? "",
-          totalAssigned: Number(currentUP.totalAssigned ?? 0),
-          submitCount: Number(currentUP.submitCount ?? 0),
-          approvedCount: Number(currentUP.approvedCount ?? 0),
-          rejectedCount: Number(currentUP.rejectedCount ?? 0),
-          lastUpdated: new Date().toISOString(),
-          districtId: getDistrictId(currentUP),
-        })
-      );
+    if (currentUP?.samples) {
+      setEditableSamples(currentUP.samples.map((s: any) => ({ ...s })));
     } else {
-      setUpdateUserProgressForm((prev) => ({
-        ...prev,
-        userProgressId: "",
-        subSurveyActivityId: "",
-        totalAssigned: 0,
-        submitCount: 0,
-        approvedCount: 0,
-        rejectedCount: 0,
-        lastUpdated: "",
-        districtId: "",
-      }));
+      setEditableSamples([]);
     }
-  }, [currentUP]);
-
-  useEffect(() => {
-    setUpdateUserProgressForm((prev) => applyConstraints(prev));
-  }, [isListing, currentUP?.id]);
-
-  const step = (
-    field: "submitCount" | "approvedCount" | "rejectedCount" | "fixcount",
-    delta: number
-  ) => {
-    setUpdateUserProgressForm((prev) => {
-      let { submitCount, approvedCount, rejectedCount, totalAssigned } = prev;
-
-      if (field === "submitCount") {
-        if (delta > 0) {
-          if (
-            !isListing &&
-            submitCount + approvedCount + rejectedCount >= totalAssigned
-          ) {
-            toast.error(
-              "Tidak bisa menambah Submit di atas Total Sampel Petugas"
-            );
-            return prev;
-          }
-          submitCount += 1;
-        } else {
-          if (submitCount <= 0) return prev;
-          submitCount -= 1;
-        }
-      }
-
-      if (field === "approvedCount") {
-        if (delta > 0) {
-          if (submitCount <= 0) {
-            toast.error("Tidak ada pending untuk di-approve");
-            return prev;
-          }
-          submitCount -= 1;
-          approvedCount += 1;
-        } else {
-          if (approvedCount <= 0) return prev;
-          approvedCount -= 1;
-          submitCount += 1;
-        }
-      }
-
-      if (field === "rejectedCount") {
-        if (delta > 0) {
-          if (submitCount <= 0) {
-            toast.error("Tidak ada pending untuk di-reject");
-            return prev;
-          }
-          submitCount -= 1;
-          rejectedCount += 1;
-        } else {
-          if (rejectedCount <= 0) return prev;
-          rejectedCount -= 1;
-          submitCount += 1;
-        }
-      }
-
-      if (field === "fixcount") {
-        if (rejectedCount <= 0) {
-          toast.error("Tidak ada data yang perlu diperbaiki");
-          return prev;
-        } else {
-          submitCount += 1;
-          rejectedCount -= 1;
-        }
-      }
-
-      return applyConstraints({
-        ...prev,
-        submitCount,
-        approvedCount,
-        rejectedCount,
-        lastUpdated: new Date().toISOString(),
-      });
-    });
-  };
+  }, [currentUP?.id]);
 
   const subSurveyOptions = React.useMemo(() => {
     const rows = userProgressData?.userProgressSurveyByUserId ?? [];
@@ -327,48 +167,6 @@ export default function UserPage() {
     }
   };
 
-  const handleUpdateUserProgress = async (
-    e: React.FormEvent<HTMLFormElement>
-  ) => {
-    e.preventDefault();
-    try {
-      if (!updateUserProgressForm.userProgressId) {
-        toast.error("Pilih kegiatan survei terlebih dahulu.");
-        return;
-      }
-      const v0 = applyConstraints(updateUserProgressForm);
-      if (!isListing && v0.submitCount > v0.totalAssigned) {
-        toast.error("Jumlah Submit tidak boleh melebihi Total Sampel Petugas");
-        return;
-      }
-      const updateTotalAssigned =
-        v0.submitCount < v0.totalAssigned
-          ? (currentUP?.totalAssigned ?? 0)
-          : v0.totalAssigned;
-      await updateUserSurveyProgress({
-        variables: {
-          input: {
-            id: currentUP.id,
-            samples: currentUP.samples.map((s: any) => ({
-              id: s.id,
-              nus: s.nus,
-              cacahStatus: s.cacahStatus,
-              approvalStatus: s.approvalStatus,
-              geoLat: s.geoLat,
-              geoLng: s.geoLng,
-              geoCapturedAt: s.geoCapturedAt,
-            })),
-          },
-        },
-      });
-      await fetchUserProgress({ variables: { userId: user!.id } });
-      toast.success("UserProgress berhasil diupdate!");
-    } catch (err) {
-      toast.error("Gagal update user progress");
-      console.error(err);
-    }
-  };
-
   if (loading) {
     return (
       <div className="max-w-screen-xl mx-auto px-3 py-6 font-Poppins">
@@ -380,11 +178,78 @@ export default function UserPage() {
     return null;
   }
 
+  // async function patchOneSample(sample: any) {
+  //   const userProgressId =
+  //     currentUP?.id || updateUserProgressForm.userProgressId;
+  //   if (!userProgressId) return toast.error("Pilih kegiatan & blok dulu ya.");
+
+  //   try {
+  //     await patchUserSamples({
+  //       variables: {
+  //         input: {
+  //           userProgressId,
+  //           updateSamples: [
+  //             {
+  //               id: sample.id,
+  //               cacahStatus: sample.cacahStatus,
+  //               geoLat: sample.geoLat ?? null,
+  //               geoLng: sample.geoLng ?? null,
+  //               geoCapturedAt: new Date().toISOString(),
+  //             },
+  //           ],
+  //         },
+  //       },
+  //     });
+
+  //     await fetchUserProgress({ variables: { userId: user!.id } });
+  //     toast.success("Tersimpan");
+  //   } catch (e: any) {
+  //     showApolloError(e);
+  //   }
+  // }
+
+  async function patchAllSamples() {
+    const userProgressId =
+      currentUP?.id || updateUserProgressForm.userProgressId;
+    if (!userProgressId) return toast.error("Pilih kegiatan & blok dulu ya.");
+
+    try {
+      await patchUserSamples({
+        variables: {
+          input: {
+            userProgressId,
+            updateSamples: editableSamples.map((s) => ({
+              id: s.id,
+              cacahStatus: s.cacahStatus,
+              geoLat: s.geoLat ?? null,
+              geoLng: s.geoLng ?? null,
+              geoCapturedAt: new Date().toISOString(),
+            })),
+          },
+        },
+      });
+
+      await fetchUserProgress({ variables: { userId: user!.id } });
+      toast.success("Semua sampel tersimpan");
+    } catch (e: any) {
+      showApolloError(e);
+    }
+  }
+
   async function patchSample(sample: any) {
+    const userProgressId =
+      currentUP?.id || updateUserProgressForm.userProgressId;
+    if (!userProgressId) {
+      toast.error(
+        "User progress belum dipilih. Pilih kegiatan & blok dulu ya."
+      );
+      return;
+    }
+
     await patchUserSamples({
       variables: {
         input: {
-          userProgressId: userProgress.id,
+          userProgressId,
           updateSamples: [
             {
               id: sample.id,
@@ -397,26 +262,68 @@ export default function UserPage() {
         },
       },
     });
+
+    await fetchUserProgress({ variables: { userId: user!.id } });
   }
 
-  function ambilLokasi(sampleId: string) {
-    navigator.geolocation.getCurrentPosition((pos) => {
-      patchUserSamples({
-        variables: {
-          input: {
-            userProgressId: userProgress.id,
-            updateSamples: [
-              {
-                id: sampleId,
-                geoLat: pos.coords.latitude,
-                geoLng: pos.coords.longitude,
-                geoCapturedAt: new Date().toISOString(),
+  function showApolloError(e: any) {
+    console.log("ApolloError message:", e?.message);
+    console.log("graphQLErrors:", e?.graphQLErrors);
+    console.log("networkError:", e?.networkError);
+    const msg =
+      e?.graphQLErrors?.[0]?.message ||
+      e?.networkError?.message ||
+      e?.message ||
+      "Terjadi error saat menyimpan.";
+    toast.error(msg);
+  }
+
+  function ambilLokasiDanPatch(sampleId: string) {
+    const userProgressId =
+      currentUP?.id || updateUserProgressForm.userProgressId;
+    if (!userProgressId) return toast.error("Pilih kegiatan & blok dulu ya.");
+
+    if (!navigator.geolocation) {
+      toast.error("Browser tidak mendukung lokasi.");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          await patchUserSamples({
+            variables: {
+              input: {
+                userProgressId,
+                updateSamples: [
+                  {
+                    id: sampleId,
+                    geoLat: pos.coords.latitude,
+                    geoLng: pos.coords.longitude,
+                    geoCapturedAt: new Date().toISOString(),
+                  },
+                ],
               },
-            ],
-          },
-        },
-      });
-    });
+            },
+          });
+
+          await fetchUserProgress({ variables: { userId: user!.id } });
+          toast.success("Lokasi tersimpan");
+        } catch (e: any) {
+          showApolloError(e);
+        }
+      },
+      (err) => {
+        // INI yang sebelumnya kamu belum punya
+        toast.error(`Gagal ambil lokasi: ${err.message}`);
+        console.log("Geolocation error:", err);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0,
+      }
+    );
   }
 
   return (
@@ -425,7 +332,7 @@ export default function UserPage() {
         <span>Panel Petugas</span>
       </div>
       <div className="bg-blue-100 rounded-lg p-4 shadow-md">
-        <form onSubmit={handleUpdateUserProgress} className="space-y-3">
+        <form onSubmit={(e) => e.preventDefault()} className="space-y-3">
           <h3 className="text-base md:text-lg font-bold">
             Update Data Petugas
           </h3>
@@ -484,179 +391,96 @@ export default function UserPage() {
             </div>
           </div>
 
-          <div>
-            <div className="flex flex-wrap gap-4">
-              <div className="flex-1 min-w-[200px]">
-                <label
-                  htmlFor="totalAssigned"
-                  className="block text-sm font-bold mb-1"
-                >
-                  {isListing ? "Total Listing Petugas" : "Total Sampel Petugas"}
-                </label>
-                <input
-                  id="totalAssigned"
-                  type="number"
-                  readOnly
-                  value={updateUserProgressForm.totalAssigned}
-                  className="w-full px-3 py-3 border rounded-md bg-white text-center text-xl sm:text-2xl cursor-default focus:outline-none"
-                />
-                <p className="mt-1 text-xs text-gray-600">
-                  {isListing
-                    ? "Listing: total = Submit + Approved + Rejected."
-                    : "Non-Listing: (Submit + Approved + Rejected) ≤ Total Sampel."}
-                </p>
-              </div>
-
-              {/* Approved */}
-              <div className="flex-1 min-w-[220px]">
-                <label
-                  htmlFor="approvedCount"
-                  className="block text-sm font-bold mb-1"
-                >
-                  Jumlah Approved Oleh PML
-                </label>
-                <div className="flex items-center gap-2">
-                  {/* <button
-                  type="button"
-                  onClick={() => step("approvedCount", -1)}
-                  disabled={
-                    !updateUserProgressForm.subSurveyActivityId ||
-                    !canDecApproved
-                  }
-                  className="px-3 py-2 border rounded-md font-bold bg-red-500 text-white hover:bg-red-600"
-                  aria-label="Kurangi Approved"
-                >
-                  -
-                </button> */}
-                  <input
-                    readOnly
-                    id="approvedCount"
-                    value={updateUserProgressForm.approvedCount}
-                    className="w-full px-3 py-3 border rounded-md bg-white text-center text-xl sm:text-2xl cursor-default focus:outline-none"
-                  />
-                  {/* <button
-                  type="button"
-                  onClick={() => step("approvedCount", +1)}
-                  disabled={
-                    !updateUserProgressForm.subSurveyActivityId ||
-                    !canIncApproved
-                  }
-                  className="px-3 py-2 border rounded-md font-bold bg-green-500 text-white hover:bg-green-600"
-                  aria-label="Tambah Approved"
-                >
-                  +
-                </button> */}
+          {currentUP?.id ? (
+            <div className="border rounded-md p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold">Daftar Sampel</h3>
+                <div className="text-xs opacity-70">
+                  Blok: {currentUP.blockCount ?? "-"}
                 </div>
               </div>
 
-              {/* Rejected */}
-              <div className="flex-1 min-w-[220px]">
-                <label
-                  htmlFor="rejectedCount"
-                  className="block text-sm font-bold mb-1"
-                >
-                  Jumlah Rejected Oleh PML
-                </label>
-                <div className="flex items-center gap-2">
-                  {/* <button
-                  type="button"
-                  onClick={() => step("rejectedCount", -1)}
-                  disabled={
-                    !updateUserProgressForm.subSurveyActivityId ||
-                    !canDecRejected
-                  }
-                  className="px-3 py-2 border rounded-md font-bold bg-red-500 text-white hover:bg-red-600"
-                  aria-label="Kurangi Rejected"
-                >
-                  -
-                </button> */}
-                  <input
-                    readOnly
-                    id="rejectedCount"
-                    value={updateUserProgressForm.rejectedCount}
-                    className="w-full px-3 py-3 border rounded-md bg-white text-center text-xl sm:text-2xl cursor-default focus:outline-none"
-                  />
-                  {/* <button
-                  type="button"
-                  onClick={() => step("rejectedCount", +1)}
-                  disabled={
-                    !updateUserProgressForm.subSurveyActivityId ||
-                    !canIncRejected
-                  }
-                  className="px-3 py-2 border rounded-md font-bold bg-green-500 text-white hover:bg-green-600"
-                  aria-label="Tambah Rejected"
-                >
-                  +
-                </button> */}
+              {editableSamples.length === 0 ? (
+                <div className="text-sm opacity-70">Belum ada sampel.</div>
+              ) : (
+                <div className="space-y-2">
+                  {editableSamples.map((s, idx) => (
+                    <div
+                      key={s.id}
+                      className="grid grid-cols-1 md:grid-cols-6 gap-2 items-center border rounded-md p-2"
+                    >
+                      <div className="text-sm font-medium">NUS: {s.nus}</div>
+
+                      {/* Status Pencacahan */}
+                      <select
+                        value={s.cacahStatus}
+                        onChange={(e) =>
+                          setEditableSamples((prev) =>
+                            prev.map((x, i) =>
+                              i === idx
+                                ? { ...x, cacahStatus: e.target.value }
+                                : x
+                            )
+                          )
+                        }
+                        className="w-full px-3 py-2 border rounded-md bg-white text-sm"
+                      >
+                        <option value="Belum_Cacah">Belum Dicacah</option>
+                        <option value="Selesai">Selesai</option>
+                        {/* <option value="Drop_Out">Drop Out</option> */}
+                      </select>
+
+                      {/* Status Persetujuan (read-only untuk petugas) */}
+                      <input
+                        value={s.approvalStatus ?? "Menunggu"}
+                        disabled
+                        className="w-full px-3 py-2 border rounded-md bg-white text-sm"
+                      />
+
+                      {/* Geotag info */}
+                      <div className="text-xs opacity-80">
+                        {s.geoLat && s.geoLng
+                          ? `${s.geoLat.toFixed?.(5) ?? s.geoLat}, ${s.geoLng.toFixed?.(5) ?? s.geoLng}`
+                          : "Belum ada lokasi"}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => ambilLokasiDanPatch(s.id)}
+                        className="border rounded-md px-2 py-1 text-sm"
+                        disabled={patching}
+                      >
+                        Ambil Lokasi
+                      </button>
+
+                      {/* <button
+                        type="button"
+                        onClick={() => patchOneSample(s)}
+                        className="border rounded-md px-2 py-1 text-sm"
+                        disabled={patching}
+                      >
+                        Simpan
+                      </button> */}
+                    </div>
+                  ))}
                 </div>
-              </div>
+              )}
             </div>
-
-            {/* Submit */}
-            <div className="flex-1 min-w-[220px] mt-4 mb-8 lg:px-72">
-              <label
-                htmlFor="submitCount"
-                className="block text-sm font-bold mb-1"
-              >
-                Jumlah Submit Oleh Petugas
-              </label>
-              <div>
-                <div className="flex gap-2 items-center">
-                  <button
-                    type="button"
-                    onClick={() => step("submitCount", -1)}
-                    disabled={
-                      !updateUserProgressForm.subSurveyActivityId ||
-                      !canDecSubmit
-                    }
-                    className="px-3 py-2 border rounded-md font-bold bg-red-500 text-white hover:bg-red-600"
-                    aria-label="Kurangi Submit"
-                  >
-                    -
-                  </button>
-                  <input
-                    readOnly
-                    id="submitCount"
-                    value={updateUserProgressForm.submitCount}
-                    className="w-full px-3 py-3 border rounded-md bg-white text-center text-xl sm:text-2xl cursor-default focus:outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => step("submitCount", +1)}
-                    disabled={
-                      !updateUserProgressForm.subSurveyActivityId ||
-                      !canIncSubmit
-                    }
-                    className="px-3 py-2 border rounded-md font-bold bg-green-500 text-white hover:bg-green-600"
-                    aria-label="Tambah Submit"
-                  >
-                    +
-                  </button>
-                </div>
-                <div className="flex justify-center mt-1">
-                  <button
-                    type="button"
-                    onClick={() => step("fixcount", 1)}
-                    disabled={
-                      !updateUserProgressForm.subSurveyActivityId ||
-                      !canFixSubmit
-                    }
-                    className="p-1 border rounded-md bg-blue-500 text-white text-center text-md hover:bg-blue-600"
-                    aria-label="Tambah Perbaikan"
-                  >
-                    Tambah perbaikan
-                  </button>
-                </div>
-              </div>
+          ) : (
+            <div className="text-sm opacity-70">
+              Pilih kegiatan dan blok untuk menampilkan sampel.
             </div>
-          </div>
+          )}
 
           <button
-            type="submit"
+            type="button"
+            onClick={patchAllSamples}
             className={`${styles.button} my-2 text-white w-full sm:w-auto`}
-            disabled={!updateUserProgressForm.userProgressId}
+            disabled={
+              !currentUP?.id || editableSamples.length === 0 || patching
+            }
           >
-            Simpan Perubahan
+            Simpan Semua Sampel
           </button>
         </form>
       </div>
