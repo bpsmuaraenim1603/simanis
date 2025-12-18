@@ -36,6 +36,7 @@ export const GET_USER_PROGRESS_BY_SUBSURVEY_ID = gql`
       samples {
         id
         nus
+        identity
         cacahStatus
         approvalStatus
         geoLat

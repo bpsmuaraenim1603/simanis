@@ -147,6 +147,9 @@ export class UserSampleType {
   @Field()
   nus: string;
 
+  @Field()
+  identity: string;
+
   @Field(() => CacahStatus)
   cacahStatus: CacahStatus;
 

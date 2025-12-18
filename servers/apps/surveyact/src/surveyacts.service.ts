@@ -31,7 +31,7 @@ import {
   User,
 } from '@prisma/client';
 import { HttpService } from '@nestjs/axios';
-import { lastValueFrom } from 'rxjs';
+import { identity, lastValueFrom } from 'rxjs';
 import {
   SubSurveyActivityType,
   SubSurveyProgressType,
@@ -339,11 +339,9 @@ export class SurveyActivityService {
         },
       });
 
-      // 3) kalau samples dikirim => replace semua child samples
       if (samples) {
         await tx.userSample.deleteMany({ where: { userProgressId: id } });
 
-        // validasi kecil: buang baris kosong (NUS kosong)
         const cleaned = samples.filter(
           (s) => String(s.nus ?? '').trim().length > 0,
         );
@@ -353,6 +351,7 @@ export class SurveyActivityService {
             data: cleaned.map((s) => ({
               userProgressId: id,
               nus: s.nus,
+              identity: s.identity,
               cacahStatus: s.cacahStatus,
               approvalStatus: s.approvalStatus,
               geoLat: s.geoLat ?? null,
@@ -437,6 +436,7 @@ export class SurveyActivityService {
           data: createSamples.map((s) => ({
             userProgressId,
             nus: s.nus,
+            identity: s.identity,
             cacahStatus: s.cacahStatus,
             approvalStatus: s.approvalStatus,
             geoLat: s.geoLat ?? null,

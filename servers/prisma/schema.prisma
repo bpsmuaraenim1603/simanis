@@ -41,7 +41,6 @@ enum AgreeState {
 enum CacahStatus {
   Belum_Cacah
   Selesai
-  Drop_Out
 }
 
 enum NotificationType {
@@ -54,7 +53,6 @@ enum NotificationType {
   CONTENT_ISSUE_CREATED
   SUBSURVEY_START_SOON
   SUBSURVEY_END_SOON
-  // tambah sesuai kebutuhan
 }
 
 enum TargetType {
@@ -138,20 +136,6 @@ model User {
   NotificationA Notification[] @relation("Notification_Actor")
 }
 
-// model Issue {
-//   id                  String            @id @default(uuid())
-//   content             String
-//   status              IssueStatus       @default(Waiting)
-//   createdAt           DateTime          @default(now())
-//   updatedAt           DateTime          @updatedAt
-//   userId              String
-//   user                User              @relation(fields: [userId], references: [id])
-//   subSurveyActivityId String
-//   subSurveyActivity   SubSurveyActivity @relation(fields: [subSurveyActivityId], references: [id])
-
-//   issueComments IssueComment[]
-// }
-
 model ContentIssue {
   id                  String            @id @default(uuid())
   content             String
@@ -205,6 +189,7 @@ model UserSample {
   userProgressId String
   userProgress   UserProgress @relation(fields: [userProgressId], references: [id], onDelete: Cascade)
   nus            String
+  identity       String
   cacahStatus    CacahStatus  @default(Belum_Cacah)
   approvalStatus AgreeState   @default(Menunggu)
   geoLat         Float?

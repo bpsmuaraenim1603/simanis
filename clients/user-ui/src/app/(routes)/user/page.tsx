@@ -14,6 +14,45 @@ import toast from "react-hot-toast";
 
 type SubSurveyOption = { id: string; name: string };
 
+function IconButton({
+  label,
+  onClick,
+  disabled,
+  className = "",
+  children,
+}: {
+  label: string;
+  onClick?: () => void;
+  disabled?: boolean;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label} // fallback tooltip native
+      className={`group relative inline-flex h-9 w-9 items-center justify-center rounded-md border
+                  text-white shadow-sm transition
+                  focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-0
+                  ${disabled ? "cursor-not-allowed opacity-50" : "hover:brightness-110"}
+                  ${className}`}
+    >
+      {children}
+      {/* Tooltip kustom */}
+      <span
+        className="pointer-events-none absolute -top-9 left-1/2 -translate-x-1/2
+                   whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-white
+                   opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition"
+      >
+        {label}
+      </span>
+    </button>
+  );
+}
+
 export default function UserPage() {
   const getDistrictId = (up: any) =>
     up?.districtId ??
@@ -89,10 +128,16 @@ export default function UserPage() {
   const isListing = rawType.toLowerCase() === "listing";
 
   const [editableSamples, setEditableSamples] = useState<any[]>([]);
+  const [locatingId, setLocatingId] = useState<string | null>(null);
+  const [resettingId, setResettingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (currentUP?.samples) {
-      setEditableSamples(currentUP.samples.map((s: any) => ({ ...s })));
+      const sorted = [...currentUP.samples].sort(
+        (a: any, b: any) => Number(a.nus) - Number(b.nus)
+      );
+
+      setEditableSamples(sorted.map((s: any) => ({ ...s })));
     } else {
       setEditableSamples([]);
     }
@@ -138,6 +183,12 @@ export default function UserPage() {
     return uniq.map((b) => ({ value: b, label: `Blok ${b}` }));
   }, [userProgressData, updateUserProgressForm.subSurveyActivityId]);
 
+  const toFloatOrNull = (v: any) => {
+    if (v === "" || v === null || v === undefined) return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+
   useEffect(() => {
     setSelectedBlock("");
   }, [updateUserProgressForm.subSurveyActivityId]);
@@ -178,36 +229,6 @@ export default function UserPage() {
     return null;
   }
 
-  // async function patchOneSample(sample: any) {
-  //   const userProgressId =
-  //     currentUP?.id || updateUserProgressForm.userProgressId;
-  //   if (!userProgressId) return toast.error("Pilih kegiatan & blok dulu ya.");
-
-  //   try {
-  //     await patchUserSamples({
-  //       variables: {
-  //         input: {
-  //           userProgressId,
-  //           updateSamples: [
-  //             {
-  //               id: sample.id,
-  //               cacahStatus: sample.cacahStatus,
-  //               geoLat: sample.geoLat ?? null,
-  //               geoLng: sample.geoLng ?? null,
-  //               geoCapturedAt: new Date().toISOString(),
-  //             },
-  //           ],
-  //         },
-  //       },
-  //     });
-
-  //     await fetchUserProgress({ variables: { userId: user!.id } });
-  //     toast.success("Tersimpan");
-  //   } catch (e: any) {
-  //     showApolloError(e);
-  //   }
-  // }
-
   async function patchAllSamples() {
     const userProgressId =
       currentUP?.id || updateUserProgressForm.userProgressId;
@@ -221,8 +242,8 @@ export default function UserPage() {
             updateSamples: editableSamples.map((s) => ({
               id: s.id,
               cacahStatus: s.cacahStatus,
-              geoLat: s.geoLat ?? null,
-              geoLng: s.geoLng ?? null,
+              geoLat: toFloatOrNull(s.geoLat),
+              geoLng: toFloatOrNull(s.geoLng),
               geoCapturedAt: new Date().toISOString(),
             })),
           },
@@ -234,36 +255,6 @@ export default function UserPage() {
     } catch (e: any) {
       showApolloError(e);
     }
-  }
-
-  async function patchSample(sample: any) {
-    const userProgressId =
-      currentUP?.id || updateUserProgressForm.userProgressId;
-    if (!userProgressId) {
-      toast.error(
-        "User progress belum dipilih. Pilih kegiatan & blok dulu ya."
-      );
-      return;
-    }
-
-    await patchUserSamples({
-      variables: {
-        input: {
-          userProgressId,
-          updateSamples: [
-            {
-              id: sample.id,
-              cacahStatus: sample.cacahStatus,
-              geoLat: sample.geoLat,
-              geoLng: sample.geoLng,
-              geoCapturedAt: new Date().toISOString(),
-            },
-          ],
-        },
-      },
-    });
-
-    await fetchUserProgress({ variables: { userId: user!.id } });
   }
 
   function showApolloError(e: any) {
@@ -278,18 +269,46 @@ export default function UserPage() {
     toast.error(msg);
   }
 
+  function openMap(lat: number, lng: number) {
+    const url = `https://www.google.com/maps?q=${lat},${lng}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  function fmtCoord(v: any, digits = 6) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n.toFixed(digits) : String(v ?? "");
+  }
+
   function ambilLokasiDanPatch(sampleId: string) {
     const userProgressId =
       currentUP?.id || updateUserProgressForm.userProgressId;
     if (!userProgressId) return toast.error("Pilih kegiatan & blok dulu ya.");
+
+    const sampleIndex = editableSamples.findIndex((s) => s.id === sampleId);
+    if (sampleIndex === -1)
+      return toast.error("Sample tidak ditemukan di state.");
 
     if (!navigator.geolocation) {
       toast.error("Browser tidak mendukung lokasi.");
       return;
     }
 
+    setLocatingId(sampleId);
+    const toastId = toast.loading("Sedang mengambil lokasi...");
+
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+
+        setEditableSamples((prev) =>
+          prev.map((s, i) =>
+            i === sampleIndex
+              ? { ...s, geoLat: lat, geoLng: lng, cacahStatus: "Selesai" }
+              : s
+          )
+        );
+
         try {
           await patchUserSamples({
             variables: {
@@ -298,8 +317,9 @@ export default function UserPage() {
                 updateSamples: [
                   {
                     id: sampleId,
-                    geoLat: pos.coords.latitude,
-                    geoLng: pos.coords.longitude,
+                    cacahStatus: "Selesai",
+                    geoLat: lat,
+                    geoLng: lng,
                     geoCapturedAt: new Date().toISOString(),
                   },
                 ],
@@ -307,23 +327,80 @@ export default function UserPage() {
             },
           });
 
+          toast.success("Lokasi tersimpan & status jadi Selesai", {
+            id: toastId,
+          });
           await fetchUserProgress({ variables: { userId: user!.id } });
-          toast.success("Lokasi tersimpan");
         } catch (e: any) {
+          toast.error("Gagal menyimpan lokasi", { id: toastId });
           showApolloError(e);
+          await fetchUserProgress({ variables: { userId: user!.id } });
+        } finally {
+          setLocatingId(null);
         }
       },
       (err) => {
-        // INI yang sebelumnya kamu belum punya
-        toast.error(`Gagal ambil lokasi: ${err.message}`);
-        console.log("Geolocation error:", err);
+        toast.error(`Gagal ambil lokasi: ${err.message}`, { id: toastId });
+        setLocatingId(null);
       },
-      {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 0,
-      }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
+  }
+
+  async function resetCacah(sampleId: string) {
+    const userProgressId =
+      currentUP?.id || updateUserProgressForm.userProgressId;
+    if (!userProgressId) return toast.error("Pilih kegiatan & blok dulu ya.");
+
+    const sampleIndex = editableSamples.findIndex((s) => s.id === sampleId);
+    if (sampleIndex === -1)
+      return toast.error("Sample tidak ditemukan di state.");
+    if (!window.confirm("Yakin ingin mereset sampel?")) return;
+
+    setResettingId(sampleId);
+    const toastId = toast.loading("Mereset pencacahan...");
+
+    setEditableSamples((prev) =>
+      prev.map((s, i) =>
+        i === sampleIndex
+          ? {
+              ...s,
+              cacahStatus: "Belum_Cacah",
+              geoLat: null,
+              geoLng: null,
+              geoCapturedAt: null,
+            }
+          : s
+      )
+    );
+
+    try {
+      await patchUserSamples({
+        variables: {
+          input: {
+            userProgressId,
+            updateSamples: [
+              {
+                id: sampleId,
+                cacahStatus: "Belum_Cacah",
+                geoLat: null,
+                geoLng: null,
+                geoCapturedAt: null,
+              },
+            ],
+          },
+        },
+      });
+
+      toast.success("Berhasil direset", { id: toastId });
+      await fetchUserProgress({ variables: { userId: user!.id } });
+    } catch (e: any) {
+      toast.error("Gagal reset", { id: toastId });
+      showApolloError(e);
+      await fetchUserProgress({ variables: { userId: user!.id } });
+    } finally {
+      setResettingId(null);
+    }
   }
 
   return (
@@ -383,84 +460,192 @@ export default function UserPage() {
                   blockHUOptions.length === 0
                 }
               />
-              {!!selectedBlock && (
-                <p className="mt-1 text-xs text-gray-600">
-                  Menampilkan data untuk <b>Blok {selectedBlock}</b>.
-                </p>
-              )}
             </div>
           </div>
 
-          {currentUP?.id ? (
-            <div className="border rounded-md p-3 space-y-3">
+          {selectedBlock ? (
+            <div className="border rounded-md space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="font-semibold">Daftar Sampel</h3>
-                <div className="text-xs opacity-70">
-                  Blok: {currentUP.blockCount ?? "-"}
-                </div>
+                <h3 className="font-semibold">
+                  Daftar Sampel ({editableSamples.length} Baris)
+                </h3>
               </div>
 
               {editableSamples.length === 0 ? (
                 <div className="text-sm opacity-70">Belum ada sampel.</div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-2 bg-white p-2 rounded-md border">
                   {editableSamples.map((s, idx) => (
                     <div
                       key={s.id}
-                      className="grid grid-cols-1 md:grid-cols-6 gap-2 items-center border rounded-md p-2"
+                      className="sm:flex sm:justify-between grid grid-cols-1 gap-2 items-center border rounded-md p-2"
                     >
-                      <div className="text-sm font-medium">NUS: {s.nus}</div>
+                      <div className="text-sm font-semibold w-full">
+                        NUS: {s.nus}
+                      </div>
+
+                      {/* Nama Sampel */}
+                      <input
+                        value={s.identity}
+                        readOnly
+                        className="w-full px-3 py-2 border rounded-md bg-white text-sm font-semibold focus:outline-none cursor-default"
+                      />
 
                       {/* Status Pencacahan */}
-                      <select
-                        value={s.cacahStatus}
-                        onChange={(e) =>
-                          setEditableSamples((prev) =>
-                            prev.map((x, i) =>
-                              i === idx
-                                ? { ...x, cacahStatus: e.target.value }
-                                : x
-                            )
-                          )
+                      <input
+                        value={
+                          s.cacahStatus === "Selesai"
+                            ? "Selesai"
+                            : "Belum Dicacah"
                         }
-                        className="w-full px-3 py-2 border rounded-md bg-white text-sm"
-                      >
-                        <option value="Belum_Cacah">Belum Dicacah</option>
-                        <option value="Selesai">Selesai</option>
-                        {/* <option value="Drop_Out">Drop Out</option> */}
-                      </select>
+                        readOnly
+                        className={`w-full px-3 py-2 border rounded-md ${s.cacahStatus === "Selesai" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"} text-sm font-semibold focus:outline-none cursor-default`}
+                      />
 
                       {/* Status Persetujuan (read-only untuk petugas) */}
                       <input
                         value={s.approvalStatus ?? "Menunggu"}
                         disabled
-                        className="w-full px-3 py-2 border rounded-md bg-white text-sm"
+                        className={`w-full px-3 py-2 border rounded-md ${s.approvalStatus === "Disetujui" ? "bg-green-50 text-green-700" : s.approvalStatus == "Ditolak" ? "bg-red-50 text-red-700" : "bg-yellow-50 text-yellow-700"} text-sm font-semibold focus:outline-none`}
                       />
 
-                      {/* Geotag info */}
-                      <div className="text-xs opacity-80">
-                        {s.geoLat && s.geoLng
-                          ? `${s.geoLat.toFixed?.(5) ?? s.geoLat}, ${s.geoLng.toFixed?.(5) ?? s.geoLng}`
-                          : "Belum ada lokasi"}
+                      <div className="flex gap-2 flex-wrap justify-end w-full">
+                        {s.geoLat && s.geoLng ? (
+                          <IconButton
+                            label={`Lihat Lokasi (${fmtCoord(s.geoLat)}, ${fmtCoord(s.geoLng)})`}
+                            onClick={() =>
+                              openMap(Number(s.geoLat), Number(s.geoLng))
+                            }
+                            className="bg-purple-600 border-purple-600 hover:bg-purple-500"
+                          >
+                            {/* icon lokasi */}
+                            <svg
+                              viewBox="0 0 24 24"
+                              className="h-5 w-5"
+                              aria-hidden="true"
+                            >
+                              <path
+                                d="M12 21s7-4.35 7-11a7 7 0 1 0-14 0c0 6.65 7 11 7 11z"
+                                fill="currentColor"
+                                opacity=".15"
+                              />
+                              <path
+                                d="M12 21s7-4.35 7-11a7 7 0 1 0-14 0c0 6.65 7 11 7 11z"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                              />
+                              <path
+                                d="M12 11.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                              />
+                            </svg>
+                          </IconButton>
+                        ) : (
+                          <IconButton
+                            label="Koordinat belum tersedia"
+                            disabled
+                            className="bg-purple-200 border-purple-200 text-purple-800"
+                          >
+                            <svg
+                              viewBox="0 0 24 24"
+                              className="h-5 w-5"
+                              aria-hidden="true"
+                            >
+                              <path
+                                d="M12 21s7-4.35 7-11a7 7 0 1 0-14 0c0 6.65 7 11 7 11z"
+                                fill="currentColor"
+                                opacity=".15"
+                              />
+                              <path
+                                d="M7 7l10 10"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                              />
+                            </svg>
+                          </IconButton>
+                        )}
+                        <IconButton
+                          label={
+                            locatingId === s.id
+                              ? "Mengambil Lokasi..."
+                              : s.cacahStatus === "Selesai"
+                                ? "Sudah Dicacah"
+                                : "Mulai Pencacahan"
+                          }
+                          onClick={() => ambilLokasiDanPatch(s.id)}
+                          disabled={
+                            s.cacahStatus === "Selesai" ||
+                            locatingId === s.id ||
+                            resettingId === s.id
+                          }
+                          className="bg-blue-600 border-blue-600 hover:bg-blue-500"
+                        >
+                          {/* icon pensil */}
+                          <svg
+                            viewBox="0 0 24 24"
+                            className="h-5 w-5"
+                            aria-hidden="true"
+                          >
+                            <path
+                              d="M4 20h4l10.5-10.5a1.5 1.5 0 0 0 0-2.1l-1.9-1.9a1.5 1.5 0 0 0-2.1 0L4 16v4z"
+                              fill="currentColor"
+                              opacity=".15"
+                            />
+                            <path
+                              d="M4 20h4l10.5-10.5a1.5 1.5 0 0 0 0-2.1l-1.9-1.9a1.5 1.5 0 0 0-2.1 0L4 16v4z"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinejoin="round"
+                            />
+                            <path
+                              d="M13.5 6.5l4 4"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                            />
+                          </svg>
+                        </IconButton>
+                        {s.cacahStatus === "Selesai" && (
+                          <IconButton
+                            label={
+                              resettingId === s.id ? "Mereset..." : "Reset"
+                            }
+                            onClick={() => resetCacah(s.id)}
+                            disabled={
+                              resettingId === s.id || locatingId === s.id
+                            }
+                            className="bg-red-600 border-red-600 hover:bg-red-500"
+                          >
+                            {/* icon reset */}
+                            <svg
+                              viewBox="0 0 24 24"
+                              className="h-5 w-5"
+                              aria-hidden="true"
+                            >
+                              <path
+                                d="M21 12a9 9 0 1 1-2.64-6.36"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                              />
+                              <path
+                                d="M21 5v6h-6"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                              />
+                            </svg>
+                          </IconButton>
+                        )}
                       </div>
-
-                      <button
-                        type="button"
-                        onClick={() => ambilLokasiDanPatch(s.id)}
-                        className="border rounded-md px-2 py-1 text-sm"
-                        disabled={patching}
-                      >
-                        Ambil Lokasi
-                      </button>
-
-                      {/* <button
-                        type="button"
-                        onClick={() => patchOneSample(s)}
-                        className="border rounded-md px-2 py-1 text-sm"
-                        disabled={patching}
-                      >
-                        Simpan
-                      </button> */}
                     </div>
                   ))}
                 </div>
@@ -472,16 +657,18 @@ export default function UserPage() {
             </div>
           )}
 
-          <button
-            type="button"
-            onClick={patchAllSamples}
-            className={`${styles.button} my-2 text-white w-full sm:w-auto`}
-            disabled={
-              !currentUP?.id || editableSamples.length === 0 || patching
-            }
-          >
-            Simpan Semua Sampel
-          </button>
+          {/* <div className="md:col-span-2 flex justify-end">
+            <button
+              type="button"
+              onClick={patchAllSamples}
+              className={`${styles.button} my-2 text-white w-full sm:w-auto`}
+              disabled={
+                !currentUP?.id || editableSamples.length === 0 || patching
+              }
+            >
+              Simpan Semua Sampel
+            </button>
+          </div> */}
         </form>
       </div>
     </div>

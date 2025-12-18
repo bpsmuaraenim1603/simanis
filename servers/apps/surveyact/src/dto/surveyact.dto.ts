@@ -185,6 +185,9 @@ export class UserSampleInput {
   @Field()
   nus: string;
 
+  @Field()
+  identity: string;
+
   @Field(() => CacahStatus, { defaultValue: CacahStatus.Belum_Cacah })
   cacahStatus: CacahStatus;
 

@@ -42,7 +42,8 @@ const splitLink = split(
         definition.name.value.toLowerCase().includes("survey") ||
         definition.name.value.toLowerCase().includes("spj") ||
         definition.name.value.toLowerCase().includes("jobletter") ||
-        definition.name.value.toLowerCase().includes("issue")
+        definition.name.value.toLowerCase().includes("issue") ||
+        definition.name.value.toLowerCase().includes("patchuser")
       );
     }
     return false; // fallback, selalu return boolean

@@ -31,7 +31,6 @@ import HUComboBox from "@/src/components/HUCombobox";
 import HUSelect from "@/src/components/HUSelect";
 import useUser from "@/src/hooks/useUser";
 import { useRouter } from "next/navigation";
-import { PATCH_USER_SAMPLES } from "@/src/graphql/actions/patch-usersamples.action";
 
 /* ====== (type definitions sama persis dengan punyamu) ====== */
 type SurveyActivity = { id: string; name: string; slug: string };
@@ -159,6 +158,7 @@ function Admin() {
   const { user: currentUser, loading: userLoading } = useUser();
   const router = useRouter();
   const ALLOWED = new Set(["Superadmin", "Admin"]);
+  const formatNUS = (n: number) => String(n).padStart(3, "0");
 
   React.useEffect(() => {
     if (userLoading) return;
@@ -236,24 +236,17 @@ function Admin() {
     villageName: "",
     travelBill: "",
   });
-  const [sampleList, setSampleList] = useState<
-    {
-      id?: string;
-      nus: string;
-      cacahStatus: string;
-      approvalStatus: string;
-      geoLat?: string;
-      geoLng?: string;
-    }[]
-  >([
-    {
-      nus: "",
-      cacahStatus: "Belum_Cacah",
-      approvalStatus: "Menunggu",
-      geoLat: "",
-      geoLng: "",
-    },
-  ]);
+  const emptySampleRow = {
+    nus: "",
+    identity: "",
+    cacahStatus: "Belum_Cacah",
+    approvalStatus: "Menunggu",
+    geoLat: "",
+    geoLng: "",
+  };
+
+  const [sampleListAdd, setSampleListAdd] = useState([emptySampleRow]);
+  const [sampleListUpdate, setSampleListUpdate] = useState([emptySampleRow]);
   const [qSupervisor, setQSupervisor] = useState("");
   const [qEnumerator, setQEnumerator] = useState("");
   const [qUPUser, setQUPUser] = useState("");
@@ -328,8 +321,6 @@ function Admin() {
   const [deleteSurveyActivity] = useMutation(DELETE_SURVEY_ACTIVITY);
   const [deleteSubSurveyActivity] = useMutation(DELETE_SUBSURVEY_ACTIVITY);
   const [deleteUserProgressMut] = useMutation(DELETE_USER_SURVEY_PROGRESS);
-  const [patchUserSamples, { loading: patching }] =
-    useMutation(PATCH_USER_SAMPLES);
 
   const toDateInput = (d?: string | Date) =>
     d ? new Date(d).toISOString().slice(0, 10) : "";
@@ -571,15 +562,9 @@ function Admin() {
           toast.error("Sisa sampel sudah habis untuk kegiatan ini.");
           return;
         }
-        // if (usedUserIdsForAdd.has(userProgressForm.userId)) {
-        //   toast.error("Petugas ini sudah ditugaskan pada kegiatan ini.");
-        //   return;
-        // }
       }
 
-      // Validasi limit_bill (lintas kegiatan)
       if (userProgressForm.userId) {
-        // pastikan data akumulasi sudah ada; kalau belum, aman panggil dulu (edge)
         if (!upByUserData) {
           await fetchUserProgressByUser({
             variables: { userId: userProgressForm.userId },
@@ -609,8 +594,9 @@ function Admin() {
             submitCount: 0,
             approvedCount: 0,
             rejectedCount: 0,
-            samples: sampleList.map((s) => ({
-              nus: s.nus,
+            samples: sampleListAdd.map((s, idx) => ({
+              nus: formatNUS(idx + 1),
+              identity: s.identity,
               cacahStatus: s.cacahStatus,
               approvalStatus: s.approvalStatus,
               geoLat: s.geoLat ? Number(s.geoLat) : null,
@@ -637,15 +623,7 @@ function Admin() {
         travelBill: "",
         superVisorId: userProgressForm.superVisorId,
       });
-      setSampleList([
-        {
-          nus: "",
-          cacahStatus: "Belum_Cacah",
-          approvalStatus: "Menunggu",
-          geoLat: "",
-          geoLng: "",
-        },
-      ]);
+      setSampleListAdd([emptySampleRow]);
     } catch (err) {
       toast.error("Gagal tambah user progress");
       console.error(err);
@@ -710,8 +688,9 @@ function Admin() {
               districtId: updateUserProgressForm.districtId,
               villageName: updateUserProgressForm.villageName,
               travelBill: updateUserProgressForm.travelBill,
-              samples: sampleList.map((s) => ({
-                nus: s.nus,
+              samples: sampleListUpdate.map((s, idx) => ({
+                nus: formatNUS(idx + 1),
+                identity: s.identity,
                 cacahStatus: s.cacahStatus,
                 approvalStatus: s.approvalStatus,
                 geoLat: s.geoLat ? Number(s.geoLat) : null,
@@ -741,15 +720,7 @@ function Admin() {
         villageName: "",
         travelBill: "",
       });
-      setSampleList([
-        {
-          nus: "",
-          cacahStatus: "Belum_Cacah",
-          approvalStatus: "Menunggu",
-          geoLat: "",
-          geoLng: "",
-        },
-      ]);
+      setSampleListUpdate([emptySampleRow]);
     } catch (err) {
       toast.error("Gagal perbarui petugas");
       console.error(err);
@@ -839,15 +810,7 @@ function Admin() {
           villageName: "",
           travelBill: "",
         }));
-        setSampleList([
-          {
-            nus: "",
-            cacahStatus: "Belum_Cacah",
-            approvalStatus: "Menunggu",
-            geoLat: "",
-            geoLng: "",
-          },
-        ]);
+        setSampleListUpdate([emptySampleRow]);
         await handleRefresh();
       } else {
         toast.error("Gagal menghapus Petugas.");
@@ -1274,9 +1237,10 @@ function Admin() {
 
     const samples = (currentUP as any)?.samples ?? [];
     if (Array.isArray(samples) && samples.length > 0) {
-      setSampleList(
+      setSampleListUpdate(
         samples.map((s: any) => ({
           nus: s.nus ?? "",
+          identity: s.identity ?? "",
           cacahStatus: s.cacahStatus ?? "Belum_Cacah",
           approvalStatus: s.approvalStatus ?? "Menunggu",
           geoLat: s.geoLat != null ? String(s.geoLat) : "",
@@ -1284,15 +1248,7 @@ function Admin() {
         }))
       );
     } else {
-      setSampleList([
-        {
-          nus: "",
-          cacahStatus: "Belum_Cacah",
-          approvalStatus: "Menunggu",
-          geoLat: "",
-          geoLng: "",
-        },
-      ]);
+      setSampleListUpdate([emptySampleRow]);
     }
   }, [currentUP?.id]);
 
@@ -2012,24 +1968,14 @@ function Admin() {
                 </p>
               )}
             </div>
+            {/* === Daftar Sampel Petugas (ADD) === */}
             <div className="md:col-span-2 border rounded-md p-3 bg-white">
               <div className="flex justify-between items-center mb-2">
-                <h4 className="font-bold text-sm">Daftar Sampel Petugas</h4>
+                <h4 className="font-bold text-sm">Daftar Sampel Petugas ({sampleListAdd.length} Baris)</h4>
                 <div>
                   <button
                     type="button"
-                    onClick={() =>
-                      setSampleList((prev) => [
-                        ...prev,
-                        {
-                          nus: "",
-                          cacahStatus: "Belum_Cacah",
-                          approvalStatus: "Menunggu",
-                          geoLat: "",
-                          geoLng: "",
-                        },
-                      ])
-                    }
+                    onClick={() => setSampleListAdd(prev => [...prev, emptySampleRow])}
                     className="flex flex-row items-center justify-center px-3 rounded-md cursor-pointer bg-[#2190ff] min-h-[30px] w-full font-Poppins font-semibold text-white hover:bg-[#1977cc] transition-colors text-sm"
                   >
                     + Tambah Baris
@@ -2040,18 +1986,27 @@ function Admin() {
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 <div className="overflow-x-auto">
                   <div className="min-w-[720px] md:min-w-0 px-1">
-                    {sampleList.map((row, idx) => (
+                    {sampleListAdd.map((row, idx) => (
                       <div
                         key={idx}
                         className="flex gap-2 items-center my-2 w-full"
                       >
                         <input
                           placeholder="NUS"
-                          value={row.nus}
+                          value={formatNUS(idx + 1)}
+                          readOnly
+                          className="w-full sm:col-span-2 md:col-span-1 px-3 py-2 border rounded-md bg-white"
+                        />
+
+                        <input
+                          placeholder="Identitas"
+                          value={row.identity}
                           onChange={(e) =>
-                            setSampleList((prev) =>
+                            setSampleListAdd((prev) =>
                               prev.map((r, i) =>
-                                i === idx ? { ...r, nus: e.target.value } : r
+                                i === idx
+                                  ? { ...r, identity: e.target.value }
+                                  : r
                               )
                             )
                           }
@@ -2061,7 +2016,7 @@ function Admin() {
                         <select
                           value={row.cacahStatus}
                           onChange={(e) =>
-                            setSampleList((prev) =>
+                            setSampleListAdd((prev) =>
                               prev.map((r, i) =>
                                 i === idx
                                   ? { ...r, cacahStatus: e.target.value }
@@ -2079,7 +2034,7 @@ function Admin() {
                         <select
                           value={row.approvalStatus}
                           onChange={(e) =>
-                            setSampleList((prev) =>
+                            setSampleListAdd((prev) =>
                               prev.map((r, i) =>
                                 i === idx
                                   ? { ...r, approvalStatus: e.target.value }
@@ -2098,7 +2053,7 @@ function Admin() {
                           placeholder="Lat"
                           value={row.geoLat ?? ""}
                           onChange={(e) =>
-                            setSampleList((prev) =>
+                            setSampleListAdd((prev) =>
                               prev.map((r, i) =>
                                 i === idx ? { ...r, geoLat: e.target.value } : r
                               )
@@ -2110,7 +2065,7 @@ function Admin() {
                           placeholder="Lng"
                           value={row.geoLng ?? ""}
                           onChange={(e) =>
-                            setSampleList((prev) =>
+                            setSampleListAdd((prev) =>
                               prev.map((r, i) =>
                                 i === idx ? { ...r, geoLng: e.target.value } : r
                               )
@@ -2121,7 +2076,7 @@ function Admin() {
                         <button
                           type="button"
                           onClick={() => {
-                            setSampleList((prev) =>
+                            setSampleListAdd((prev) =>
                               prev.filter((_, i) => i !== idx)
                             );
                           }}
@@ -2324,21 +2279,10 @@ function Admin() {
             {/* === Daftar Sampel Petugas (UPDATE) === */}
             <div className="md:col-span-2 border rounded-md p-3 bg-white">
               <div className="flex justify-between items-center mb-2">
-                <h4 className="font-bold text-sm">Daftar Sampel Petugas</h4>
+                <h4 className="font-bold text-sm">Daftar Sampel Petugas ({sampleListUpdate.length} Baris)</h4>
                 <button
                   type="button"
-                  onClick={() =>
-                    setSampleList((prev) => [
-                      ...prev,
-                      {
-                        nus: "",
-                        cacahStatus: "Belum_Cacah",
-                        approvalStatus: "Menunggu",
-                        geoLat: "",
-                        geoLng: "",
-                      },
-                    ])
-                  }
+                  onClick={() => setSampleListUpdate(prev => [...prev, emptySampleRow])}
                   className="flex flex-row items-center justify-center px-3 rounded-md cursor-pointer bg-[#2190ff] min-h-[30px] font-Poppins font-semibold text-white hover:bg-[#1977cc] transition-colors text-sm"
                   disabled={!updateUserProgressForm.userProgressId}
                   title={
@@ -2359,18 +2303,27 @@ function Admin() {
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   <div className="overflow-x-auto">
                     <div className="min-w-[720px] md:min-w-0 px-1">
-                      {sampleList.map((row, idx) => (
+                      {sampleListUpdate.map((row, idx) => (
                         <div
                           key={idx}
                           className="flex gap-2 items-center my-2 w-full"
                         >
                           <input
                             placeholder="NUS"
-                            value={row.nus}
+                            value={formatNUS(idx + 1)}
+                            readOnly
+                            className="w-full sm:col-span-2 md:col-span-1 px-3 py-2 border rounded-md bg-white"
+                          />
+
+                          <input
+                            placeholder="Identitas"
+                            value={row.identity}
                             onChange={(e) =>
-                              setSampleList((prev) =>
+                              setSampleListUpdate((prev) =>
                                 prev.map((r, i) =>
-                                  i === idx ? { ...r, nus: e.target.value } : r
+                                  i === idx
+                                    ? { ...r, identity: e.target.value }
+                                    : r
                                 )
                               )
                             }
@@ -2380,7 +2333,7 @@ function Admin() {
                           <select
                             value={row.cacahStatus}
                             onChange={(e) =>
-                              setSampleList((prev) =>
+                              setSampleListUpdate((prev) =>
                                 prev.map((r, i) =>
                                   i === idx
                                     ? { ...r, cacahStatus: e.target.value }
@@ -2398,7 +2351,7 @@ function Admin() {
                           <select
                             value={row.approvalStatus}
                             onChange={(e) =>
-                              setSampleList((prev) =>
+                              setSampleListUpdate((prev) =>
                                 prev.map((r, i) =>
                                   i === idx
                                     ? { ...r, approvalStatus: e.target.value }
@@ -2417,7 +2370,7 @@ function Admin() {
                             placeholder="Lat"
                             value={row.geoLat ?? ""}
                             onChange={(e) =>
-                              setSampleList((prev) =>
+                              setSampleListUpdate((prev) =>
                                 prev.map((r, i) =>
                                   i === idx
                                     ? { ...r, geoLat: e.target.value }
@@ -2432,7 +2385,7 @@ function Admin() {
                             placeholder="Lng"
                             value={row.geoLng ?? ""}
                             onChange={(e) =>
-                              setSampleList((prev) =>
+                              setSampleListUpdate((prev) =>
                                 prev.map((r, i) =>
                                   i === idx
                                     ? { ...r, geoLng: e.target.value }
@@ -2447,7 +2400,7 @@ function Admin() {
                           <button
                             type="button"
                             onClick={() =>
-                              setSampleList((prev) =>
+                              setSampleListUpdate((prev) =>
                                 prev.filter((_, i) => i !== idx)
                               )
                             }

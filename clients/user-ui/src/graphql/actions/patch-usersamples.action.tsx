@@ -11,6 +11,7 @@ export const PATCH_USER_SAMPLES = gql`
       samples {
         id
         nus
+        identity
         cacahStatus
         approvalStatus
         geoLat

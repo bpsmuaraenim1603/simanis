@@ -31,6 +31,7 @@ export const GET_USER_PROGRESS_BY_USER_ID = gql`
       samples {
         id
         nus
+        identity
         cacahStatus
         approvalStatus
         geoLat
