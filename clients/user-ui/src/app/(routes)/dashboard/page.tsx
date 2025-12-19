@@ -161,7 +161,7 @@ function Dashboard() {
             name: r.subSurveyActivity.name,
           },
           totalAssigned: r.totalAssigned,
-          submitCount: r.submitCount+r.approvedCount+r.rejectedCount,
+          submitCount: r.submitCount,
           approvedCount: r.approvedCount,
           rejectedCount: r.rejectedCount,
           lastUpdated: r.lastUpdated,
@@ -169,7 +169,7 @@ function Dashboard() {
       } else {
         // jika ada multi baris (mis. beda blok) untuk kegiatan yang sama → jumlahkan
         prev.totalAssigned += r.totalAssigned;
-        prev.submitCount += r.submitCount+r.approvedCount+r.rejectedCount;
+        prev.submitCount += r.submitCount;
         prev.approvedCount += r.approvedCount;
         prev.rejectedCount += r.rejectedCount;
         prev.lastUpdated =
@@ -749,7 +749,7 @@ function Dashboard() {
               const percent =
                 agg.totalAssigned > 0
                   ? Math.round(
-                      ((agg.submitCount + agg.approvedCount) /
+                      ((agg.submitCount + agg.rejectedCount) /
                         agg.totalAssigned) *
                         100
                     )
@@ -790,7 +790,7 @@ function Dashboard() {
                     <div
                       className="absolute inset-y-0 left-0 rounded-full z-10 bg-blue-600"
                       style={{ width: `${pctApproved}%` }}
-                      title={`Approved: ${pctApproved}%`}
+                      title={`Disetujui: ${pctApproved}%`}
                     />
                   </div>
 
@@ -809,7 +809,7 @@ function Dashboard() {
                     <p className="ml-7">Submit</p>
                     <span className="inline-flex items-center gap-1">
                       <span className="inline-block w-3 h-2 rounded bg-blue-600 align-middle" />{" "}
-                      Approved
+                      Disetujui
                     </span>
                   </div>
                 </div>

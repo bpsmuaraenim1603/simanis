@@ -740,7 +740,7 @@ export class SurveyActivityService {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-    const [jobLetters, spj, userProgress] = await Promise.all([
+    const [jobLetter, submitSPJ, userProgress] = await Promise.all([
       this.prisma.jobLetter.count({
         where: {
           createdAt: {
@@ -757,19 +757,20 @@ export class SurveyActivityService {
           },
         },
       }),
-      this.prisma.userProgress.count({
+      this.prisma.userProgress.findMany({
         where: {
           lastUpdated: {
             gte: startOfMonth,
             lte: endOfMonth,
           },
         },
-      }),
+        distinct: ['userId'],
+      }).then((res) => res.length),
     ]);
 
     return {
-      totalJobLetters: jobLetters,
-      totalSPJ: spj,
+      totalJobLetters: jobLetter,
+      totalSPJ: submitSPJ,
       totalActiveUsers: userProgress,
     };
   }

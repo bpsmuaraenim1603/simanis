@@ -229,34 +229,6 @@ export default function UserPage() {
     return null;
   }
 
-  async function patchAllSamples() {
-    const userProgressId =
-      currentUP?.id || updateUserProgressForm.userProgressId;
-    if (!userProgressId) return toast.error("Pilih kegiatan & blok dulu ya.");
-
-    try {
-      await patchUserSamples({
-        variables: {
-          input: {
-            userProgressId,
-            updateSamples: editableSamples.map((s) => ({
-              id: s.id,
-              cacahStatus: s.cacahStatus,
-              geoLat: toFloatOrNull(s.geoLat),
-              geoLng: toFloatOrNull(s.geoLng),
-              geoCapturedAt: new Date().toISOString(),
-            })),
-          },
-        },
-      });
-
-      await fetchUserProgress({ variables: { userId: user!.id } });
-      toast.success("Semua sampel tersimpan");
-    } catch (e: any) {
-      showApolloError(e);
-    }
-  }
-
   function showApolloError(e: any) {
     console.log("ApolloError message:", e?.message);
     console.log("graphQLErrors:", e?.graphQLErrors);
@@ -366,6 +338,7 @@ export default function UserPage() {
           ? {
               ...s,
               cacahStatus: "Belum_Cacah",
+              approvalStatus: "Menunggu",
               geoLat: null,
               geoLng: null,
               geoCapturedAt: null,
@@ -580,7 +553,8 @@ export default function UserPage() {
                           disabled={
                             s.cacahStatus === "Selesai" ||
                             locatingId === s.id ||
-                            resettingId === s.id
+                            resettingId === s.id ||
+                            s.approvalStatus === "Disetujui"
                           }
                           className="bg-blue-600 border-blue-600 hover:bg-blue-500"
                         >
@@ -618,7 +592,9 @@ export default function UserPage() {
                             }
                             onClick={() => resetCacah(s.id)}
                             disabled={
-                              resettingId === s.id || locatingId === s.id
+                              resettingId === s.id ||
+                              locatingId === s.id ||
+                              s.approvalStatus === "Disetujui"
                             }
                             className="bg-red-600 border-red-600 hover:bg-red-500"
                           >

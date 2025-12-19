@@ -1,8 +1,13 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
 import toast from "react-hot-toast";
-import { useApolloClient, useLazyQuery, useQuery } from "@apollo/client";
+import {
+  useApolloClient,
+  useLazyQuery,
+  useMutation,
+  useQuery,
+} from "@apollo/client";
 import useUser from "@/src/hooks/useUser";
 import { GET_ALL_SURVEY_ACTIVITIES } from "@/src/graphql/actions/find-allsurveyact.action";
 import { GET_ALL_SUB_SURVEY_ACTIVITIES } from "@/src/graphql/actions/find-allsubsurveyact.action";
@@ -12,6 +17,7 @@ import styles from "@/src/utils/style";
 import HUComboBox from "@/src/components/HUCombobox";
 import HUSelect from "@/src/components/HUSelect";
 import { useRouter } from "next/navigation";
+import { PATCH_USER_SAMPLES } from "@/src/graphql/actions/patch-usersamples.action";
 
 /* ==== (type definitions sama persis dengan punyamu) ==== */
 type SurveyActivity = { id: string; name: string };
@@ -40,6 +46,16 @@ type UserProgressRow = {
     name?: string | null;
     activityType?: string | null;
   } | null;
+  samples?: {
+    id: string;
+    nus: string;
+    identity?: string;
+    approvalStatus: string;
+    cacahStatus: string;
+    geoLat?: number | null;
+    geoLng?: number | null;
+    geoCapturedAt?: string | null;
+  }[];
 };
 
 export default function SupervisorManagePage() {
@@ -74,6 +90,8 @@ export default function SupervisorManagePage() {
     useLazyQuery(GET_USER_PROGRESS_BY_SUBSURVEY_ID, {
       fetchPolicy: "network-only",
     });
+  const [patchUserSamples, { loading: patching }] =
+    useMutation(PATCH_USER_SAMPLES);
 
   const [surveyActivityId, setSurveyActivityId] = React.useState("");
   const [selectedUserId, setSelectedUserId] = React.useState<string>("");
@@ -85,11 +103,15 @@ export default function SupervisorManagePage() {
   React.useEffect(() => {
     setSubSurveyActivityId("");
     setSelectedUserProgressId("");
+    setSelectedUserId("");
+    setSelectedBlock("");
     if (surveyActivityId) fetchSubs({ variables: { surveyActivityId } });
   }, [surveyActivityId, fetchSubs]);
 
   React.useEffect(() => {
     setSelectedUserProgressId("");
+    setSelectedUserId("");
+    setSelectedBlock("");
     if (subSurveyActivityId) fetchUP({ variables: { subSurveyActivityId } });
   }, [subSurveyActivityId, fetchUP]);
 
@@ -212,6 +234,12 @@ export default function SupervisorManagePage() {
     districtId: "",
   });
 
+  const [approvedSamples, setApprovedSamples] = React.useState<any[]>([]);
+
+  const [mapModal, setMapModal] = React.useState<null | {
+    index: number;
+  }>(null);
+
   const clamp = (x: number, min = 0, max = Number.POSITIVE_INFINITY) =>
     Math.min(max, Math.max(min, Number.isFinite(x) ? x : 0));
 
@@ -316,6 +344,7 @@ export default function SupervisorManagePage() {
   };
 
   const [saving, setSaving] = React.useState(false);
+
   const onSubmit: React.FormEventHandler<HTMLFormElement> = async (e) => {
     e.preventDefault();
     if (!form.userProgressId) {
@@ -417,7 +446,66 @@ export default function SupervisorManagePage() {
     );
   }, [visibleUPRows]);
 
+  const goPrev = () =>
+    setMapModal((prev) =>
+      prev ? { index: Math.max(prev.index - 1, 0) } : prev
+    );
+
+  const goNext = () =>
+    setMapModal((prev) =>
+      prev ? { index: Math.min(prev.index + 1, mapCount - 1) } : prev
+    );
+
+  async function setSampleApproval(
+    sampleId: string,
+    status: "Disetujui" | "Ditolak"
+  ) {
+    if (!currentUP?.id) return toast.error("Pilih petugas/blok dulu.");
+
+    try {
+      await patchUserSamples({
+        variables: {
+          input: {
+            userProgressId: currentUP.id,
+            updateSamples: [{ id: sampleId, approvalStatus: status }],
+          },
+        },
+      });
+
+      // refresh data supaya UI keupdate
+      await fetchUP({ variables: { subSurveyActivityId } });
+      toast.success(
+        status === "Disetujui" ? "Sampel disetujui" : "Sampel ditolak"
+      );
+    } catch (e: any) {
+      toast.error(e?.message ?? "Gagal update approval");
+    }
+  }
+
   const disabled = saLoading || subsLoading || upLoading;
+
+  useEffect(() => {
+    if (currentUP?.samples) {
+      const sorted = [...currentUP.samples].sort(
+        (a: any, b: any) => Number(a.nus) - Number(b.nus)
+      );
+      setApprovedSamples(sorted);
+    } else {
+      setApprovedSamples([]);
+    }
+  }, [currentUP?.samples]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!mapModal) return;
+      if (e.key === "ArrowLeft") goPrev();
+      if (e.key === "ArrowRight") goNext();
+      if (e.key === "Escape") setMapModal(null);
+    };
+
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mapModal]);
 
   if (userLoading) {
     return (
@@ -429,6 +517,22 @@ export default function SupervisorManagePage() {
   if (!currentUser || !ALLOWED.has(currentUser.role ?? "")) {
     return null;
   }
+
+  const mapSamples = React.useMemo(() => {
+    return (approvedSamples ?? []).filter((s: any) => {
+      const lat = Number(s.geoLat);
+      const lng = Number(s.geoLng);
+      return Number.isFinite(lat) && Number.isFinite(lng);
+    });
+  }, [approvedSamples]);
+
+  const mapCount = mapSamples.length;
+
+  const activeSample = React.useMemo(() => {
+    if (!mapModal) return null;
+    const idx = Math.min(Math.max(mapModal.index, 0), mapCount - 1);
+    return mapSamples[idx] ?? null;
+  }, [mapModal, mapSamples, mapCount]);
 
   return (
     <div className="max-w-screen-xl mx-auto px-3 sm:px-6 md:px-8 py-6 space-y-4 font-Poppins">
@@ -546,76 +650,205 @@ export default function SupervisorManagePage() {
         onSubmit={onSubmit}
         className="bg-blue-50 rounded-xl p-4 shadow space-y-4"
       >
-        <h3 className="text-base font-bold">Update Data Petugas</h3>
+        <h3 className="text-base font-bold">
+          {isListing ? "Approve Listing Petugas" : "Approve Sample Petugas"}
+        </h3>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-sm font-semibold mb-1">
-              {isListing ? "Total Listing Petugas" : "Total Sampel Petugas"}
-            </label>
-            <input
-              type="number"
-              value={form.totalAssigned}
-              onChange={(e) =>
-                setForm((p) =>
-                  applyConstraints({
-                    ...p,
-                    totalAssigned: Number(e.target.value),
-                  })
-                )
-              }
-              readOnly={isListing}
-              className="w-full px-3 py-2 border rounded-md bg-white"
-            />
-            <p className="text-xs text-gray-600 mt-1">
-              {isListing
-                ? "Listing: total mengikuti Submit + Approved + Rejected."
-                : "Non-Listing: (Submit + Approved + Rejected) tidak boleh melebihi Total Sampel."}
-            </p>
-          </div>
+        <div className="mt-6">
+          <div className="text-lg font-semibold mb-2">Sampel Petugas</div>
 
-          {(["submitCount", "approvedCount", "rejectedCount"] as const).map(
-            (key) => (
-              <div key={key}>
-                <label className="block text-sm font-semibold mb-1">
-                  {key === "submitCount"
-                    ? "Submit"
-                    : key === "approvedCount"
-                      ? "Approved"
-                      : "Rejected"}
-                </label>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="px-3 py-2 border rounded-md font-bold bg-red-500 text-white hover:bg-red-600"
-                    onClick={() => step(key, -1)}
-                  >
-                    -
-                  </button>
-                  <input
-                    readOnly
-                    value={form[key]}
-                    className="w-full px-3 py-2 border rounded-md bg-white text-center"
-                  />
-                  <button
-                    type="button"
-                    className="px-3 py-2 border rounded-md font-bold bg-green-500 text-white hover:bg-green-600"
-                    onClick={() => step(key, +1)}
-                  >
-                    +
-                  </button>
+          <div className="w-full rounded-lg border border-gray-200 overflow-x-auto">
+            <table className="min-w-[900px] w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr className="text-left">
+                  <th className="p-2 sm:p-3">NUS</th>
+                  <th className="p-2 sm:p-3">Identitas</th>
+                  <th className="p-2 sm:p-3">Status Cacah</th>
+                  <th className="p-2 sm:p-3">Approval</th>
+                  <th className="p-2 sm:p-3">Lokasi</th>
+                  <th className="p-2 sm:p-3">Aksi</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {approvedSamples.map((s: any, idx: number) => {
+                  const canApprove = s.cacahStatus === "Selesai"; // optional rule
+                  const hasGeo =
+                    Number.isFinite(Number(s.geoLat)) &&
+                    Number.isFinite(Number(s.geoLng));
+
+                  return (
+                    <tr key={s.id} className="border-t">
+                      <td className="p-2 sm:p-3">{s.nus}</td>
+                      <td className="p-2 sm:p-3">{s.identity}</td>
+                      <td className="p-2 sm:p-3">
+                        {s.cacahStatus === "Selesai" ? (
+                          <span className="inline-block px-3 py-1 rounded bg-green-100 text-green-700">
+                            Selesai
+                          </span>
+                        ) : (
+                          <span className="inline-block px-3 py-1 rounded bg-red-100 text-red-700">
+                            Belum Dicacah
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-2 sm:p-3">
+                        {s.approvalStatus === "Menunggu" ? (
+                          <span className="inline-block px-3 py-1 rounded bg-yellow-100 text-yellow-700">
+                            Menunggu
+                          </span>
+                        ) : s.approvalStatus === "Ditolak" ? (
+                          <span className="inline-block px-3 py-1 rounded bg-red-100 text-red-700">
+                            Ditolak
+                          </span>
+                        ) : (
+                          <span className="inline-block px-3 py-1 rounded bg-green-100 text-green-700">
+                            Disetujui
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="p-2 sm:p-3">
+                        {hasGeo ? (
+                          <button
+                            type="button"
+                            className="px-3 py-1 rounded bg-purple-600 text-white disabled:opacity-40"
+                            onClick={() => {
+                              const idx = mapSamples.findIndex(
+                                (x: any) => x.id === s.id
+                              );
+                              if (idx === -1) {
+                                toast.error(
+                                  "Sampel ini belum punya koordinat."
+                                );
+                                return;
+                              }
+                              setMapModal({ index: idx });
+                            }}
+                          >
+                            Lihat peta
+                          </button>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
+
+                      <td className="p-2 sm:p-3">
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={!canApprove || patching}
+                            className="px-3 py-1 rounded bg-green-600 text-white disabled:opacity-40"
+                            onClick={() => setSampleApproval(s.id, "Disetujui")}
+                          >
+                            Setuju
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!canApprove || patching}
+                            className="px-3 py-1 rounded bg-red-600 text-white disabled:opacity-40"
+                            onClick={() => setSampleApproval(s.id, "Ditolak")}
+                          >
+                            Tolak
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+
+                {approvedSamples.length === 0 && (
+                  <tr>
+                    <td className="p-3 text-gray-500" colSpan={6}>
+                      Belum ada sampel untuk progress ini.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+            {mapModal && activeSample && (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                onClick={() => setMapModal(null)}
+              >
+                <div
+                  className="w-full max-w-5xl rounded-2xl bg-white shadow-xl overflow-hidden"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Header */}
+                  <div className="flex items-center justify-between px-4 py-3 border-b">
+                    <div className="font-semibold text-gray-800">
+                      {activeSample.nus} — {activeSample.identity ?? "-"}
+                    </div>
+
+                    <button
+                      type="button"
+                      className="px-3 py-1 rounded bg-gray-600 text-white"
+                      onClick={() => setMapModal(null)}
+                    >
+                      Tutup
+                    </button>
+                  </div>
+
+                  {/* Body */}
+                  <div className="p-0">
+                    {activeSample.geoLat && activeSample.geoLng ? (
+                      <iframe
+                        className="w-full h-[60vh] sm:h-[70vh]"
+                        loading="lazy"
+                        referrerPolicy="no-referrer-when-downgrade"
+                        src={`https://www.google.com/maps?q=${activeSample.geoLat},${activeSample.geoLng}&z=17&output=embed`}
+                      />
+                    ) : (
+                      <div className="p-6 text-gray-600">
+                        Lokasi belum tersedia untuk sampel ini.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="px-4 py-3 border-t text-xs text-gray-500">
+                    Koordinat: {activeSample.geoLat ?? "-"},{" "}
+                    {activeSample.geoLng ?? "-"}
+                  </div>
+                  {mapCount > 1 && (
+                    <div className="flex items-center justify-between gap-2 px-3 sm:px-4 py-3 border-t bg-gray-50">
+                      <button
+                        type="button"
+                        disabled={mapModal.index <= 0}
+                        onClick={goPrev}
+                        className="px-3 py-2 rounded-lg bg-white shadow disabled:opacity-40 text-sm"
+                      >
+                        ← Sebelumnya
+                      </button>
+
+                      <div className="text-[11px] sm:text-xs text-gray-500 text-center">
+                        Sampel {mapModal.index + 1} dari {mapCount}
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={mapModal.index >= mapCount - 1}
+                        onClick={goNext}
+                        className="px-3 py-2 rounded-lg bg-white shadow disabled:opacity-40 text-sm"
+                      >
+                        Berikutnya →
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
-            )
-          )}
+            )}
+          </div>
         </div>
 
-        <button
-          disabled={!form.userProgressId || saving}
-          className={`${styles.button} my-2 text-white w-full sm:w-auto`}
-        >
-          {saving ? "Menyimpan..." : "Simpan Perubahan"}
-        </button>
+        {/* <div className="flex w-full justify-end">
+          <button
+            disabled={!form.userProgressId || saving}
+            className={`${styles.button} my-2 text-white w-full sm:w-auto`}
+          >
+            {saving ? "Menyimpan..." : "Simpan Perubahan"}
+          </button>
+        </div> */}
       </form>
 
       <div className="bg-white rounded-xl p-4 shadow">

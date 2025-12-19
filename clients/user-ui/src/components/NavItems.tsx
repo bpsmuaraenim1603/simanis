@@ -34,7 +34,7 @@ const NavItems = ({ isMinimized = false }: { isMinimized?: boolean }) => {
     ...(user?.role === "Superadmin" || user?.role === "Keuangan" ? [{ title: "Kontrol Pengguna", hovertitle: "Kontrol Pengguna", url: "/superadmin", logo: User, style: "border-b-2 border-white pb-2" }] : []),
     ...(user?.role === "Admin" || user?.role === "Superadmin" ? [{ title: "Manajemen Tim", hovertitle: "Manajemen Tim", url: "/admin", logo: User, style: "border-b-2 border-white pb-2" }] : []),
     ...(user?.role === "Supervisor" || user?.role === "Superadmin" || user?.role === "Admin" ? [{ title: "Pengawas", hovertitle: "Pengawas", url: "/supervisor", logo: User, style: "border-b-2 border-white pb-2" }] : []),
-    ...(user?.role === "User" || user?.role === "Superadmin" ? [{ title: "Petugas", hovertitle: "Petugas", url: "/user", logo: User, style: "border-b-2 border-white pb-2" }] : []),
+    ...(user?.role === "User" ? [{ title: "Petugas", hovertitle: "Petugas", url: "/user", logo: User, style: "border-b-2 border-white pb-2" }] : []),
     { title: "KEGIATAN LAPANGAN", url: "#kegiatanlapangan", unhover: true },
     { title: "Progres", url: "/progress", hovertitle: "Progres", logo: ChartNoAxesCombined, dataprogress: dynamiSurveyProgress },
     { title: "Kendala", url: "/issue", hovertitle: "Kendala", style: "border-b-2 border-white pb-2", logo: TriangleAlert,

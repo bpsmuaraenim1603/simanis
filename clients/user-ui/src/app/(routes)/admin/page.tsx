@@ -997,7 +997,12 @@ function Admin() {
       subSurveyActivityId: "",
       superVisorId: "",
       userId: "",
+      districtId: "",
+      villageName: "",
+      blockCount: "",
+      travelBill: "",
     }));
+    setSampleListAdd([emptySampleRow]);
   }, [userProgressForm.surveyActivityId]);
 
   useEffect(() => {
@@ -1233,7 +1238,10 @@ function Admin() {
   }, [currentUP?.userId, fetchUserProgressByUserForUpdate]);
 
   useEffect(() => {
-    if (!currentUP) return;
+    if (!currentUP) {
+      setSampleListUpdate([]);
+      return;
+    }
 
     const samples = (currentUP as any)?.samples ?? [];
     if (Array.isArray(samples) && samples.length > 0) {
@@ -1248,9 +1256,21 @@ function Admin() {
         }))
       );
     } else {
-      setSampleListUpdate([emptySampleRow]);
+      setSampleListUpdate([]);
     }
   }, [currentUP?.id]);
+
+  useEffect(() => {
+    if (!userProgressForm.userId) {
+      setSampleListAdd([]);
+    }
+  }, [userProgressForm.userId]);
+
+  useEffect(() => {
+    if (!updateUserProgressForm.userProgressId) {
+      setSampleListUpdate([]);
+    }
+  }, [updateUserProgressForm.userProgressId]);
 
   /* ===================== UI ===================== */
   if (userLoading) {
@@ -1779,7 +1799,7 @@ function Admin() {
             className="grid grid-cols-1 md:grid-cols-2 gap-4"
           >
             <div className="md:col-span-2">
-              <h3 className="text-lg font-bold">Tambah Petugas</h3>
+              <h3 className="text-lg font-bold">Tambah Blok Petugas</h3>
             </div>
 
             <div>
@@ -1962,21 +1982,26 @@ function Admin() {
                 <p
                   className={`mt-1 text-xs ${willExceedAdd ? "text-red-600" : "text-gray-600"}`}
                 >
-                  Akan terpakai:{" "}
-                  {(usedTravelAdd + newTravelAdd).toLocaleString("id-ID")}{" "}
-                  {willExceedAdd && "— Melebihi limit!"}
+                  Akan terpakai: {newTravelAdd.toLocaleString("id-ID")}{" "}
+                  {willExceedAdd &&
+                    "— Melebihi limit! Total honor sudah mencapai " +
+                      (usedTravelAdd + newTravelAdd).toLocaleString("id-ID")}
                 </p>
               )}
             </div>
-            {/* === Daftar Sampel Petugas (ADD) === */}
+            {/* === Daftar Sampel Blok Petugas (ADD) === */}
             <div className="md:col-span-2 border rounded-md p-3 bg-white">
-              <div className="flex justify-between items-center mb-2">
-                <h4 className="font-bold text-sm">Daftar Sampel Petugas ({sampleListAdd.length} Baris)</h4>
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-2">
+                <h4 className="font-bold text-sm">
+                  Daftar Sampel Blok Petugas ({sampleListAdd.length} Baris)
+                </h4>
                 <div>
                   <button
                     type="button"
-                    onClick={() => setSampleListAdd(prev => [...prev, emptySampleRow])}
-                    className="flex flex-row items-center justify-center px-3 rounded-md cursor-pointer bg-[#2190ff] min-h-[30px] w-full font-Poppins font-semibold text-white hover:bg-[#1977cc] transition-colors text-sm"
+                    onClick={() =>
+                      setSampleListAdd((prev) => [...prev, emptySampleRow])
+                    }
+                    className="flex flex-row items-center justify-center px-3 rounded-md cursor-pointer bg-[#2190ff] min-h-[30px] w-full sm:w-auto font-Poppins font-semibold text-white hover:bg-[#1977cc] transition-colors text-sm"
                   >
                     + Tambah Baris
                   </button>
@@ -2114,7 +2139,7 @@ function Admin() {
             className="grid grid-cols-1 md:grid-cols-2 gap-4"
           >
             <div className="md:col-span-2">
-              <h3 className="text-lg font-bold">Perbarui Petugas</h3>
+              <h3 className="text-lg font-bold">Perbarui Blok Petugas</h3>
             </div>
 
             <div>
@@ -2180,7 +2205,7 @@ function Admin() {
                 htmlFor="userProgressId"
                 className="block text-sm font-bold mb-2"
               >
-                Petugas
+                Block Petugas
               </label>
 
               <HUComboBox
@@ -2191,11 +2216,11 @@ function Admin() {
                 options={filteredUPsForUpdate.map(
                   (up: UserProgressWithUser) => ({
                     value: up.id,
-                    label: up.user?.name ?? "-",
+                    label: `${up.user?.name ?? "-"} - Blok ${up.blockCount ?? "-"}`,
                     subLabel: up.user?.email ?? "",
                   })
                 )}
-                placeholder="-- Pilih Petugas --"
+                placeholder="-- Pilih Blok Petugas --"
               />
               {currentUP?.userId && (
                 <p className="mt-1 text-xs">
@@ -2268,26 +2293,31 @@ function Admin() {
                 <p
                   className={`mt-1 text-xs ${willExceedUpdate ? "text-red-600" : "text-gray-600"}`}
                 >
-                  Akan terpakai:{" "}
-                  {(usedTravelUpdateOthers + newTravelUpdate).toLocaleString(
-                    "id-ID"
-                  )}{" "}
-                  {willExceedUpdate && "— Melebihi limit!"}
+                  Akan terpakai: {newTravelUpdate.toLocaleString("id-ID")}{" "}
+                  {willExceedUpdate &&
+                    "— Melebihi limit! Total honor sudah mencapai " +
+                      (usedTravelUpdateOthers + newTravelUpdate).toLocaleString(
+                        "id-ID"
+                      )}
                 </p>
               )}
             </div>
-            {/* === Daftar Sampel Petugas (UPDATE) === */}
+            {/* === Daftar Sampel Blok Petugas (UPDATE) === */}
             <div className="md:col-span-2 border rounded-md p-3 bg-white">
-              <div className="flex justify-between items-center mb-2">
-                <h4 className="font-bold text-sm">Daftar Sampel Petugas ({sampleListUpdate.length} Baris)</h4>
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-2">
+                <h4 className="font-bold text-sm">
+                  Daftar Sampel Blok Petugas ({sampleListUpdate.length} Baris)
+                </h4>
                 <button
                   type="button"
-                  onClick={() => setSampleListUpdate(prev => [...prev, emptySampleRow])}
+                  onClick={() =>
+                    setSampleListUpdate((prev) => [...prev, emptySampleRow])
+                  }
                   className="flex flex-row items-center justify-center px-3 rounded-md cursor-pointer bg-[#2190ff] min-h-[30px] font-Poppins font-semibold text-white hover:bg-[#1977cc] transition-colors text-sm"
                   disabled={!updateUserProgressForm.userProgressId}
                   title={
                     !updateUserProgressForm.userProgressId
-                      ? "Pilih Petugas dulu"
+                      ? "Pilih Blok Petugas dulu"
                       : ""
                   }
                 >
@@ -2297,7 +2327,7 @@ function Admin() {
 
               {!updateUserProgressForm.userProgressId ? (
                 <div className="text-xs text-gray-600">
-                  Pilih Petugas terlebih dahulu untuk memuat sampel.
+                  Pilih Blok Petugas terlebih dahulu untuk memuat sampel.
                 </div>
               ) : (
                 <div className="space-y-2 max-h-64 overflow-y-auto">
@@ -2430,7 +2460,7 @@ function Admin() {
                   type="submit"
                   className={`${styles.button} my-2 text-white`}
                 >
-                  Perbarui Petugas
+                  Perbarui Blok Petugas
                 </button>
               )}
             </div>

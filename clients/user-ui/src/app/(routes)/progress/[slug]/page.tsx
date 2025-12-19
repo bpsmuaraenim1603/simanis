@@ -255,23 +255,23 @@ const ProgressTemplate = () => {
             <div className="bg-blue-300 rounded-md flex flex-col items-center space-y-1 w-full py-2">
               <p>Total Petugas</p>
               <p className="font-bold text-xl md:text-2xl text-blue-600">
-                {progress.totalPetugas}
+                {aggregatedUserProgress.length}
               </p>
             </div>
             <div className="bg-green-300 rounded-md flex flex-col items-center space-y-1 w-full py-2">
-              <p>Sampel Submitted</p>
+              <p>Sampel Disubmit</p>
               <p className="font-bold text-xl md:text-2xl text-green-600">
                 {progress.submitCount}
               </p>
             </div>
             <div className="bg-purple-300 rounded-md flex flex-col items-center space-y-1 w-full py-2">
-              <p>Sampel Approved</p>
+              <p>Sampel Disetujui</p>
               <p className="font-bold text-xl md:text-2xl text-purple-600">
                 {progress.approvedCount}
               </p>
             </div>
             <div className="bg-red-300 rounded-md flex flex-col items-center space-y-1 w-full py-2">
-              <p>Sampel Rejected</p>
+              <p>Sampel Ditolak</p>
               <p className="font-bold text-xl md:text-2xl text-red-600">
                 {progress.rejectedCount}
               </p>
@@ -290,9 +290,9 @@ const ProgressTemplate = () => {
                     <th className="px-4 py-2">NAMA PETUGAS</th>
                     <th className="px-4 py-2">WILAYAH TUGAS</th>
                     <th className="px-4 py-2">TARGET</th>
-                    <th className="px-4 py-2">SUBMITTED</th>
-                    <th className="px-4 py-2">APPROVED</th>
-                    <th className="px-4 py-2">REJECTED</th>
+                    <th className="px-4 py-2">DISUBMIT</th>
+                    <th className="px-4 py-2">DISETUJUI</th>
+                    <th className="px-4 py-2">DITOLAK</th>
                     <th className="px-4 py-2">PROGRESS</th>
                   </tr>
                 </thead>
@@ -301,7 +301,7 @@ const ProgressTemplate = () => {
                     const percent =
                       row.totalAssigned > 0
                         ? Math.round(
-                            ((row.submitCount + row.approvedCount) /
+                            ((row.submitCount + row.rejectedCount) /
                               row.totalAssigned) *
                               100
                           )
@@ -315,8 +315,8 @@ const ProgressTemplate = () => {
                         : 0;
 
                     const districtText =
-                      Array.from(row.districts ?? []).join(" · ") || "-";
-                    const cityText = Array.from(row.cities ?? []).join(" · ");
+                      Array.from(row.districts ?? []).join(", ") || "-";
+                    const cityText = Array.from(row.cities ?? []).join(", ");
 
                     return (
                       <tr key={row.user.id}>
@@ -329,8 +329,8 @@ const ProgressTemplate = () => {
 
                         {/* Wilayah tugas: gabungkan nama distrik & kota bila multi */}
                         <td className="px-4 py-3 text-gray-700">
-                          {districtText}
-                          {cityText ? `, ${cityText}` : ""}
+                          {cityText ? `${cityText}: ` : ""}
+                          {districtText}                          
                         </td>
 
                         <td className="px-4 py-3">{row.totalAssigned}</td>
@@ -345,7 +345,7 @@ const ProgressTemplate = () => {
                             />
                           </div>
                           <p className="text-xs text-gray-600 mt-1">
-                            {percent}% Submitted
+                            {percent}% Disubmit
                           </p>
                           <div className="w-full bg-gray-200 rounded-full h-2">
                             <div
@@ -354,7 +354,7 @@ const ProgressTemplate = () => {
                             />
                           </div>
                           <p className="text-xs text-gray-600 mt-1">
-                            {percentApproved}% Approved
+                            {percentApproved}% Disetujui
                           </p>
                         </td>
                       </tr>
