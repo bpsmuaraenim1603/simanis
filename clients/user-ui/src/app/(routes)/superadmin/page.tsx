@@ -990,9 +990,9 @@ export default function SuperAdminManagePage() {
   }
 
   return (
-    <div className="max-w-screen-xl mx-auto px-3 sm:px-6 md:px-8 py-4 space-y-4 font-Poppins">
+    <div className="max-w-screen-xl mx-auto px-3 sm:px-6 md:px-8 py-4 font-Poppins">
       {/* Header */}
-      <div className="bg-orange-50 rounded-lg p-3 md:p-4 font-bold text-lg md:text-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 shadow-md">
+      <div className="bg-orange-50 rounded-lg p-3 md:p-4 font-bold text-lg md:text-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 shadow-md mb-4">
         <span>Panel Kontrol Pengguna</span>
       </div>
       <Tabs<AdminTab>
@@ -1004,7 +1004,7 @@ export default function SuperAdminManagePage() {
         onChange={setActiveTab}
       />
 
-      <div className="mt-4">
+      <div>
         {activeTab === "users" && (
           <>
             {/* Search */}

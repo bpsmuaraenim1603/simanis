@@ -254,6 +254,45 @@ export default function SupervisorManagePage() {
   );
 
   const [approvedSamples, setApprovedSamples] = useState<any[]>([]);
+  const [mapModal, setMapModal] = useState<null | { index: number }>(null);
+
+  const mapSamples = useMemo(() => {
+    return (approvedSamples ?? []).filter((s: any) => {
+      const lat = Number(s.geoLat);
+      const lng = Number(s.geoLng);
+      return Number.isFinite(lat) && Number.isFinite(lng);
+    });
+  }, [approvedSamples]);
+
+  const mapCount = mapSamples.length;
+
+  const activeSample = useMemo(() => {
+    if (!mapModal) return null;
+    const idx = Math.min(Math.max(mapModal.index, 0), mapCount - 1);
+    return mapSamples[idx] ?? null;
+  }, [mapModal, mapSamples, mapCount]);
+
+  const goPrev = () =>
+    setMapModal((prev) =>
+      prev ? { index: Math.max(prev.index - 1, 0) } : prev
+    );
+
+  const goNext = () =>
+    setMapModal((prev) =>
+      prev ? { index: Math.min(prev.index + 1, mapCount - 1) } : prev
+    );
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!mapModal) return;
+      if (e.key === "ArrowLeft") goPrev();
+      if (e.key === "ArrowRight") goNext();
+      if (e.key === "Escape") setMapModal(null);
+    };
+
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mapModal, mapCount]);
 
   useEffect(() => {
     if (currentUP?.samples) {
@@ -577,6 +616,7 @@ export default function SupervisorManagePage() {
                     <th className="p-2 sm:p-3">Identitas</th>
                     <th className="p-2 sm:p-3">Status Cacah</th>
                     <th className="p-2 sm:p-3">Approval</th>
+                    <th className="p-2 sm:p-3">Lokasi</th>
                     <th className="p-2 sm:p-3">Aksi</th>
                   </tr>
                 </thead>
@@ -614,6 +654,31 @@ export default function SupervisorManagePage() {
                             </span>
                           )}
                         </td>
+                        <td className="p-2 sm:p-3">
+                          {Number.isFinite(Number(s.geoLat)) &&
+                          Number.isFinite(Number(s.geoLng)) ? (
+                            <button
+                              type="button"
+                              className="px-3 py-1 rounded bg-purple-600 text-white disabled:opacity-40"
+                              onClick={() => {
+                                const idx = mapSamples.findIndex(
+                                  (x: any) => x.id === s.id
+                                );
+                                if (idx === -1) {
+                                  toast.error(
+                                    "Sampel ini belum punya koordinat."
+                                  );
+                                  return;
+                                }
+                                setMapModal({ index: idx });
+                              }}
+                            >
+                              Lihat peta
+                            </button>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </td>
 
                         <td className="p-2 sm:p-3">
                           <div className="flex flex-wrap gap-2">
@@ -645,7 +710,7 @@ export default function SupervisorManagePage() {
 
                   {approvedSamples.length === 0 && (
                     <tr>
-                      <td className="p-3 text-gray-500" colSpan={5}>
+                      <td className="p-3 text-gray-500" colSpan={6}>
                         {!currentUP?.id
                           ? "Pilih blok untuk melihat sampel."
                           : "Belum ada sampel untuk progres ini."}
@@ -654,6 +719,77 @@ export default function SupervisorManagePage() {
                   )}
                 </tbody>
               </table>
+              {mapModal && activeSample && (
+                <div
+                  className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                  onClick={() => setMapModal(null)}
+                >
+                  <div
+                    className="w-full max-w-5xl rounded-2xl bg-white shadow-xl overflow-hidden"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-center justify-between px-4 py-3 border-b">
+                      <div className="font-semibold text-gray-800">
+                        {activeSample.nus} — {activeSample.identity ?? "-"}
+                      </div>
+
+                      <button
+                        type="button"
+                        className="px-3 py-1 rounded bg-gray-600 text-white"
+                        onClick={() => setMapModal(null)}
+                      >
+                        Tutup
+                      </button>
+                    </div>
+
+                    <div className="p-0">
+                      {activeSample.geoLat && activeSample.geoLng ? (
+                        <iframe
+                          className="w-full h-[60vh] sm:h-[70vh]"
+                          loading="lazy"
+                          referrerPolicy="no-referrer-when-downgrade"
+                          src={`https://www.google.com/maps?q=${activeSample.geoLat},${activeSample.geoLng}&z=17&output=embed`}
+                        />
+                      ) : (
+                        <div className="p-6 text-gray-600">
+                          Lokasi belum tersedia untuk sampel ini.
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="px-4 py-3 border-t text-xs text-gray-500">
+                      Koordinat: {activeSample.geoLat ?? "-"},{" "}
+                      {activeSample.geoLng ?? "-"}
+                    </div>
+
+                    {mapCount > 1 && (
+                      <div className="flex items-center justify-between gap-2 px-3 sm:px-4 py-3 border-t bg-gray-50">
+                        <button
+                          type="button"
+                          disabled={mapModal.index <= 0}
+                          onClick={goPrev}
+                          className="px-3 py-2 rounded-lg bg-white shadow disabled:opacity-40 text-sm"
+                        >
+                          ← Sebelumnya
+                        </button>
+
+                        <div className="text-[11px] sm:text-xs text-gray-500 text-center">
+                          Sampel {mapModal.index + 1} dari {mapCount}
+                        </div>
+
+                        <button
+                          type="button"
+                          disabled={mapModal.index >= mapCount - 1}
+                          onClick={goNext}
+                          className="px-3 py-2 rounded-lg bg-white shadow disabled:opacity-40 text-sm"
+                        >
+                          Berikutnya →
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -22,6 +22,7 @@ import { Dialog, Transition } from "@headlessui/react";
 import Datetime from "react-datetime";
 import "react-datetime/css/react-datetime.css";
 import { Fragment } from "react";
+import MonthlyStaffUsageWidget from "@/src/components/MonthlyStaffUsageWidget";
 
 interface CalendarEvent {
   title: string;
@@ -359,12 +360,12 @@ function Dashboard() {
       {/* Header */}
       <div className="bg-orange-50 rounded-lg p-3 md:p-4 font-bold text-lg md:text-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 shadow-md">
         <span>Beranda</span>
-        <button
+        {/* <button
           onClick={fetchEvents}
           className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700 transition font-semibold w-full sm:w-auto"
         >
           Refresh
-        </button>
+        </button> */}
       </div>
 
       {/* Toolbar pencarian */}
@@ -656,7 +657,7 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* ======= Headline Cards ======= */}
+      {/* ======= Headline Cards =======
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="p-3 md:p-4 bg-orange-50 rounded-lg shadow-md font-bold">
           <h2>PROGRES PENDATAAN</h2>
@@ -667,7 +668,7 @@ function Dashboard() {
       </div>
 
       {/* ======= KPI Cards ======= */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
+      {/* <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
         <div className="p-4 bg-orange-50 rounded-lg shadow-md">
           <p className="text-sm font-semibold">Petugas Aktif</p>
           <h2 className="font-bold text-2xl">
@@ -690,7 +691,8 @@ function Dashboard() {
             {monthlyStats?.getMonthlySurveyStats?.totalSPJ ?? "0"}
           </h2>
         </div>
-      </div>
+      </div>*/}
+      <MonthlyStaffUsageWidget />
 
       {/* ======= Chart & Leaderboard ======= */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">

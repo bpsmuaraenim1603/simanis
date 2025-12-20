@@ -381,13 +381,44 @@ export default function UserPage() {
     );
   }
 
-  // NOTE: backend kamu belum mendukung update field "identity" lewat PatchUserSampleInput,
-  // jadi tombol simpan nama di-disable secara fungsional (biar tidak error Apollo).
-  async function saveIdentity(_sampleId: string) {
-    toast.error(
-      "Update nama responden belum didukung oleh backend (PatchUserSampleInput)."
-    );
-    return;
+  async function saveIdentity(sampleId: string) {
+    const userProgressId =
+      currentUP?.id || updateUserProgressForm.userProgressId;
+    if (!userProgressId) return toast.error("Pilih kegiatan & blok dulu ya.");
+
+    const sample = editableSamples.find((s) => s.id === sampleId);
+    if (!sample) return toast.error("Sample tidak ditemukan.");
+
+    const nextIdentity = String(sample.identity ?? "").trim();
+    if (!nextIdentity) return toast.error("Nama responden tidak boleh kosong.");
+
+    setSavingIdentityId(sampleId);
+    const toastId = toast.loading("Menyimpan nama responden...");
+
+    try {
+      await patchUserSamples({
+        variables: {
+          input: {
+            userProgressId,
+            updateSamples: [
+              {
+                id: sampleId,
+                identity: nextIdentity,
+              },
+            ],
+          },
+        },
+      });
+
+      toast.success("Nama responden tersimpan", { id: toastId });
+      await fetchUserProgress({ variables: { userId: user!.id } });
+    } catch (e: any) {
+      toast.error("Gagal menyimpan nama responden", { id: toastId });
+      showApolloError(e);
+      await fetchUserProgress({ variables: { userId: user!.id } });
+    } finally {
+      setSavingIdentityId(null);
+    }
   }
 
   async function resetCacah(sampleId: string) {
@@ -679,6 +710,7 @@ export default function UserPage() {
                               )
                             );
                           }}
+                          disabled={s.approvalStatus === "Disetujui"}
                           onKeyDown={(e) => {
                             if (e.key === "Enter") {
                               e.preventDefault();
@@ -693,11 +725,17 @@ export default function UserPage() {
                           <button
                             type="button"
                             onClick={() => saveIdentity(s.id)}
-                            disabled
-                            className="px-3 py-2 rounded-md bg-gray-400 text-white text-xs font-semibold disabled:opacity-70"
-                            title="Backend belum mendukung update nama responden"
+                            disabled={
+                              savingIdentityId === s.id ||
+                              locatingId === s.id ||
+                              resettingId === s.id
+                            }
+                            className="px-3 py-2 rounded-md bg-blue-600 text-white text-xs font-semibold disabled:opacity-70"
+                            title="Simpan nama responden"
                           >
-                            Simpan
+                            {savingIdentityId === s.id
+                              ? "Menyimpan..."
+                              : "Simpan"}
                           </button>
                         </div>
                       </div>
