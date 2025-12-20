@@ -1,18 +1,14 @@
 "use client";
 
-import HUComboBox from "@/src/components/HUCombobox";
 import { GET_USER_PROGRESS_BY_USER_ID } from "@/src/graphql/actions/find-usersurveyprogressbyuser.action";
 import { PATCH_USER_SAMPLES } from "@/src/graphql/actions/patch-usersamples.action";
-// import { UPDATE_USER_PROGRESS } from "@/src/graphql/actions/update-userprogress.action";
 import useUser from "@/src/hooks/useUser";
-import styles from "@/src/utils/style";
 import { useLazyQuery, useMutation } from "@apollo/client";
 import { useRouter } from "next/navigation";
-import React, { useEffect, useState } from "react";
-import { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 
-type SubSurveyOption = { id: string; name: string };
+type ViewMode = "list" | "detail";
 
 function IconButton({
   label,
@@ -33,7 +29,7 @@ function IconButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      title={label} // fallback tooltip native
+      title={label}
       className={`group relative inline-flex h-9 w-9 items-center justify-center rounded-md border
                   text-white shadow-sm transition
                   focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-0
@@ -41,7 +37,6 @@ function IconButton({
                   ${className}`}
     >
       {children}
-      {/* Tooltip kustom */}
       <span
         className="pointer-events-none absolute -top-9 left-1/2 -translate-x-1/2
                    whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-white
@@ -54,6 +49,22 @@ function IconButton({
 }
 
 export default function UserPage() {
+  const { user, loading } = useUser();
+  const router = useRouter();
+
+  // roles yang diizinkan
+  const ALLOWED = new Set(["Superadmin", "User"]);
+
+  useEffect(() => {
+    if (loading) return;
+    const role = user?.role ?? "";
+    if (!ALLOWED.has(role)) {
+      toast.error("Akses ditolak. Mengarahkan ke Beranda");
+      router.replace("/dashboard");
+    }
+  }, [loading, user?.role, router]);
+
+  // helper districtId (fallback beberapa kemungkinan field)
   const getDistrictId = (up: any) =>
     up?.districtId ??
     up?.district?.id ??
@@ -61,24 +72,7 @@ export default function UserPage() {
     up?.subSurveyActivity?.district?.id ??
     "";
 
-  const { user, loading } = useUser();
-
-  const router = useRouter();
-
-  // roles yang diizinkan
-  const ALLOWED = new Set(["Superadmin", "User"]);
-
-  React.useEffect(() => {
-    if (loading) return;
-    const role = user?.role ?? "";
-
-    if (!ALLOWED.has(role)) {
-      toast.error("Akses ditolak. Mengarahkan ke Beranda");
-      router.replace("/dashboard");
-    }
-  }, [loading, user?.role, router]);
-
-  // ===== Update user progress =====
+  // ===== State utama =====
   const [updateUserProgressForm, setUpdateUserProgressForm] = useState({
     userProgressId: "",
     subSurveyActivityId: "",
@@ -90,7 +84,9 @@ export default function UserPage() {
     lastUpdated: "",
     districtId: "",
   });
+
   const [selectedBlock, setSelectedBlock] = useState<string>("");
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
 
   const [fetchUserProgress, { data: userProgressData, loading: upLoading }] =
     useLazyQuery(GET_USER_PROGRESS_BY_USER_ID, { fetchPolicy: "network-only" });
@@ -99,21 +95,144 @@ export default function UserPage() {
     if (user?.id) fetchUserProgress({ variables: { userId: user.id } });
   }, [user?.id, fetchUserProgress]);
 
-  const [patchUserSamples, { loading: patching }] =
-    useMutation(PATCH_USER_SAMPLES);
+  const [patchUserSamples] = useMutation(PATCH_USER_SAMPLES);
 
-  const currentUP = useMemo(() => {
-    const rows = userProgressData?.userProgressSurveyByUserId ?? [];
+  const [editableSamples, setEditableSamples] = useState<any[]>([]);
+  const [locatingId, setLocatingId] = useState<string | null>(null);
+  const [resettingId, setResettingId] = useState<string | null>(null);
+  const [savingIdentityId, setSavingIdentityId] = useState<string | null>(null);
+
+  // ===== Formatter tanggal =====
+  function fmtDate(d: any) {
+    if (!d) return "-";
+    const dt = new Date(d);
+    if (Number.isNaN(dt.getTime())) return String(d);
+    return dt.toLocaleDateString("id-ID", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  }
+
+  function fmtDateRange(start: any, end: any) {
+    if (!start && !end) return "-";
+    if (start && !end) return `${fmtDate(start)} -`;
+    if (!start && end) return `- ${fmtDate(end)}`;
+    return `${fmtDate(start)} - ${fmtDate(end)}`;
+  }
+
+  // ===== Cards kegiatan (list tombol) =====
+  // NOTE: karena beda blok bisa beda desa/kecamatan, di card kegiatan kita tampilkan "kota" saja.
+  const activityCards = useMemo(() => {
+    const rows: any[] = userProgressData?.userProgressSurveyByUserId ?? [];
+
+    const map = new Map<
+      string,
+      {
+        activity: any;
+        rows: any[];
+        totals: {
+          totalAssigned: number;
+          submitCount: number;
+          approvedCount: number;
+          rejectedCount: number;
+        };
+        blocks: string[];
+        cityName?: string;
+      }
+    >();
+
+    for (const up of rows) {
+      const actId = up?.subSurveyActivity?.id;
+      if (!actId) continue;
+
+      const totalAssigned = Number(up?.totalAssigned ?? 0);
+      const submitCount = Number(up?.submitCount ?? 0);
+      const approvedCount = Number(up?.approvedCount ?? 0);
+      const rejectedCount = Number(up?.rejectedCount ?? 0);
+
+      const blk = String(up?.blockCount ?? "").trim();
+      const cityName = up?.district?.city ?? undefined;
+
+      const prev = map.get(actId);
+      if (!prev) {
+        map.set(actId, {
+          activity: up?.subSurveyActivity,
+          rows: [up],
+          totals: { totalAssigned, submitCount, approvedCount, rejectedCount },
+          blocks: blk ? [blk] : [],
+          cityName,
+        });
+      } else {
+        prev.rows.push(up);
+        prev.totals.totalAssigned += totalAssigned;
+        prev.totals.submitCount += submitCount;
+        prev.totals.approvedCount += approvedCount;
+        prev.totals.rejectedCount += rejectedCount;
+        if (blk && !prev.blocks.includes(blk)) prev.blocks.push(blk);
+        if (!prev.cityName && cityName) prev.cityName = cityName;
+      }
+    }
+
+    return Array.from(map.values()).sort((a, b) => {
+      const aStart = a.activity?.startDate
+        ? new Date(a.activity.startDate).getTime()
+        : 0;
+      const bStart = b.activity?.startDate
+        ? new Date(b.activity.startDate).getTime()
+        : 0;
+      return bStart - aStart;
+    });
+  }, [userProgressData]);
+
+  // ===== Card kegiatan terpilih =====
+  const selectedActivityCard = useMemo(() => {
+    const id = updateUserProgressForm.subSurveyActivityId;
+    if (!id) return undefined;
+    return activityCards.find((c) => c.activity?.id === id);
+  }, [activityCards, updateUserProgressForm.subSurveyActivityId]);
+
+  // ===== Cards BLOK (setelah pilih kegiatan) =====
+  const blockCards = useMemo(() => {
+    const rows: any[] = userProgressData?.userProgressSurveyByUserId ?? [];
+    const actId = updateUserProgressForm.subSurveyActivityId;
+    if (!actId) return [];
+
     const filtered = rows.filter(
-      (up: any) =>
-        up?.subSurveyActivity?.id === updateUserProgressForm.subSurveyActivityId
+      (r: any) => r?.subSurveyActivity?.id === actId
+    );
+
+    // 1 row = 1 blok (biasanya). Kalau ada duplikat, kita ambil yang pertama.
+    const map = new Map<string, any>();
+    for (const r of filtered) {
+      const blk = String(r?.blockCount ?? "").trim();
+      if (!blk) continue;
+      if (!map.has(blk)) map.set(blk, r);
+    }
+
+    return Array.from(map.entries())
+      .map(([blk, row]) => ({
+        block: blk,
+        row,
+      }))
+      .sort((a, b) => a.block.localeCompare(b.block, "id"));
+  }, [userProgressData, updateUserProgressForm.subSurveyActivityId]);
+
+  // ===== Current UP (baris progress yang aktif sesuai kegiatan + blok) =====
+  const currentUP = useMemo(() => {
+    const rows: any[] = userProgressData?.userProgressSurveyByUserId ?? [];
+    const actId = updateUserProgressForm.subSurveyActivityId;
+    if (!actId) return undefined;
+
+    const filtered = rows.filter(
+      (up: any) => up?.subSurveyActivity?.id === actId
     );
     if (filtered.length === 0) return undefined;
 
     const blk = (selectedBlock ?? "").toString().trim();
     if (blk) {
       const byBlock = filtered.find(
-        (up: any) => (up?.blockCount ?? "").toString().trim() === blk
+        (up: any) => String(up?.blockCount ?? "").trim() === blk
       );
       return byBlock ?? filtered[0];
     }
@@ -124,100 +243,43 @@ export default function UserPage() {
     selectedBlock,
   ]);
 
-  const rawType = currentUP?.subSurveyActivity?.activityType ?? "";
-  const isListing = rawType.toLowerCase() === "listing";
-
-  const [editableSamples, setEditableSamples] = useState<any[]>([]);
-  const [locatingId, setLocatingId] = useState<string | null>(null);
-  const [resettingId, setResettingId] = useState<string | null>(null);
-
   useEffect(() => {
     if (currentUP?.samples) {
       const sorted = [...currentUP.samples].sort(
         (a: any, b: any) => Number(a.nus) - Number(b.nus)
       );
-
       setEditableSamples(sorted.map((s: any) => ({ ...s })));
     } else {
       setEditableSamples([]);
     }
   }, [currentUP?.id]);
 
-  const subSurveyOptions = React.useMemo(() => {
-    const rows = userProgressData?.userProgressSurveyByUserId ?? [];
-    const pairs = rows
-      .filter((up: any) => up?.subSurveyActivity?.id)
-      .map(
-        (up: any) => [up.subSurveyActivity.id, up.subSurveyActivity] as const
-      );
-    return Array.from(new Map(pairs).values());
-  }, [userProgressData]);
+  // ===== Navigasi view =====
+  function openActivity(activityId: string) {
+    const rows: any[] = userProgressData?.userProgressSurveyByUserId ?? [];
+    const up = rows.find((r: any) => r?.subSurveyActivity?.id === activityId);
 
-  const subSurveyHUOptions = useMemo(() => {
-    const rows = (
-      Array.isArray(subSurveyOptions) ? subSurveyOptions : []
-    ) as SubSurveyOption[];
-    return rows.map(({ id, name }) => ({ value: id, label: name ?? "-" }));
-  }, [subSurveyOptions]);
+    setUpdateUserProgressForm((prev) => ({
+      ...prev,
+      subSurveyActivityId: activityId,
+      districtId: getDistrictId(up),
+    }));
 
-  const blockHUOptions = useMemo(() => {
-    const rows = userProgressData?.userProgressSurveyByUserId ?? [];
+    setSelectedBlock(""); // masuk ke list blok dulu
+    setViewMode("detail");
+  }
 
-    const filtered = updateUserProgressForm.subSurveyActivityId
-      ? rows.filter(
-          (r: any) =>
-            r?.subSurveyActivity?.id ===
-            updateUserProgressForm.subSurveyActivityId
-        )
-      : [];
-
-    const blocks: string[] = filtered
-      .map((r: any) => String(r?.blockCount ?? "").trim())
-      .filter((v: string) => v.length > 0);
-
-    // <-- Set<string> -> Array<string>
-    const uniq: string[] = Array.from(new Set<string>(blocks)).sort((a, b) =>
-      a.localeCompare(b, "id")
-    );
-
-    return uniq.map((b) => ({ value: b, label: `Blok ${b}` }));
-  }, [userProgressData, updateUserProgressForm.subSurveyActivityId]);
-
-  const toFloatOrNull = (v: any) => {
-    if (v === "" || v === null || v === undefined) return null;
-    const n = Number(v);
-    return Number.isFinite(n) ? n : null;
-  };
-
-  useEffect(() => {
+  function backToList() {
+    setViewMode("list");
     setSelectedBlock("");
-  }, [updateUserProgressForm.subSurveyActivityId]);
+    setUpdateUserProgressForm((prev) => ({ ...prev, subSurveyActivityId: "" }));
+  }
 
-  useEffect(() => {
-    if (!updateUserProgressForm.subSurveyActivityId) return;
-    if (!blockHUOptions.length) return;
-    if (blockHUOptions.length === 1) {
-      setSelectedBlock(blockHUOptions[0].value);
-    }
-  }, [blockHUOptions, updateUserProgressForm.subSurveyActivityId]);
+  function backToBlockCards() {
+    setSelectedBlock("");
+  }
 
-  const handleChangeUpdateUserProgress = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => {
-    const { id, value } = e.target;
-    if (id === "subSurveyActivityId") {
-      const rows = userProgressData?.userProgressSurveyByUserId ?? [];
-      const up = rows.find((r: any) => r?.subSurveyActivity?.id === value);
-      setUpdateUserProgressForm((prev) => ({
-        ...prev,
-        subSurveyActivityId: value,
-        districtId: getDistrictId(up),
-      }));
-    } else {
-      setUpdateUserProgressForm((prev) => ({ ...prev, [id]: value }));
-    }
-  };
-
+  // ===== Guard UI =====
   if (loading) {
     return (
       <div className="max-w-screen-xl mx-auto px-3 py-6 font-Poppins">
@@ -251,7 +313,7 @@ export default function UserPage() {
     return Number.isFinite(n) ? n.toFixed(digits) : String(v ?? "");
   }
 
-  function ambilLokasiDanPatch(sampleId: string) {
+  async function ambilLokasiDanPatch(sampleId: string) {
     const userProgressId =
       currentUP?.id || updateUserProgressForm.userProgressId;
     if (!userProgressId) return toast.error("Pilih kegiatan & blok dulu ya.");
@@ -319,6 +381,15 @@ export default function UserPage() {
     );
   }
 
+  // NOTE: backend kamu belum mendukung update field "identity" lewat PatchUserSampleInput,
+  // jadi tombol simpan nama di-disable secara fungsional (biar tidak error Apollo).
+  async function saveIdentity(_sampleId: string) {
+    toast.error(
+      "Update nama responden belum didukung oleh backend (PatchUserSampleInput)."
+    );
+    return;
+  }
+
   async function resetCacah(sampleId: string) {
     const userProgressId =
       currentUP?.id || updateUserProgressForm.userProgressId;
@@ -381,62 +452,202 @@ export default function UserPage() {
       <div className="bg-orange-50 rounded-lg p-3 md:p-4 font-bold text-lg md:text-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 shadow-md">
         <span>Panel Petugas</span>
       </div>
+
       <div className="bg-blue-100 rounded-lg p-4 shadow-md">
         <form onSubmit={(e) => e.preventDefault()} className="space-y-3">
           <h3 className="text-base md:text-lg font-bold">
             Update Data Petugas
           </h3>
 
-          <div>
-            <label
-              htmlFor="subSurveyActivityId"
-              className="block text-sm font-bold mb-1"
-            >
-              Kegiatan Survei
-            </label>
-            <HUComboBox
-              value={updateUserProgressForm.subSurveyActivityId || null}
-              onValueChange={(v) =>
-                setUpdateUserProgressForm((p) => ({
-                  ...p,
-                  subSurveyActivityId: (v ?? "") as string,
-                }))
-              }
-              options={subSurveyHUOptions}
-              placeholder="-- Pilih kegiatan survei --"
-            />
-            {updateUserProgressForm.subSurveyActivityId && (
-              <p className="mt-1 text-xs">
-                Tipe kegiatan:{" "}
-                <span
-                  className={`px-2 py-0.5 rounded ${isListing ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"}`}
-                >
-                  {isListing ? "Listing" : "Non-Listing"}
-                </span>
+          {viewMode === "list" ? (
+            <div className="space-y-2">
+              <p className="text-sm opacity-80">
+                Pilih kegiatan survei untuk melihat assignment per blok.
               </p>
-            )}
-            <div className="mt-2">
-              <label className="block text-sm font-bold mb-1">Blok</label>
-              <HUComboBox
-                value={selectedBlock || null}
-                onValueChange={(v) => setSelectedBlock((v ?? "") as string)}
-                options={blockHUOptions}
-                placeholder={
-                  !updateUserProgressForm.subSurveyActivityId
-                    ? "Pilih kegiatan dulu"
-                    : blockHUOptions.length === 0
-                      ? "Tidak ada blok"
-                      : "-- Pilih Blok --"
-                }
-                disabled={
-                  !updateUserProgressForm.subSurveyActivityId ||
-                  blockHUOptions.length === 0
-                }
-              />
-            </div>
-          </div>
 
-          {selectedBlock ? (
+              {upLoading ? (
+                <div className="text-sm opacity-70">Memuat kegiatan…</div>
+              ) : activityCards.length === 0 ? (
+                <div className="text-sm opacity-70">
+                  Belum ada kegiatan survei yang ditugaskan.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {activityCards.map((c) => {
+                    const act = c.activity;
+                    const rawType = (act?.activityType ?? "").toString();
+                    const isListingCard = rawType.toLowerCase() === "listing";
+                    const range = fmtDateRange(act?.startDate, act?.endDate);
+
+                    return (
+                      <button
+                        key={act?.id}
+                        type="button"
+                        onClick={() => act?.id && openActivity(act.id)}
+                        className="text-left bg-white border rounded-lg p-3 shadow-sm hover:shadow transition"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="font-semibold leading-snug">
+                            {act?.name ?? "-"}
+                          </div>
+                          <span
+                            className={`shrink-0 px-2 py-0.5 rounded text-xs ${
+                              isListingCard
+                                ? "bg-green-100 text-green-700"
+                                : "bg-gray-100 text-gray-700"
+                            }`}
+                          >
+                            {isListingCard ? "Listing" : "Non-Listing"}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-[35%,auto] gap-2 my-2 text-xs">
+                          Jadwal<span className="font-medium">: {range}</span>
+                          Kabupaten/Kota
+                          <span className="font-medium">
+                            : {c.cityName ?? "-"}
+                          </span>
+                        </div>
+
+                        <div className="mt-2 w-full gap-2 text-sm">
+                          <div className="rounded-md bg-blue-50 p-2">
+                            <div>Assigned</div>
+                            <div className="font-semibold">
+                              {c.totals.totalAssigned}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                          <div className="rounded-md bg-green-50 p-2">
+                            <div>Submit</div>
+                            <div className="font-semibold">
+                              {c.totals.submitCount}
+                            </div>
+                          </div>
+                          <div className="rounded-md bg-emerald-50 p-2">
+                            <div>Approved</div>
+                            <div className="font-semibold">
+                              {c.totals.approvedCount}
+                            </div>
+                          </div>
+                          {/* <div className="rounded-md bg-red-50 p-2">
+                            <div>Rejected</div>
+                            <div className="font-semibold">
+                              {c.totals.rejectedCount}
+                            </div>
+                          </div> */}
+                        </div>
+
+                        <div className="mt-2 text-sm">
+                          Jumlah Blok Assignment:{" "}
+                          <span className="font-medium">
+                            {c.blocks.length || "-"}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={backToList}
+                  className="px-3 py-1.5 rounded-md bg-white border hover:bg-gray-50 text-sm"
+                >
+                  ← Kembali
+                </button>
+
+                {selectedBlock ? (
+                  <button
+                    type="button"
+                    onClick={backToBlockCards}
+                    className="px-3 py-1.5 rounded-md bg-white border hover:bg-gray-50 text-sm"
+                  >
+                    Pilih Blok
+                  </button>
+                ) : null}
+              </div>
+
+              {/* ===== List BLOK cards (tanpa combobox) ===== */}
+              {!selectedBlock ? (
+                <div className="space-y-2">
+                  <div className="text-sm opacity-80">
+                    Pilih blok untuk melihat daftar sampel.
+                  </div>
+
+                  {blockCards.length === 0 ? (
+                    <div className="text-sm opacity-70">
+                      Tidak ada blok untuk kegiatan ini.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {blockCards.map(({ block, row }) => (
+                        <button
+                          key={block}
+                          type="button"
+                          onClick={() => setSelectedBlock(block)}
+                          className="text-left bg-white border rounded-lg p-3 shadow-sm hover:shadow transition"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="font-semibold">Blok {block}</div>
+                          </div>
+
+                          <div className="grid grid-cols-[35%,auto] gap-2 my-2 text-xs">
+                            Kab/Kota
+                            <span className="font-medium">
+                              : {row?.district?.city ?? "-"}
+                            </span>
+                            Kecamatan
+                            <span className="font-medium">
+                              : {row?.district?.name ?? "-"}
+                            </span>
+                            Desa
+                            <span className="font-medium">
+                              : {row?.villageName ?? "-"}
+                            </span>
+                          </div>
+
+                          <div className="mt-2 w-full text-sm">
+                            <div className="rounded-md bg-blue-50 p-2">
+                              <div>Assigned</div>
+                              <div className="font-semibold">
+                                {row?.totalAssigned ?? 0}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                            <div className="rounded-md bg-green-50 p-2">
+                              <div>Submit</div>
+                              <div className="font-semibold">
+                                {row?.submitCount ?? 0}
+                              </div>
+                            </div>
+                            <div className="rounded-md bg-emerald-50 p-2">
+                              <div>Approved</div>
+                              <div className="font-semibold">
+                                {row?.approvedCount ?? 0}
+                              </div>
+                            </div>
+                            {/* <div className="rounded-md bg-red-50 p-2">
+                              <div>Rejected</div>
+                              <div className="font-semibold">{row?.rejectedCount ?? 0}</div>
+                            </div> */}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          )}
+
+          {/* ===== Sampel (muncul setelah blok dipilih) ===== */}
+          {viewMode === "detail" && selectedBlock ? (
             <div className="border rounded-md space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold">
@@ -448,7 +659,7 @@ export default function UserPage() {
                 <div className="text-sm opacity-70">Belum ada sampel.</div>
               ) : (
                 <div className="space-y-2 bg-white p-2 rounded-md border">
-                  {editableSamples.map((s, idx) => (
+                  {editableSamples.map((s) => (
                     <div
                       key={s.id}
                       className="sm:flex sm:justify-between grid grid-cols-1 gap-2 items-center border rounded-md p-2"
@@ -457,29 +668,64 @@ export default function UserPage() {
                         NUS: {s.nus}
                       </div>
 
-                      {/* Nama Sampel */}
-                      <input
-                        value={s.identity}
-                        readOnly
-                        className="w-full px-3 py-2 border rounded-md bg-white text-sm font-semibold focus:outline-none cursor-default"
-                      />
+                      <div className="flex flex-row gap-2 w-full">
+                        <input
+                          value={s.identity ?? ""}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setEditableSamples((prev) =>
+                              prev.map((x) =>
+                                x.id === s.id ? { ...x, identity: v } : x
+                              )
+                            );
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              saveIdentity(s.id);
+                            }
+                          }}
+                          placeholder="Nama Responden"
+                          className="px-3 py-2 border rounded-md bg-white text-sm font-semibold focus:outline-none w-full"
+                        />
 
-                      {/* Status Pencacahan */}
+                        <div className="flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => saveIdentity(s.id)}
+                            disabled
+                            className="px-3 py-2 rounded-md bg-gray-400 text-white text-xs font-semibold disabled:opacity-70"
+                            title="Backend belum mendukung update nama responden"
+                          >
+                            Simpan
+                          </button>
+                        </div>
+                      </div>
+
                       <input
                         value={
                           s.cacahStatus === "Selesai"
-                            ? "Selesai"
+                            ? "Selesai Dicacah"
                             : "Belum Dicacah"
                         }
                         readOnly
-                        className={`w-full px-3 py-2 border rounded-md ${s.cacahStatus === "Selesai" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"} text-sm font-semibold focus:outline-none cursor-default`}
+                        className={`w-full px-3 py-2 border rounded-md ${
+                          s.cacahStatus === "Selesai"
+                            ? "bg-green-50 text-green-700"
+                            : "bg-red-50 text-red-700"
+                        } text-sm font-semibold focus:outline-none cursor-default`}
                       />
 
-                      {/* Status Persetujuan (read-only untuk petugas) */}
                       <input
                         value={s.approvalStatus ?? "Menunggu"}
                         disabled
-                        className={`w-full px-3 py-2 border rounded-md ${s.approvalStatus === "Disetujui" ? "bg-green-50 text-green-700" : s.approvalStatus == "Ditolak" ? "bg-red-50 text-red-700" : "bg-yellow-50 text-yellow-700"} text-sm font-semibold focus:outline-none`}
+                        className={`w-full px-3 py-2 border rounded-md ${
+                          s.approvalStatus === "Disetujui"
+                            ? "bg-green-50 text-green-700"
+                            : s.approvalStatus === "Ditolak"
+                              ? "bg-red-50 text-red-700"
+                              : "bg-yellow-50 text-yellow-700"
+                        } text-sm font-semibold focus:outline-none`}
                       />
 
                       <div className="flex gap-2 flex-wrap justify-end w-full">
@@ -491,7 +737,6 @@ export default function UserPage() {
                             }
                             className="bg-purple-600 border-purple-600 hover:bg-purple-500"
                           >
-                            {/* icon lokasi */}
                             <svg
                               viewBox="0 0 24 24"
                               className="h-5 w-5"
@@ -541,6 +786,7 @@ export default function UserPage() {
                             </svg>
                           </IconButton>
                         )}
+
                         <IconButton
                           label={
                             locatingId === s.id
@@ -558,7 +804,6 @@ export default function UserPage() {
                           }
                           className="bg-blue-600 border-blue-600 hover:bg-blue-500"
                         >
-                          {/* icon pensil */}
                           <svg
                             viewBox="0 0 24 24"
                             className="h-5 w-5"
@@ -585,6 +830,7 @@ export default function UserPage() {
                             />
                           </svg>
                         </IconButton>
+
                         {s.cacahStatus === "Selesai" && (
                           <IconButton
                             label={
@@ -598,7 +844,6 @@ export default function UserPage() {
                             }
                             className="bg-red-600 border-red-600 hover:bg-red-500"
                           >
-                            {/* icon reset */}
                             <svg
                               viewBox="0 0 24 24"
                               className="h-5 w-5"
@@ -627,24 +872,7 @@ export default function UserPage() {
                 </div>
               )}
             </div>
-          ) : (
-            <div className="text-sm opacity-70">
-              Pilih kegiatan dan blok untuk menampilkan sampel.
-            </div>
-          )}
-
-          {/* <div className="md:col-span-2 flex justify-end">
-            <button
-              type="button"
-              onClick={patchAllSamples}
-              className={`${styles.button} my-2 text-white w-full sm:w-auto`}
-              disabled={
-                !currentUP?.id || editableSamples.length === 0 || patching
-              }
-            >
-              Simpan Semua Sampel
-            </button>
-          </div> */}
+          ) : null}
         </form>
       </div>
     </div>

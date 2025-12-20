@@ -1,6 +1,7 @@
 import {
   Args,
   ID,
+  Int,
   Mutation,
   Parent,
   Query,
@@ -13,7 +14,9 @@ import {
   DistrictType,
   IssueCommentType,
   JobLetterType,
+  MonthlyActivityStaffUsageRowType,
   MonthlyStatsType,
+  StaffYearlyExportRowType,
   SubmitSPJType,
   SubSurveyActivityType,
   SubSurveyProgressType,
@@ -245,8 +248,23 @@ export class SurveyActivityResolver {
   }
 
   @Query(() => MonthlyStatsType)
-  getMonthlySurveyStats() {
-    return this.service.getMonthlySurveyStats();
+  getMonthlySurveyStats(
+    @Args('subSurveyActivityId', { type: () => ID, nullable: true })
+    subSurveyActivityId?: string,
+  ) {
+    return this.service.getMonthlySurveyStats(subSurveyActivityId);
+  }
+
+  @Query(() => [MonthlyActivityStaffUsageRowType])
+  getMonthlyActivityStaffUsage(
+    @Args('year', { type: () => Int }) year: number,
+  ) {
+    return this.service.getMonthlyActivityStaffUsage(year);
+  }
+
+  @Query(() => [StaffYearlyExportRowType])
+  getStaffYearlyExport(@Args('year', { type: () => Int }) year: number) {
+    return this.service.getStaffYearlyExport(year);
   }
 
   @Query(() => [DistrictType])

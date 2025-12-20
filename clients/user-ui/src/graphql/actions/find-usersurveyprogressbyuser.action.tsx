@@ -19,14 +19,23 @@ export const GET_USER_PROGRESS_BY_USER_ID = gql`
         name
         limit_bill
       }
+        superVisorId
+      superVisor {
+        id
+        name
+      }
       subSurveyActivity {
         id
         name
         activityType
+        startDate
+        endDate
+        sampleType
       }
       district {
         id
         name
+        city
       }
       samples {
         id

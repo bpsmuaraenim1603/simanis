@@ -5,6 +5,7 @@ import {
   Int,
   registerEnumType,
   GraphQLISODateTime,
+  Float,
 } from '@nestjs/graphql';
 import {
   AgreeState,
@@ -321,6 +322,32 @@ export class MonthlyStatsType {
 }
 
 @ObjectType()
+export class MonthlyActivityStaffUsageRowType {
+  @Field(() => String, {
+    description: 'Bulan kegiatan berdasarkan startDate, format "YYYY-MM"',
+  })
+  month!: string;
+
+  @Field(() => ID)
+  subSurveyActivityId!: string;
+
+  @Field(() => String)
+  subSurveyName!: string;
+
+  @Field(() => GraphQLISODateTime)
+  startDate!: Date;
+
+  @Field(() => GraphQLISODateTime)
+  endDate!: Date;
+
+  @Field(() => Number, { description: "Jumlah petugas (distinct userId) dipakai pada kegiatan" })
+  staffCount!: number;
+
+  @Field(() => [UserType], { description: "Daftar petugas (distinct userId) dipakai pada kegiatan" })
+  staffUsers!: UserType[];
+}
+
+@ObjectType()
 export class IssueCommentType {
   @Field(() => ID)
   id: string;
@@ -378,4 +405,54 @@ export class ContentIssueType {
 
   @Field()
   updatedAt: Date;
+}
+
+@ObjectType()
+export class StaffYearlyExportRowType {
+  @Field(() => String)
+  userId!: string;
+
+  @Field(() => String)
+  userName!: string;
+
+  @Field(() => Float, { nullable: true })
+  userLimitBill?: number | null;
+
+  @Field(() => String)
+  subSurveyActivityId!: string;
+
+  @Field(() => String)
+  subSurveyName!: string;
+
+  @Field(() => String, { nullable: true })
+  activityType?: string | null;
+
+  @Field(() => GraphQLISODateTime, { nullable: true })
+  startDate?: Date | null;
+
+  @Field(() => String, {
+    description: 'Bulan berdasarkan startDate, format "YYYY-MM"',
+  })
+  month!: string;
+
+  @Field(() => String, { nullable: true })
+  districtName?: string | null;
+
+  @Field(() => Int, { nullable: true })
+  blockCount?: number | null;
+
+  @Field(() => Int, { nullable: true })
+  totalAssigned?: number | null;
+
+  @Field(() => Int, { nullable: true })
+  submitCount?: number | null;
+
+  @Field(() => Int, { nullable: true })
+  approvedCount?: number | null;
+
+  @Field(() => Int, { nullable: true })
+  rejectedCount?: number | null;
+
+  @Field(() => Float, { nullable: true })
+  travelBill?: number | null;
 }

@@ -43,7 +43,9 @@ const splitLink = split(
         definition.name.value.toLowerCase().includes("spj") ||
         definition.name.value.toLowerCase().includes("jobletter") ||
         definition.name.value.toLowerCase().includes("issue") ||
-        definition.name.value.toLowerCase().includes("patchuser")
+        definition.name.value.toLowerCase().includes("patchuser") ||
+        definition.name.value.toLowerCase().includes("monthly") ||
+        definition.name.value.toLowerCase().includes("yearly")
       );
     }
     return false; // fallback, selalu return boolean

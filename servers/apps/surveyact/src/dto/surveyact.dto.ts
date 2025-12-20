@@ -34,6 +34,9 @@ export class PatchUserSampleInput {
   approvalStatus?: AgreeState;
 
   @Field({ nullable: true })
+  identity?: string;
+
+  @Field({ nullable: true })
   geoLat?: number;
 
   @Field({ nullable: true })

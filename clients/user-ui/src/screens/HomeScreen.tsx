@@ -12,8 +12,13 @@ function HomeScreen() {
 
   useEffect(() => {
     if (user) {
-      toast.success("Anda sudah login. Mengarahkan ke Beranda");
-      router.replace("/dashboard");
+      if (user.role === "User") {
+        toast.success("Anda sudah login. Mengarahkan langsung ke Halaman User");
+        router.replace("/user");
+      } else {
+        toast.success("Anda sudah login. Mengarahkan ke Beranda");
+        router.replace("/dashboard");
+      }
     }
   }, [user, loading, router]);
 

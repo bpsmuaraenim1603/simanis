@@ -425,6 +425,7 @@ export class SurveyActivityService {
               ...(s.geoLat !== undefined && { geoLat: s.geoLat }),
               ...(s.geoLng !== undefined && { geoLng: s.geoLng }),
               ...(s.geoCapturedAt && { geoCapturedAt: s.geoCapturedAt }),
+              ...(s.identity && { identity: s.identity }),
             },
           });
         }
@@ -735,44 +736,196 @@ export class SurveyActivityService {
     });
   }
 
-  async getMonthlySurveyStats() {
+  async getMonthlySurveyStats(subSurveyActivityId?: string) {
     const now = new Date();
+
+    // rentang bulan ini (tgl 1 - akhir bulan)
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    endOfMonth.setHours(23, 59, 59, 999);
 
-    const [jobLetter, submitSPJ, userProgress] = await Promise.all([
+    // default: pakai bulan ini
+    let rangeStart = startOfMonth;
+    let rangeEnd = endOfMonth;
+
+    // kalau ada subSurveyActivityId → irisan dengan periode kegiatan
+    if (subSurveyActivityId) {
+      const sub = await this.prisma.subSurveyActivity.findUnique({
+        where: { id: subSurveyActivityId },
+        select: { startDate: true, endDate: true },
+      });
+
+      if (!sub?.startDate || !sub?.endDate) {
+        throw new Error('startDate/endDate belum di-set untuk kegiatan ini');
+      }
+
+      const activityStart = new Date(sub.startDate);
+      const activityEnd = new Date(sub.endDate);
+      activityEnd.setHours(23, 59, 59, 999);
+
+      rangeStart = activityStart > startOfMonth ? activityStart : startOfMonth;
+      rangeEnd = activityEnd < endOfMonth ? activityEnd : endOfMonth;
+
+      // tidak overlap
+      if (rangeStart > rangeEnd) {
+        return { totalJobLetters: 0, totalSPJ: 0, totalActiveUsers: 0 };
+      }
+    }
+
+    const [jobLetter, submitSPJ, totalActiveUsers] = await Promise.all([
       this.prisma.jobLetter.count({
         where: {
-          createdAt: {
-            gte: startOfMonth,
-            lte: endOfMonth,
-          },
+          ...(subSurveyActivityId ? { subSurveyActivityId } : {}),
+          createdAt: { gte: rangeStart, lte: rangeEnd },
         },
       }),
+
       this.prisma.submitSPJ.count({
         where: {
-          createdAt: {
-            gte: startOfMonth,
-            lte: endOfMonth,
-          },
+          ...(subSurveyActivityId ? { subSurveyActivityId } : {}),
+          createdAt: { gte: rangeStart, lte: rangeEnd },
         },
       }),
-      this.prisma.userProgress.findMany({
-        where: {
-          lastUpdated: {
-            gte: startOfMonth,
-            lte: endOfMonth,
+
+      this.prisma.userProgress
+        .findMany({
+          where: {
+            ...(subSurveyActivityId ? { subSurveyActivityId } : {}),
+            lastUpdated: { gte: rangeStart, lte: rangeEnd },
           },
-        },
-        distinct: ['userId'],
-      }).then((res) => res.length),
+          distinct: ['userId'],
+          select: { userId: true },
+        })
+        .then((res) => res.length),
     ]);
 
     return {
       totalJobLetters: jobLetter,
       totalSPJ: submitSPJ,
-      totalActiveUsers: userProgress,
+      totalActiveUsers,
     };
+  }
+
+  async getMonthlyActivityStaffUsage(year: number) {
+    const from = new Date(year, 0, 1);
+    const to = new Date(year, 11, 31);
+    to.setHours(23, 59, 59, 999);
+
+    const subs = await this.prisma.subSurveyActivity.findMany({
+      where: { startDate: { gte: from, lte: to } },
+      select: { id: true, name: true, startDate: true, endDate: true },
+      orderBy: { startDate: 'asc' },
+    });
+
+    const pad2 = (n: number) => String(n).padStart(2, '0');
+
+    const rows = await Promise.all(
+      subs.map(async (s) => {
+        // 1x query saja: ambil distinct userId + data user
+        const ups = await this.prisma.userProgress.findMany({
+          where: { subSurveyActivityId: s.id },
+          distinct: ['userId'],
+          select: {
+            userId: true,
+            user: { select: { id: true, name: true, email: true } },
+          },
+        });
+
+        const month = `${s.startDate.getFullYear()}-${pad2(s.startDate.getMonth() + 1)}`;
+
+        const staffUsers = ups.map((x) => x.user).filter(Boolean);
+
+        return {
+          month,
+          subSurveyActivityId: s.id,
+          subSurveyName: s.name ?? '-',
+          startDate: s.startDate,
+          endDate: s.endDate,
+          staffCount: staffUsers.length,
+          staffUsers,
+        };
+      }),
+    );
+
+    return rows;
+  }
+
+  async getStaffYearlyExport(year: number) {
+    const from = new Date(year, 0, 1);
+    const to = new Date(year, 11, 31, 23, 59, 59, 999);
+
+    const pad2 = (n: number) => String(n).padStart(2, '0');
+
+    const ups = await this.prisma.userProgress.findMany({
+      where: {
+        // tahun ditentukan dari startDate kegiatan
+        subSurveyActivity: {
+          startDate: { gte: from, lte: to },
+        },
+      },
+      select: {
+        userId: true,
+        subSurveyActivityId: true,
+
+        totalAssigned: true,
+        submitCount: true,
+        approvedCount: true,
+        rejectedCount: true,
+        blockCount: true,
+        travelBill: true,
+
+        user: {
+          select: {
+            name: true,
+            limit_bill: true,
+          },
+        },
+        district: {
+          select: { name: true },
+        },
+        subSurveyActivity: {
+          select: {
+            id: true,
+            name: true,
+            activityType: true,
+            startDate: true, // ini kunci untuk bulan
+          },
+        },
+      },
+      orderBy: [{ subSurveyActivity: { startDate: 'asc' } }],
+    });
+
+    return ups.map((r) => {
+      const sd = r.subSurveyActivity?.startDate ?? null;
+
+      const month =
+        sd != null
+          ? `${sd.getFullYear()}-${pad2(sd.getMonth() + 1)}`
+          : `${year}-01`; // fallback (harusnya tidak kepakai)
+
+      return {
+        userId: r.userId,
+        userName: r.user?.name ?? '-',
+        userLimitBill: r.user?.limit_bill ?? null,
+
+        subSurveyActivityId: r.subSurveyActivityId,
+        subSurveyName: r.subSurveyActivity?.name ?? '-',
+        activityType: r.subSurveyActivity?.activityType ?? null,
+
+        startDate: sd,
+        month,
+
+        districtName: r.district?.name ?? null,
+
+        blockCount: r.blockCount ?? 0,
+        totalAssigned: r.totalAssigned ?? 0,
+        submitCount: r.submitCount ?? 0,
+        approvedCount: r.approvedCount ?? 0,
+        rejectedCount: r.rejectedCount ?? 0,
+
+        travelBill: r.travelBill ?? 0,
+      };
+    });
   }
 
   async allDistricts() {

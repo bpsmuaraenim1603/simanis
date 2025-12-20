@@ -123,7 +123,11 @@ function Dashboard() {
     return names.map((name) => ({ value: String(name), label: String(name) }));
   }, [surveyPogressData]);
 
-  const { data: monthlyStats } = useQuery(GET_MONTHLY_DASHBOARD_STATS);
+  const { data: monthlyStats } = useQuery(GET_MONTHLY_DASHBOARD_STATS, {
+    variables: selectedSubSurveyId
+      ? { subSurveyActivityId: selectedSubSurveyId }
+      : {},
+  });
 
   const { data: userProgressData } = useQuery<{
     allUserSurveyProgress: UserProgress[];
@@ -667,7 +671,7 @@ function Dashboard() {
         <div className="p-4 bg-orange-50 rounded-lg shadow-md">
           <p className="text-sm font-semibold">Petugas Aktif</p>
           <h2 className="font-bold text-2xl">
-            {monthlyStats?.getMonthlySurveyStats?.totalActiveUsers ?? "-"}
+            {monthlyStats?.getMonthlySurveyStats?.totalActiveUsers ?? "0"}
           </h2>
         </div>
         <div className="p-4 bg-orange-50 rounded-lg shadow-md">
@@ -677,13 +681,13 @@ function Dashboard() {
         <div className="p-4 bg-orange-50 rounded-lg shadow-md">
           <p className="text-sm font-semibold">Pengumpulan ST</p>
           <h2 className="font-bold text-2xl">
-            {monthlyStats?.getMonthlySurveyStats?.totalJobLetters ?? "-"}
+            {monthlyStats?.getMonthlySurveyStats?.totalJobLetters ?? "0"}
           </h2>
         </div>
         <div className="p-4 bg-orange-50 rounded-lg shadow-md">
           <p className="text-sm font-semibold">Pengajuan Honor</p>
           <h2 className="font-bold text-2xl">
-            {monthlyStats?.getMonthlySurveyStats?.totalSPJ ?? "-"}
+            {monthlyStats?.getMonthlySurveyStats?.totalSPJ ?? "0"}
           </h2>
         </div>
       </div>
@@ -726,7 +730,7 @@ function Dashboard() {
                   name="Submit Sampel"
                 />
                 <Bar dataKey="approvedCount" fill="#22c55e" name="Approved" />
-                <Bar dataKey="rejectedCount" fill="#ef4444" name="Rejected" />
+                {/* <Bar dataKey="rejectedCount" fill="#ef4444" name="Rejected" /> */}
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -796,7 +800,7 @@ function Dashboard() {
 
                   <p className="text-xs text-gray-600">
                     Target: {agg.totalAssigned} sampel, Disubmit:{" "}
-                    {agg.submitCount} sampel, Disetujui: {agg.approvedCount}{" "}
+                    {agg.submitCount+agg.rejectedCount} sampel, Disetujui: {agg.approvedCount}{" "}
                     sampel
                   </p>
 

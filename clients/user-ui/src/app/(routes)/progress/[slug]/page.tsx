@@ -251,31 +251,31 @@ const ProgressTemplate = () => {
           </div>
 
           {/* Ringkasan angka 4 kolom */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="bg-blue-300 rounded-md flex flex-col items-center space-y-1 w-full py-2">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <div className="bg-gray-300 rounded-md flex flex-col items-center space-y-1 w-full py-2">
               <p>Total Petugas</p>
-              <p className="font-bold text-xl md:text-2xl text-blue-600">
+              <p className="font-bold text-xl md:text-2xl text-gray-600">
                 {aggregatedUserProgress.length}
               </p>
             </div>
-            <div className="bg-green-300 rounded-md flex flex-col items-center space-y-1 w-full py-2">
+            <div className="bg-blue-300 rounded-md flex flex-col items-center space-y-1 w-full py-2">
               <p>Sampel Disubmit</p>
-              <p className="font-bold text-xl md:text-2xl text-green-600">
+              <p className="font-bold text-xl md:text-2xl text-blue-600">
                 {progress.submitCount}
               </p>
             </div>
-            <div className="bg-purple-300 rounded-md flex flex-col items-center space-y-1 w-full py-2">
+            <div className="bg-green-300 rounded-md flex flex-col items-center space-y-1 w-full py-2">
               <p>Sampel Disetujui</p>
-              <p className="font-bold text-xl md:text-2xl text-purple-600">
+              <p className="font-bold text-xl md:text-2xl text-green-600">
                 {progress.approvedCount}
               </p>
             </div>
-            <div className="bg-red-300 rounded-md flex flex-col items-center space-y-1 w-full py-2">
+            {/* <div className="bg-red-300 rounded-md flex flex-col items-center space-y-1 w-full py-2">
               <p>Sampel Ditolak</p>
               <p className="font-bold text-xl md:text-2xl text-red-600">
                 {progress.rejectedCount}
               </p>
-            </div>
+            </div> */}
           </div>
 
           {/* Tabel petugas */}
@@ -292,7 +292,7 @@ const ProgressTemplate = () => {
                     <th className="px-4 py-2">TARGET</th>
                     <th className="px-4 py-2">DISUBMIT</th>
                     <th className="px-4 py-2">DISETUJUI</th>
-                    <th className="px-4 py-2">DITOLAK</th>
+                    {/* <th className="px-4 py-2">DITOLAK</th> */}
                     <th className="px-4 py-2">PROGRESS</th>
                   </tr>
                 </thead>
@@ -336,7 +336,7 @@ const ProgressTemplate = () => {
                         <td className="px-4 py-3">{row.totalAssigned}</td>
                         <td className="px-4 py-3">{row.submitCount}</td>
                         <td className="px-4 py-3">{row.approvedCount}</td>
-                        <td className="px-4 py-3">{row.rejectedCount}</td>
+                        {/* <td className="px-4 py-3">{row.rejectedCount}</td> */}
                         <td className="px-4 py-3">
                           <div className="w-full bg-gray-200 rounded-full h-2">
                             <div
