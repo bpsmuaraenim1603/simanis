@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { SurveyActivityService } from './surveyacts.service';
-import { SurveyActivityResolver } from './surveyact.resolver';
+import { SurveyActivityResolver, UserSampleResolver } from './surveyact.resolver';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { GraphQLModule } from '@nestjs/graphql';
 import {
@@ -33,6 +33,7 @@ import { StorageService } from './storage.service';
     JobLetterResolver,
     StorageService,
     SurveyActivityResolver,
+    UserSampleResolver,
     PrismaService,
   ],
 })

@@ -10,7 +10,6 @@ import {
 } from "@apollo/client";
 import useUser from "@/src/hooks/useUser";
 import { useRouter } from "next/navigation";
-
 import { GET_ALL_SURVEY_ACTIVITIES } from "@/src/graphql/actions/find-allsurveyact.action";
 import { GET_ALL_SUB_SURVEY_ACTIVITIES } from "@/src/graphql/actions/find-allsubsurveyact.action";
 import { GET_USER_PROGRESS_BY_SUBSURVEY_ID } from "@/src/graphql/actions/find-usersurveyprogress.action";
@@ -60,6 +59,8 @@ type UserProgressRow = {
     approvalStatus: string;
     geoLat?: number | null;
     geoLng?: number | null;
+    photoPath?: string | null;
+    photoSignedUrl?: string | null;
   }[];
 };
 
@@ -88,7 +89,6 @@ export default function SupervisorManagePage() {
   const apollo = useApolloClient();
   const router = useRouter();
 
-  // roles yang diizinkan
   const ALLOWED = new Set(["Superadmin", "Supervisor", "Admin"]);
 
   useEffect(() => {
@@ -100,7 +100,6 @@ export default function SupervisorManagePage() {
     }
   }, [userLoading, currentUser?.role, router]);
 
-  // ===== Ambil semua tim, lalu fetch semua sub-kegiatan (tanpa UI pilih tim) =====
   const { data: saData, loading: saLoading } = useQuery(
     GET_ALL_SURVEY_ACTIVITIES,
     {
@@ -112,6 +111,8 @@ export default function SupervisorManagePage() {
     []
   );
   const [subsLoading, setSubsLoading] = useState(false);
+  const [assignedSubIds, setAssignedSubIds] = useState<Set<string>>(new Set());
+  const [assignedLoading, setAssignedLoading] = useState(false);
 
   useEffect(() => {
     async function loadAllSubs() {
@@ -134,14 +135,12 @@ export default function SupervisorManagePage() {
           )
         );
 
-        // sesuai file sebelumnya: subsData?.subSurveyActivityById
         const merged: SubSurveyActivity[] = results
           .flatMap(
             (r) => (r.data?.subSurveyActivityById ?? []) as SubSurveyActivity[]
           )
           .filter(Boolean);
 
-        // uniq by id
         const map = new Map<string, SubSurveyActivity>();
         for (const s of merged) if (s?.id) map.set(s.id, s);
         setAllSubActivities(Array.from(map.values()));
@@ -157,7 +156,6 @@ export default function SupervisorManagePage() {
     loadAllSubs();
   }, [saData, apollo]);
 
-  // ===== Fetch user progress per subSurveyActivity =====
   const [fetchUP, { data: upData, loading: upLoading }] = useLazyQuery(
     GET_USER_PROGRESS_BY_SUBSURVEY_ID,
     {
@@ -168,12 +166,10 @@ export default function SupervisorManagePage() {
   const [patchUserSamples, { loading: patching }] =
     useMutation(PATCH_USER_SAMPLES);
 
-  // ===== View state =====
   const [viewMode, setViewMode] = useState<ViewMode>("activity");
   const [subSurveyActivityId, setSubSurveyActivityId] = useState("");
   const [selectedUserProgressId, setSelectedUserProgressId] = useState("");
 
-  // supervisor filter (kalau field tersedia)
   const supervisorId = currentUser?.id ?? "";
 
   const allUPRows: UserProgressRow[] =
@@ -207,20 +203,89 @@ export default function SupervisorManagePage() {
       .toString()
       .toLowerCase() === "listing";
 
-  // ===== Activity cards (tampilan awal) =====
+  function isTodayInRange(startDate?: string | null, endDate?: string | null) {
+    if (!startDate || !endDate) return false;
+
+    const now = new Date();
+
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    const startDay = new Date(
+      start.getFullYear(),
+      start.getMonth(),
+      start.getDate()
+    );
+    const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+
+    return (
+      startDay.getTime() <= today.getTime() &&
+      today.getTime() <= endDay.getTime()
+    );
+  }
+
   const activityCards = useMemo(() => {
-    // urutkan by startDate terbaru
-    return [...(allSubActivities ?? [])].sort((a, b) => {
+    const base = [...(allSubActivities ?? [])];
+
+    const inSchedule = base.filter((s) =>
+      isTodayInRange(s.startDate, s.endDate)
+    );
+
+    if (currentUser?.role === "Superadmin") {
+      return inSchedule.sort((a, b) => {
+        const aStart = a?.startDate ? new Date(a.startDate).getTime() : 0;
+        const bStart = b?.startDate ? new Date(b.startDate).getTime() : 0;
+        return bStart - aStart;
+      });
+    }
+
+    const filtered = assignedSubIds.size
+      ? inSchedule.filter((s) => assignedSubIds.has(s.id))
+      : [];
+
+    return filtered.sort((a, b) => {
       const aStart = a?.startDate ? new Date(a.startDate).getTime() : 0;
       const bStart = b?.startDate ? new Date(b.startDate).getTime() : 0;
       return bStart - aStart;
     });
-  }, [allSubActivities]);
+  }, [allSubActivities, assignedSubIds, currentUser?.role]);
+
+  function readStateFromUrl() {
+    if (typeof window === "undefined") {
+      return { mode: "activity" as ViewMode, sa: "", up: "" };
+    }
+    const p = new URLSearchParams(window.location.search);
+    const mode = (p.get("mode") as ViewMode) || "activity";
+    const sa = p.get("sa") || "";
+    const up = p.get("up") || "";
+    return { mode, sa, up };
+  }
+
+  function pushStateToUrl(
+    next: Partial<{ mode: ViewMode; sa: string; up: string }>
+  ) {
+    const p = new URLSearchParams(
+      typeof window !== "undefined" ? window.location.search : ""
+    );
+    if (next.mode !== undefined) p.set("mode", next.mode);
+    if (next.sa !== undefined) {
+      if (next.sa) p.set("sa", next.sa);
+      else p.delete("sa");
+    }
+    if (next.up !== undefined) {
+      if (next.up) p.set("up", next.up);
+      else p.delete("up");
+    }
+    router.push(`?${p.toString()}`);
+  }
 
   function openActivity(activityId: string) {
     setSubSurveyActivityId(activityId);
     setSelectedUserProgressId("");
     setViewMode("blocks");
+    pushStateToUrl({ mode: "blocks", sa: activityId, up: "" });
     fetchUP({ variables: { subSurveyActivityId: activityId } });
   }
 
@@ -228,13 +293,24 @@ export default function SupervisorManagePage() {
     setViewMode("activity");
     setSubSurveyActivityId("");
     setSelectedUserProgressId("");
+    pushStateToUrl({ mode: "activity", sa: "", up: "" });
   }
 
-  // ===== Cards berdasarkan BLOK (1 row = 1 blok + 1 desa/kec) =====
+  function openBlockCard(row: UserProgressRow) {
+    setSelectedUserProgressId(row.id);
+    setViewMode("detail");
+    pushStateToUrl({ mode: "detail", up: row.id });
+  }
+
+  function backToBlockList() {
+    setViewMode("blocks");
+    setSelectedUserProgressId("");
+    pushStateToUrl({ mode: "blocks", up: "" });
+  }
+
   const blockCards = useMemo(() => {
     const rows = [...myUPRows];
 
-    // sort: nama petugas -> blok
     rows.sort((a, b) => {
       const an = (a.user?.name ?? "").toString();
       const bn = (b.user?.name ?? "").toString();
@@ -254,7 +330,9 @@ export default function SupervisorManagePage() {
   );
 
   const [approvedSamples, setApprovedSamples] = useState<any[]>([]);
-  const [mapModal, setMapModal] = useState<null | { index: number }>(null);
+  const [detailModal, setDetailModal] = useState<null | { index: number }>(
+    null
+  );
 
   const mapSamples = useMemo(() => {
     return (approvedSamples ?? []).filter((s: any) => {
@@ -265,34 +343,52 @@ export default function SupervisorManagePage() {
   }, [approvedSamples]);
 
   const mapCount = mapSamples.length;
+  const sampleCount = approvedSamples.length;
 
   const activeSample = useMemo(() => {
-    if (!mapModal) return null;
-    const idx = Math.min(Math.max(mapModal.index, 0), mapCount - 1);
-    return mapSamples[idx] ?? null;
-  }, [mapModal, mapSamples, mapCount]);
+    if (!detailModal) return null;
+    return (approvedSamples ?? [])[detailModal.index] ?? null;
+  }, [detailModal, approvedSamples]);
 
   const goPrev = () =>
-    setMapModal((prev) =>
+    setDetailModal((prev) =>
       prev ? { index: Math.max(prev.index - 1, 0) } : prev
     );
 
   const goNext = () =>
-    setMapModal((prev) =>
-      prev ? { index: Math.min(prev.index + 1, mapCount - 1) } : prev
+    setDetailModal((prev) =>
+      prev ? { index: Math.min(prev.index + 1, sampleCount - 1) } : prev
     );
 
   useEffect(() => {
+    const apply = () => {
+      const s = readStateFromUrl();
+
+      setViewMode(s.mode);
+      setSubSurveyActivityId(s.sa);
+      setSelectedUserProgressId(s.up);
+
+      if ((s.mode === "blocks" || s.mode === "detail") && s.sa) {
+        fetchUP({ variables: { subSurveyActivityId: s.sa } });
+      }
+    };
+
+    apply();
+    window.addEventListener("popstate", apply);
+    return () => window.removeEventListener("popstate", apply);
+  }, []);
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!mapModal) return;
+      if (!detailModal) return;
       if (e.key === "ArrowLeft") goPrev();
       if (e.key === "ArrowRight") goNext();
-      if (e.key === "Escape") setMapModal(null);
+      if (e.key === "Escape") setDetailModal(null);
     };
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [mapModal, mapCount]);
+  }, [detailModal, sampleCount]);
 
   useEffect(() => {
     if (currentUP?.samples) {
@@ -305,7 +401,60 @@ export default function SupervisorManagePage() {
     }
   }, [currentUP?.id, currentUP?.samples]);
 
-  // ===== Approval =====
+  useEffect(() => {
+    if (!detailModal) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [detailModal]);
+
+  useEffect(() => {
+    async function prefetchAssignedActivities() {
+      if (!currentUser?.id) return;
+      if (!allSubActivities.length) {
+        setAssignedSubIds(new Set());
+        return;
+      }
+
+      if (currentUser.role === "Superadmin") {
+        setAssignedSubIds(new Set(allSubActivities.map((s) => s.id)));
+        return;
+      }
+
+      setAssignedLoading(true);
+      try {
+        const next = new Set<string>();
+        for (const sub of allSubActivities) {
+          const res = await apollo.query({
+            query: GET_USER_PROGRESS_BY_SUBSURVEY_ID,
+            variables: { subSurveyActivityId: sub.id },
+            fetchPolicy: "network-only",
+          });
+
+          const rows: UserProgressRow[] =
+            res.data?.userProgressBySubSurveyActivityId ?? [];
+
+          const mine = rows.filter(
+            (r) => (r.superVisorId ?? "") === (currentUser.id ?? "")
+          );
+
+          if (mine.length > 0) next.add(sub.id);
+        }
+
+        setAssignedSubIds(next);
+      } catch (e) {
+        console.error(e);
+        setAssignedSubIds(new Set());
+      } finally {
+        setAssignedLoading(false);
+      }
+    }
+
+    prefetchAssignedActivities();
+  }, [apollo, allSubActivities, currentUser?.id, currentUser?.role]);
+
   async function setSampleApproval(
     sampleId: string,
     status: "Disetujui" | "Ditolak" | "Menunggu"
@@ -329,17 +478,6 @@ export default function SupervisorManagePage() {
     }
   }
 
-  function openBlockCard(row: UserProgressRow) {
-    setSelectedUserProgressId(row.id);
-    setViewMode("detail");
-  }
-
-  function backToBlockList() {
-    setViewMode("blocks");
-    setSelectedUserProgressId("");
-  }
-
-  // ===== Guard =====
   if (userLoading) {
     return (
       <div className="max-w-screen-xl mx-auto px-3 py-6 font-Poppins">
@@ -374,7 +512,7 @@ export default function SupervisorManagePage() {
             </div>
           </div>
 
-          {saLoading || subsLoading ? (
+          {saLoading || subsLoading || assignedLoading ? (
             <div className="text-sm text-gray-600">Memuat kegiatan…</div>
           ) : activityCards.length === 0 ? (
             <div className="text-sm text-gray-600">
@@ -437,7 +575,7 @@ export default function SupervisorManagePage() {
               </button>
             </div>
 
-            <p className="text-sm text-gray-600 grid sm:grid-cols-[8%_1fr] grid-cols-[20%_1fr] grid-rows-2 my-2">
+            <p className="text-sm text-gray-600 grid sm:grid-cols-[8%_1fr] grid-cols-[25%_1fr] grid-rows-2 my-2">
               Kegiatan<span>: {selectedSub?.name ?? "-"}</span>
               Jadwal
               <span>
@@ -450,8 +588,7 @@ export default function SupervisorManagePage() {
             <div className="text-sm text-gray-600">Memuat blok…</div>
           ) : blockCards.length === 0 ? (
             <div className="text-sm text-gray-600">
-              Tidak ada progres pada kegiatan ini (atau belum ter-assign ke
-              pengawas).
+              Belum ter-assign ke pengawas.
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -529,7 +666,7 @@ export default function SupervisorManagePage() {
       {/* ===== MODE 3: DETAIL (approve sampel) ===== */}
       {viewMode === "detail" ? (
         <div className="bg-blue-50 rounded-xl p-4 shadow space-y-4">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center justify-end gap-2">
             <button
               type="button"
               onClick={backToBlockList}
@@ -540,65 +677,52 @@ export default function SupervisorManagePage() {
           </div>
 
           <div className="bg-white border rounded-lg p-3">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <div className="font-semibold">
-                  {currentUP?.user?.name ?? "-"}
-                </div>
-                {currentUP?.user?.email ? (
-                  <div className="text-xs text-gray-500">
-                    {currentUP.user.email}
+            <div>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="font-semibold">
+                    {currentUP?.user?.name ?? "-"}
                   </div>
-                ) : null}
+                  {currentUP?.user?.email ? (
+                    <div className="text-xs text-gray-500">
+                      {currentUP.user.email}
+                    </div>
+                  ) : null}
+                </div>
 
-                <div className="text-xs text-gray-700 mt-2 space-y-0.5">
-                  <div>
-                    Kegiatan:{" "}
-                    <span className="font-medium">
-                      {selectedSub?.name ?? "-"}
-                    </span>
-                  </div>
-                  <div>
-                    Rentang:{" "}
-                    <span className="font-medium">
-                      {fmtDateRange(
-                        selectedSub?.startDate,
-                        selectedSub?.endDate
-                      )}
-                    </span>
-                  </div>
-                  <div>
-                    Blok:{" "}
-                    <span className="font-medium">
-                      {currentUP?.blockCount ?? "-"}
-                    </span>
-                  </div>
-                  <div>
-                    Kab/Kota:{" "}
-                    <span className="font-medium">
-                      {currentUP?.district?.city ?? "-"}
-                    </span>
-                  </div>
-                  <div>
-                    Kecamatan:{" "}
-                    <span className="font-medium">
-                      {currentUP?.district?.name ?? "-"}
-                    </span>
-                  </div>
-                  <div>
-                    Desa:{" "}
-                    <span className="font-medium">
-                      {currentUP?.villageName ?? "-"}
-                    </span>
-                  </div>
-                </div>
+                <span className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-700">
+                  {currentUP?.blockCount
+                    ? `Blok ${currentUP.blockCount}`
+                    : "Blok -"}
+                </span>
               </div>
 
-              <span className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-700">
-                {currentUP?.blockCount
-                  ? `Blok ${currentUP.blockCount}`
-                  : "Blok -"}
-              </span>
+              <div className="text-sm w-full grid sm:grid-cols-[10%_1fr] grid-cols-[35%_1fr] grid-rows-6 text-gray-700 mt-2">
+                Kegiatan{" "}
+                <span className="font-medium">
+                  : {selectedSub?.name ?? "-"}
+                </span>
+                Jadwal{" "}
+                <span className="font-medium">
+                  : {fmtDateRange(selectedSub?.startDate, selectedSub?.endDate)}
+                </span>
+                Blok{" "}
+                <span className="font-medium">
+                  : {currentUP?.blockCount ?? "-"}
+                </span>
+                Kab/Kota{" "}
+                <span className="font-medium">
+                  : {currentUP?.district?.city ?? "-"}
+                </span>
+                Kecamatan{" "}
+                <span className="font-medium">
+                  : {currentUP?.district?.name ?? "-"}
+                </span>
+                Desa{" "}
+                <span className="font-medium">
+                  : {currentUP?.villageName ?? "-"}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -616,7 +740,6 @@ export default function SupervisorManagePage() {
                     <th className="p-2 sm:p-3">Identitas</th>
                     <th className="p-2 sm:p-3">Status Cacah</th>
                     <th className="p-2 sm:p-3">Approval</th>
-                    <th className="p-2 sm:p-3">Lokasi</th>
                     <th className="p-2 sm:p-3">Aksi</th>
                   </tr>
                 </thead>
@@ -654,55 +777,20 @@ export default function SupervisorManagePage() {
                             </span>
                           )}
                         </td>
-                        <td className="p-2 sm:p-3">
-                          {Number.isFinite(Number(s.geoLat)) &&
-                          Number.isFinite(Number(s.geoLng)) ? (
-                            <button
-                              type="button"
-                              className="px-3 py-1 rounded bg-purple-600 text-white disabled:opacity-40"
-                              onClick={() => {
-                                const idx = mapSamples.findIndex(
-                                  (x: any) => x.id === s.id
-                                );
-                                if (idx === -1) {
-                                  toast.error(
-                                    "Sampel ini belum punya koordinat."
-                                  );
-                                  return;
-                                }
-                                setMapModal({ index: idx });
-                              }}
-                            >
-                              Lihat peta
-                            </button>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-
-                        <td className="p-2 sm:p-3">
-                          <div className="flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              disabled={!canApprove || patching}
-                              className="px-3 py-1 rounded bg-green-600 text-white disabled:opacity-40"
-                              onClick={() =>
-                                setSampleApproval(s.id, "Disetujui")
-                              }
-                            >
-                              Setuju
-                            </button>
-                            <button
-                              type="button"
-                              disabled={!canApprove || patching}
-                              className="px-3 py-1 rounded bg-red-600 text-white disabled:opacity-40"
-                              onClick={() =>
-                                setSampleApproval(s.id, "Menunggu")
-                              }
-                            >
-                              Tolak
-                            </button>
-                          </div>
+                        <td className="p-2 sm:p-3 flex">
+                          <button
+                            type="button"
+                            className="px-3 py-1 rounded bg-purple-600 text-white disabled:opacity-40"
+                            onClick={() => {
+                              const idx = approvedSamples.findIndex(
+                                (x: any) => x.id === s.id
+                              );
+                              if (idx >= 0) setDetailModal({ index: idx });
+                            }}
+                            disabled={s.cacahStatus !== "Selesai"}
+                          >
+                            Lihat Keterangan
+                          </button>
                         </td>
                       </tr>
                     );
@@ -719,74 +807,165 @@ export default function SupervisorManagePage() {
                   )}
                 </tbody>
               </table>
-              {mapModal && activeSample && (
+              {detailModal && activeSample && (
                 <div
-                  className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-                  onClick={() => setMapModal(null)}
+                  className="fixed inset-0 z-50 bg-black/50 sm:p-4 pt-[56px] sm:pt-0"
+                  onClick={() => setDetailModal(null)}
                 >
-                  <div
-                    className="w-full max-w-5xl rounded-2xl bg-white shadow-xl overflow-hidden"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <div className="flex items-center justify-between px-4 py-3 border-b">
-                      <div className="font-semibold text-gray-800">
-                        {activeSample.nus} — {activeSample.identity ?? "-"}
-                      </div>
-
-                      <button
-                        type="button"
-                        className="px-3 py-1 rounded bg-gray-600 text-white"
-                        onClick={() => setMapModal(null)}
-                      >
-                        Tutup
-                      </button>
-                    </div>
-
-                    <div className="p-0">
-                      {activeSample.geoLat && activeSample.geoLng ? (
-                        <iframe
-                          className="w-full h-[60vh] sm:h-[70vh]"
-                          loading="lazy"
-                          referrerPolicy="no-referrer-when-downgrade"
-                          src={`https://www.google.com/maps?q=${activeSample.geoLat},${activeSample.geoLng}&z=17&output=embed`}
-                        />
-                      ) : (
-                        <div className="p-6 text-gray-600">
-                          Lokasi belum tersedia untuk sampel ini.
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="px-4 py-3 border-t text-xs text-gray-500">
-                      Koordinat: {activeSample.geoLat ?? "-"},{" "}
-                      {activeSample.geoLng ?? "-"}
-                    </div>
-
-                    {mapCount > 1 && (
-                      <div className="flex items-center justify-between gap-2 px-3 sm:px-4 py-3 border-t bg-gray-50">
-                        <button
-                          type="button"
-                          disabled={mapModal.index <= 0}
-                          onClick={goPrev}
-                          className="px-3 py-2 rounded-lg bg-white shadow disabled:opacity-40 text-sm"
-                        >
-                          ← Sebelumnya
-                        </button>
-
-                        <div className="text-[11px] sm:text-xs text-gray-500 text-center">
-                          Sampel {mapModal.index + 1} dari {mapCount}
+                  <div className="h-full w-full flex sm:items-center sm:justify-center">
+                    <div
+                      className="w-full max-w-5xl bg-white shadow-xl overflow-hidden flex flex-col h-[calc(100dvh-56px)] sm:h-auto sm:max-h-[90vh] sm:rounded-2xl"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {/* Header */}
+                      <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b">
+                        <div className="font-semibold text-gray-800">
+                          {activeSample.nus}
                         </div>
 
-                        <button
-                          type="button"
-                          disabled={mapModal.index >= mapCount - 1}
-                          onClick={goNext}
-                          className="px-3 py-2 rounded-lg bg-white shadow disabled:opacity-40 text-sm"
-                        >
-                          Berikutnya →
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={goPrev}
+                            disabled={!detailModal || detailModal.index <= 0}
+                            className="px-3 py-1 rounded bg-white border disabled:opacity-40"
+                            title="Sampel sebelumnya (←)"
+                          >
+                            ←
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={goNext}
+                            disabled={
+                              !detailModal ||
+                              detailModal.index >= sampleCount - 1
+                            }
+                            className="px-3 py-1 rounded bg-white border disabled:opacity-40"
+                            title="Sampel berikutnya (→)"
+                          >
+                            →
+                          </button>
+
+                          <button
+                            type="button"
+                            className="px-3 py-1 rounded bg-gray-600 text-white"
+                            onClick={() => setDetailModal(null)}
+                          >
+                            Tutup
+                          </button>
+                        </div>
                       </div>
-                    )}
+
+                      {/* Body */}
+                      <div className="flex-1 overflow-y-auto overscroll-contain">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
+                          {/* Map */}
+                          <div className="bg-gray-50">
+                            {Number.isFinite(Number(activeSample.geoLat)) &&
+                            Number.isFinite(Number(activeSample.geoLng)) ? (
+                              <iframe
+                                className="w-full h-[45vh] lg:h-[70vh]"
+                                loading="lazy"
+                                referrerPolicy="no-referrer-when-downgrade"
+                                src={`https://www.google.com/maps?q=${activeSample.geoLat},${activeSample.geoLng}&z=17&output=embed`}
+                              />
+                            ) : (
+                              <div className="p-6 text-gray-600">
+                                Lokasi belum tersedia untuk sampel ini.
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Keterangan + Foto + Aksi */}
+                          <div className="p-4 space-y-4">
+                            <div className="text-sm">
+                              <div className="text-xs text-gray-500">
+                                Nama Responden
+                              </div>
+                              <div className="font-semibold">
+                                {activeSample.identity ?? "-"}
+                              </div>
+                            </div>
+
+                            <div className="text-sm">
+                              <div className="text-xs text-gray-500">
+                                Koordinat
+                              </div>
+                              <div className="font-medium">
+                                {activeSample.geoLat ?? "-"},{" "}
+                                {activeSample.geoLng ?? "-"}
+                              </div>
+                            </div>
+
+                            <div className="text-sm">
+                              <div className="text-xs text-gray-500 mb-2">
+                                Foto Petugas
+                              </div>
+
+                              {activeSample.photoSignedUrl ? (
+                                <img
+                                  src={activeSample.photoSignedUrl as string}
+                                  alt="Foto Petugas"
+                                  className="w-full max-h-[320px] object-contain rounded-lg border bg-white"
+                                />
+                              ) : (
+                                <div className="text-gray-600">
+                                  Foto belum tersedia.
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Tombol aksi approval dipindah ke sini */}
+                            <div className="pt-2 border-t">
+                              {(() => {
+                                const canApprove =
+                                  activeSample.cacahStatus === "Selesai";
+                                return (
+                                  <div className="flex flex-wrap gap-2">
+                                    <button
+                                      type="button"
+                                      disabled={!canApprove || patching}
+                                      className="px-4 py-2 rounded bg-green-600 text-white disabled:opacity-40"
+                                      onClick={async () => {
+                                        await setSampleApproval(
+                                          activeSample.id,
+                                          "Disetujui"
+                                        );
+                                        setDetailModal(null);
+                                      }}
+                                    >
+                                      Setuju
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      disabled={!canApprove || patching}
+                                      className="px-4 py-2 rounded bg-red-600 text-white disabled:opacity-40"
+                                      onClick={async () => {
+                                        await setSampleApproval(
+                                          activeSample.id,
+                                          "Menunggu"
+                                        );
+                                        setDetailModal(null);
+                                      }}
+                                    >
+                                      Tolak
+                                    </button>
+                                  </div>
+                                );
+                              })()}
+                              {activeSample.cacahStatus !== "Selesai" ? (
+                                <div className="mt-2 text-xs text-gray-500">
+                                  Tombol approval aktif setelah status cacah =
+                                  Selesai.
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}

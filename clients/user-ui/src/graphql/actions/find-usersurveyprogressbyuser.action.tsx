@@ -46,6 +46,9 @@ export const GET_USER_PROGRESS_BY_USER_ID = gql`
         geoLat
         geoLng
         geoCapturedAt
+        photoPath
+        photoCapturedAt
+        photoSignedUrl
       }
     }
   }

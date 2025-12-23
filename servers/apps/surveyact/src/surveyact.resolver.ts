@@ -188,6 +188,16 @@ export class SurveyActivityResolver {
     return this.service.patchUserSamples(input);
   }
 
+  @Mutation(() => String)
+  async uploadSurveySamplePhoto(
+    @Args('sampleId') sampleId: string,
+    @Args({ name: 'file', type: () => GraphQLUpload })
+    file: Promise<FileUpload>,
+  ) {
+    const upload = await file;
+    return this.service.uploadUserSamplePhoto(sampleId, upload);
+  }
+
   @Mutation(() => DistrictType)
   async createDistrict(@Args('input') input: CreateDistrictDTO) {
     return this.service.createDistrict(input);
@@ -358,5 +368,15 @@ export class SurveyActivityResolver {
     @Args('input') input: DeleteByIdInput,
   ): Promise<DeleteResult> {
     return this.service.deleteSubmitSPJ(input);
+  }
+}
+
+@Resolver(() => UserSampleType)
+export class UserSampleResolver {
+  constructor(private readonly service: SurveyActivityService) {}
+
+  @ResolveField(() => String, { name: 'photoSignedUrl', nullable: true })
+  async photoSignedUrl(@Parent() sample: any) {
+    return this.service.getSamplePhotoSignedUrl(sample.photoPath ?? null);
   }
 }

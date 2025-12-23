@@ -44,6 +44,12 @@ export class PatchUserSampleInput {
 
   @Field(() => GraphQLISODateTime, { nullable: true })
   geoCapturedAt?: Date;
+
+  @Field({ nullable: true })
+  photoPath?: string;
+
+  @Field(() => GraphQLISODateTime, { nullable: true })
+  photoCapturedAt?: Date;
 }
 
 @InputType()

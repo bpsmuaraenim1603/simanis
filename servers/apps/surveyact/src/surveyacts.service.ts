@@ -65,6 +65,18 @@ function pickContentType(ext: string, mime?: string | null) {
   }
 }
 
+function isAllowedImage(ext: string, mime?: string | null) {
+  const allowedExt = new Set(['.jpg', '.jpeg', '.png']);
+  const allowedMime = new Set([
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'application/octet-stream',
+  ]);
+  const m = (mime || '').toLowerCase();
+  return allowedExt.has(ext) || allowedMime.has(m);
+}
+
 @Injectable()
 export class SurveyActivityService {
   constructor(
@@ -425,7 +437,11 @@ export class SurveyActivityService {
               ...(s.geoLat !== undefined && { geoLat: s.geoLat }),
               ...(s.geoLng !== undefined && { geoLng: s.geoLng }),
               ...(s.geoCapturedAt && { geoCapturedAt: s.geoCapturedAt }),
-              ...(s.identity && { identity: s.identity }),
+              ...(s.identity !== undefined && { identity: s.identity }),
+              ...(s.photoPath !== undefined && { photoPath: s.photoPath }),
+              ...(s.photoCapturedAt !== undefined && {
+                photoCapturedAt: s.photoCapturedAt,
+              }),
             },
           });
         }
@@ -599,6 +615,56 @@ export class SurveyActivityService {
     return data?.signedUrl ?? null;
   }
 
+  async getSamplePhotoSignedUrl(path: string | null) {
+    if (!path) return null;
+    const { data, error } = await supabase.storage
+      .from('sample-photos')
+      .createSignedUrl(path, 60 * 60);
+    if (error) return null;
+    return data?.signedUrl ?? null;
+  }
+
+  async uploadUserSamplePhoto(sampleId: string, file: FileUpload) {
+    if (!file) throw new BadRequestException('File wajib diisi');
+
+    const sample = await this.prisma.userSample.findUnique({
+      where: { id: sampleId },
+      include: {
+        userProgress: {
+          select: { userId: true, subSurveyActivityId: true },
+        },
+      },
+    });
+    if (!sample) throw new NotFoundException('Sample tidak ditemukan');
+
+    const { filename, mimetype, createReadStream } = file;
+    const ext = getExtLower(filename);
+    if (!isAllowedImage(ext, mimetype)) {
+      throw new BadRequestException('Tipe foto tidak diizinkan. Hanya JPG/PNG.');
+    }
+
+    const bucket = process.env.SUPABASE_SAMPLE_BUCKET || 'sample-photos';
+
+    // pastikan bucket ada
+    const { data: b } = await supabase.storage.getBucket(bucket);
+    if (!b) {
+      throw new BadRequestException('Bucket belum tersedia: ' + bucket);
+    }
+
+    const key = `samples/${sample.userProgress.subSurveyActivityId}/${sample.userProgress.userId}/${sampleId}/${randomUUID()}${ext || '.jpg'}`;
+    const stream = createReadStream();
+
+    const contentType = pickContentType(ext, mimetype);
+    const { error } = await supabase.storage
+      .from(bucket)
+      .upload(key, stream, { contentType, duplex: 'half' as any });
+    if (error) {
+      throw new BadRequestException('Gagal upload foto: ' + error.message);
+    }
+
+    return key;
+  }
+
   async createJobLetter(
     input: CreateJobLetterDTO,
     file?: FileUpload,
@@ -655,7 +721,6 @@ export class SurveyActivityService {
       eviLetterPath = key;
       eviLetterOriginalName = filename || null;
       eviLetterMimeType = contentType;
-      // eviLetterSize: kalau mau hitung, pipe dulu ke counter; kalau tidak, biarkan null
     }
 
     return this.prisma.jobLetter.create({

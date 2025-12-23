@@ -165,6 +165,15 @@ export class UserSampleType {
 
   @Field(() => GraphQLISODateTime, { nullable: true })
   geoCapturedAt?: Date;
+
+  @Field({ nullable: true })
+  photoPath?: string;
+
+  @Field(() => GraphQLISODateTime, { nullable: true })
+  photoCapturedAt?: Date;
+
+  @Field({ nullable: true })
+  photoSignedUrl?: string;
 }
 
 

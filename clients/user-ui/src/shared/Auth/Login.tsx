@@ -14,6 +14,7 @@ import { useMutation } from "@apollo/client";
 import { LOGIN_USER } from "@/src/graphql/actions/login.action";
 import Cookies from "js-cookie";
 import { signIn } from "next-auth/react";
+import useUser from "@/src/hooks/useUser";
 
 const formSchema = z.object({
   email: z.string().email({ message: "Email tidak valid" }),
@@ -23,6 +24,7 @@ const formSchema = z.object({
 type LoginSchema = z.infer<typeof formSchema>;
 
 const Login = ({ setActiveState }: { setActiveState: (e: string) => void }) => {
+  const { user, loading: loadingUser } = useUser();
   const [Login, { loading }] = useMutation(LOGIN_USER);
   const {
     register,
@@ -55,7 +57,14 @@ const Login = ({ setActiveState }: { setActiveState: (e: string) => void }) => {
     if (response.data.Login.user) {
       Cookies.set("refresh_token", response.data.Login.refreshToken, cookieOpts);
       Cookies.set("access_token", response.data.Login.accessToken, cookieOpts);
-      window.location.href = "/dashboard";
+      if (user?.role === "User"){
+        window.location.href = "/user";
+      } else if (user?.role === "Supervisor"){
+        window.location.href = "/supervisor";
+      } else {
+        window.location.href = "/dashboard";
+      }
+      
       toast.success("Login Berhasil!");
     } else {
       toast.error(response.data.Login.error.message);

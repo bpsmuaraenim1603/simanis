@@ -17,6 +17,9 @@ export const PATCH_USER_SAMPLES = gql`
         geoLat
         geoLng
         geoCapturedAt
+        photoPath
+        photoCapturedAt
+        photoSignedUrl
       }
     }
   }
