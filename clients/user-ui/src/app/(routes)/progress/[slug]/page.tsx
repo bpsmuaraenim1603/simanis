@@ -5,7 +5,12 @@ import { GET_SURVEY_ACTIVITIES_BY_SLUG } from "@/src/graphql/actions/find-survey
 import { GET_ALL_SUB_SURVEY_ACTIVITIES } from "@/src/graphql/actions/find-allsubsurveyact.action";
 import { GET_ALL_SUB_SURVEY_PROGRESS } from "@/src/graphql/actions/find-allsubsurveyprogress.action";
 import { GET_USER_PROGRESS_BY_SUBSURVEY_ID } from "@/src/graphql/actions/find-usersurveyprogress.action";
-import { useParams } from "next/navigation";
+import {
+  useParams,
+  usePathname,
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
 import { useQuery } from "@apollo/client";
 import useUser from "@/src/hooks/useUser";
 import HUComboBox from "@/src/components/HUCombobox";
@@ -22,6 +27,22 @@ type ProgressRow = {
 const ProgressTemplate = () => {
   const { user } = useUser();
   const { slug } = useParams() as { slug: string };
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const setQuery = React.useCallback(
+    (patch: Record<string, string | null>) => {
+      const params = new URLSearchParams(searchParams?.toString() || "");
+      for (const [k, v] of Object.entries(patch)) {
+        if (!v) params.delete(k);
+        else params.set(k, v);
+      }
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [router, pathname, searchParams]
+  );
+  const selectedCityQ = searchParams?.get("city") || "";
+  const selectedSubSlug = searchParams?.get("sub") || "";
 
   const [selectedSubSurvey, setSelectedSubSurvey] = useState<string | null>(
     null
@@ -33,9 +54,7 @@ const ProgressTemplate = () => {
     GET_SURVEY_ACTIVITIES_BY_SLUG,
     { variables: { slug }, skip: !slug, fetchPolicy: "network-only" }
   );
-
   const surveyActivityId = surveyData?.surveyActivityBySlug?.id;
-
   const { data: subSurveyDataAll, loading: loadingSubSurveyAll } = useQuery(
     GET_ALL_SUB_SURVEY_ACTIVITIES,
     {
@@ -44,25 +63,20 @@ const ProgressTemplate = () => {
       fetchPolicy: "network-only",
     }
   );
-
   const { data: subSurveyData } = useQuery(GET_ALL_SUB_SURVEY_PROGRESS, {
     variables: { subSurveyActivityId: selectedSubSurvey },
     skip: !selectedSubSurvey,
     fetchPolicy: "network-only",
   });
-
   const { data: progressData } = useQuery(GET_USER_PROGRESS_BY_SUBSURVEY_ID, {
     variables: { subSurveyActivityId: selectedSubSurvey },
     skip: !selectedSubSurvey,
     fetchPolicy: "network-only",
   });
-
   const subSurveyActivities = subSurveyDataAll?.subSurveyActivityById ?? [];
   const progress = subSurveyData?.subSurveyProgress ?? null;
-
   const userProgress: ProgressRow[] =
     (progressData?.userProgressBySubSurveyActivityId as ProgressRow[]) ?? [];
-
   const cities = useMemo<string[]>(() => {
     const list = userProgress
       .map((p) => p?.district?.city ?? "")
@@ -71,12 +85,10 @@ const ProgressTemplate = () => {
       a.localeCompare(b, "id")
     );
   }, [userProgress]);
-
   const filteredUserProgress: ProgressRow[] = useMemo(() => {
     if (!selectedCity) return userProgress;
     return userProgress.filter((p) => p?.district?.city === selectedCity);
   }, [userProgress, selectedCity]);
-
   const aggregatedUserProgress = useMemo(() => {
     const rows =
       selectedCity && selectedCity.length > 0
@@ -92,16 +104,13 @@ const ProgressTemplate = () => {
       districts: Set<string>;
       cities: Set<string>;
     };
-
     const map = new Map<string, Agg>();
-
     for (const r of rows) {
       if (!r?.user?.id) continue;
       const key = r.user.id;
       const prev = map.get(key);
       const distName = r?.district?.name ?? "-";
       const cityName = r?.district?.city ?? "";
-
       if (!prev) {
         map.set(key, {
           user: r.user,
@@ -121,11 +130,34 @@ const ProgressTemplate = () => {
         if (cityName) prev.cities.add(cityName);
       }
     }
-
     return Array.from(map.values()).sort(
       (a, b) => b.approvedCount - a.approvedCount
     );
   }, [userProgress, selectedCity]);
+
+  React.useEffect(() => {
+    if (!selectedSubSlug) return;
+    if (!subSurveyActivities?.length) return;
+
+    // kalau sudah sesuai, jangan set ulang
+    const current = subSurveyActivities.find(
+      (s: any) => s.id === selectedSubSurvey
+    );
+    if (current?.slug === selectedSubSlug) return;
+
+    const found = subSurveyActivities.find(
+      (s: any) => s.slug === selectedSubSlug
+    );
+    if (!found) return;
+
+    setSelectedSubSurvey(found.id);
+    setSelectedName(found.name);
+    setSelectedCity("");
+  }, [selectedSubSlug, subSurveyActivities, selectedSubSurvey]);
+
+  React.useEffect(() => {
+    setSelectedCity(selectedCityQ);
+  }, [selectedCityQ]);
 
   const overallPercent =
     progress && progress.targetSample > 0
@@ -166,6 +198,7 @@ const ProgressTemplate = () => {
                   setSelectedSubSurvey(subSurvey.id);
                   setSelectedName(subSurvey.name);
                   setSelectedCity("");
+                  setQuery({ sub: subSurvey.slug });
                 }}
                 className={`w-full p-2 rounded-md border font-semibold ${
                   selectedSubSurvey === subSurvey.id
@@ -217,7 +250,14 @@ const ProgressTemplate = () => {
               <p>Wilayah (Kota/Kab.)</p>
               <HUComboBox
                 value={selectedCity || null}
-                onValueChange={(v) => setSelectedCity(v ?? "")}
+                onValueChange={(v) => {
+                  const next = v ?? "";
+                  setSelectedCity(next);
+                  setQuery({
+                    sub: selectedSubSlug || null,
+                    city: next || null,
+                  });
+                }}
                 options={cityOptions ? cityOptions : []}
                 placeholder="-- Semua Wilayah --"
                 className="w-full"
@@ -330,7 +370,7 @@ const ProgressTemplate = () => {
                         {/* Wilayah tugas: gabungkan nama distrik & kota bila multi */}
                         <td className="px-4 py-3 text-gray-700">
                           {cityText ? `${cityText}: ` : ""}
-                          {districtText}                          
+                          {districtText}
                         </td>
 
                         <td className="px-4 py-3">{row.totalAssigned}</td>

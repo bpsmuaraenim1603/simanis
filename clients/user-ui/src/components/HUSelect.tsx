@@ -12,7 +12,7 @@ export type HUSelectOption = {
 type Props = {
   value: string | null; // id terpilih
   onValueChange: (v: string | null) => void; // callback set id
-  options: HUSelectOption[];
+  options?: HUSelectOption[];
   placeholder?: string;
   disabled?: boolean;
   className?: string;
@@ -22,7 +22,7 @@ type Props = {
 export default function HUSelect({
   value,
   onValueChange,
-  options,
+  options = [],
   placeholder = "Pilih…",
   disabled = false,
   className = "",

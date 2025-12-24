@@ -429,6 +429,14 @@ export class SurveyActivityService {
       // 1. UPDATE existing samples
       if (updateSamples?.length) {
         for (const s of updateSamples) {
+          let oldPhotoPath: string | null = null;
+          if (s.photoPath !== undefined) {
+            const prev = await tx.userSample.findUnique({
+              where: { id: s.id },
+              select: { photoPath: true },
+            });
+            oldPhotoPath = prev?.photoPath ?? null;
+          }
           await tx.userSample.update({
             where: { id: s.id },
             data: {
@@ -444,6 +452,14 @@ export class SurveyActivityService {
               }),
             },
           });
+          if (
+            s.photoPath !== undefined &&
+            oldPhotoPath &&
+            s.photoPath &&
+            oldPhotoPath !== s.photoPath
+          ) {
+            await this.storage.removeSampleFiles([oldPhotoPath]);
+          }
         }
       }
 
@@ -465,9 +481,19 @@ export class SurveyActivityService {
 
       // 3. DELETE samples
       if (deleteSampleIds?.length) {
-        await tx.userSample.deleteMany({
-          where: { id: { in: deleteSampleIds } },
+        // Ambil path foto dulu supaya bisa bersihin storage
+        const willDelete = await tx.userSample.findMany({
+          where: { userProgressId, id: { in: deleteSampleIds } },
+          select: { photoPath: true },
         });
+
+        await tx.userSample.deleteMany({
+          where: { userProgressId, id: { in: deleteSampleIds } },
+        });
+
+        await this.storage.removeSampleFiles(
+          willDelete.map((x) => x.photoPath),
+        );
       }
 
       // 4. HITUNG ULANG AGREGAT
@@ -640,7 +666,9 @@ export class SurveyActivityService {
     const { filename, mimetype, createReadStream } = file;
     const ext = getExtLower(filename);
     if (!isAllowedImage(ext, mimetype)) {
-      throw new BadRequestException('Tipe foto tidak diizinkan. Hanya JPG/PNG.');
+      throw new BadRequestException(
+        'Tipe foto tidak diizinkan. Hanya JPG/PNG.',
+      );
     }
 
     const bucket = process.env.SUPABASE_SAMPLE_BUCKET || 'sample-photos';
@@ -796,7 +824,7 @@ export class SurveyActivityService {
         submitCount,
         approvedCount,
         rejectedCount,
-        district: undefined, // isi nanti kalau ada
+        district: undefined,
       };
     });
   }
@@ -804,20 +832,19 @@ export class SurveyActivityService {
   async getMonthlySurveyStats(subSurveyActivityId?: string) {
     const now = new Date();
 
-    // rentang bulan ini (tgl 1 - akhir bulan)
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
     endOfMonth.setHours(23, 59, 59, 999);
 
-    // default: pakai bulan ini
     let rangeStart = startOfMonth;
     let rangeEnd = endOfMonth;
 
-    // kalau ada subSurveyActivityId → irisan dengan periode kegiatan
+    let activeSubSurveyActivityIds: string[] = [];
+
     if (subSurveyActivityId) {
       const sub = await this.prisma.subSurveyActivity.findUnique({
         where: { id: subSurveyActivityId },
-        select: { startDate: true, endDate: true },
+        select: { id: true, startDate: true, endDate: true },
       });
 
       if (!sub?.startDate || !sub?.endDate) {
@@ -831,43 +858,70 @@ export class SurveyActivityService {
       rangeStart = activityStart > startOfMonth ? activityStart : startOfMonth;
       rangeEnd = activityEnd < endOfMonth ? activityEnd : endOfMonth;
 
-      // tidak overlap
       if (rangeStart > rangeEnd) {
-        return { totalJobLetters: 0, totalSPJ: 0, totalActiveUsers: 0 };
+        return {
+          totalJobLetters: 0,
+          totalSPJ: 0,
+          totalActiveUsers: 0,
+          activeUserIds: [],
+          activeSubSurveyActivityIds: [],
+        };
       }
+
+      activeSubSurveyActivityIds = [sub.id];
+    } else {
+      const actives = await this.prisma.subSurveyActivity.findMany({
+        where: {
+          startDate: { lte: endOfMonth },
+          endDate: { gte: startOfMonth },
+        },
+        select: { id: true },
+      });
+      activeSubSurveyActivityIds = actives.map((x) => x.id);
     }
 
-    const [jobLetter, submitSPJ, totalActiveUsers] = await Promise.all([
+    if (!activeSubSurveyActivityIds.length) {
+      return {
+        totalJobLetters: 0,
+        totalSPJ: 0,
+        totalActiveUsers: 0,
+        activeUserIds: [],
+        activeSubSurveyActivityIds: [],
+      };
+    }
+
+    const activeUserIds = await this.prisma.userProgress
+      .findMany({
+        where: {
+          subSurveyActivityId: { in: activeSubSurveyActivityIds },
+        },
+        distinct: ['userId'],
+        select: { userId: true },
+      })
+      .then((res) => res.map((r) => r.userId));
+
+    const [totalJobLetters, totalSPJ] = await Promise.all([
       this.prisma.jobLetter.count({
         where: {
-          ...(subSurveyActivityId ? { subSurveyActivityId } : {}),
+          subSurveyActivityId: { in: activeSubSurveyActivityIds },
           createdAt: { gte: rangeStart, lte: rangeEnd },
         },
       }),
 
       this.prisma.submitSPJ.count({
         where: {
-          ...(subSurveyActivityId ? { subSurveyActivityId } : {}),
+          subSurveyActivityId: { in: activeSubSurveyActivityIds },
           createdAt: { gte: rangeStart, lte: rangeEnd },
         },
       }),
-
-      this.prisma.userProgress
-        .findMany({
-          where: {
-            ...(subSurveyActivityId ? { subSurveyActivityId } : {}),
-            lastUpdated: { gte: rangeStart, lte: rangeEnd },
-          },
-          distinct: ['userId'],
-          select: { userId: true },
-        })
-        .then((res) => res.length),
     ]);
 
     return {
-      totalJobLetters: jobLetter,
-      totalSPJ: submitSPJ,
-      totalActiveUsers,
+      totalJobLetters,
+      totalSPJ,
+      totalActiveUsers: activeUserIds.length,
+      activeUserIds,
+      activeSubSurveyActivityIds,
     };
   }
 
@@ -1152,7 +1206,7 @@ export class SurveyActivityService {
     });
     const subIds = subs.map((s) => s.id);
     if (subIds.length > 0) {
-      const [spjs, jls] = await Promise.all([
+      const [spjs, jls, samplePhotos] = await Promise.all([
         this.prisma.submitSPJ.findMany({
           where: { subSurveyActivityId: { in: subIds } },
           select: { eviDocumentPath: true },
@@ -1161,8 +1215,12 @@ export class SurveyActivityService {
           where: { subSurveyActivityId: { in: subIds } },
           select: {
             eviFieldUrl: true,
-            eviSTUrl: true /* eviLetterPath: true */,
+            eviSTUrl: true,
           } as any,
+        }),
+        this.prisma.userSample.findMany({
+          where: { userProgress: { subSurveyActivityId: { in: subIds } } },
+          select: { photoPath: true },
         }),
       ]);
 
@@ -1171,6 +1229,7 @@ export class SurveyActivityService {
         this.storage.removeJobLetterFiles(
           jls.flatMap((x: any) => [x.eviFieldUrl, x.eviSTUrl, x.eviLetterPath]),
         ),
+        this.storage.removeSampleFiles(samplePhotos.map((x) => x.photoPath)),
       ]);
     }
 
@@ -1223,12 +1282,18 @@ export class SurveyActivityService {
         } as any,
       }),
     ]);
+    const samplePhotos = await this.prisma.userSample.findMany({
+      where: { userProgress: { subSurveyActivityId: id } },
+      select: { photoPath: true },
+    });
+
+    await this.storage.removeSampleFiles(samplePhotos.map((x) => x.photoPath));
 
     // hapus file-file terkait
     await Promise.all([
       this.storage.removeSpjFiles(spjs.map((x) => x.eviDocumentPath)),
       this.storage.removeJobLetterFiles(
-        jls.flatMap((x: any) => [x.eviFieldUrl, x.eviSTUrl, x.eviLetterPath]),
+        jls.flatMap((x: any) => [x.eviFieldUrl, x.eviSTUrl]),
       ),
     ]);
 
@@ -1257,6 +1322,11 @@ export class SurveyActivityService {
   async deleteUserSurveyProgress({ id }: { id: string }) {
     const up = await this.prisma.userProgress.findUnique({ where: { id } });
     if (!up) throw new NotFoundException('UserProgress tidak ditemukan');
+    const samplePhotos = await this.prisma.userSample.findMany({
+      where: { userProgressId: id },
+      select: { photoPath: true },
+    });
+    await this.storage.removeSampleFiles(samplePhotos.map((x) => x.photoPath));
     await this.prisma.userProgress.delete({ where: { id } });
     return { success: true, message: 'Petugas sudah dihapus.' };
   }

@@ -113,6 +113,14 @@ export default function SupervisorManagePage() {
   const [subsLoading, setSubsLoading] = useState(false);
   const [assignedSubIds, setAssignedSubIds] = useState<Set<string>>(new Set());
   const [assignedLoading, setAssignedLoading] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("activity");
+  const [subSurveyActivityId, setSubSurveyActivityId] = useState("");
+  const [selectedUserProgressId, setSelectedUserProgressId] = useState("");
+  const [approvedSamples, setApprovedSamples] = useState<any[]>([]);
+  const [detailModal, setDetailModal] = useState<null | { index: number }>(
+    null
+  );
+  const [qIdentity, setQIdentity] = useState("");
 
   useEffect(() => {
     async function loadAllSubs() {
@@ -165,10 +173,6 @@ export default function SupervisorManagePage() {
 
   const [patchUserSamples, { loading: patching }] =
     useMutation(PATCH_USER_SAMPLES);
-
-  const [viewMode, setViewMode] = useState<ViewMode>("activity");
-  const [subSurveyActivityId, setSubSurveyActivityId] = useState("");
-  const [selectedUserProgressId, setSelectedUserProgressId] = useState("");
 
   const supervisorId = currentUser?.id ?? "";
 
@@ -329,11 +333,6 @@ export default function SupervisorManagePage() {
     [myUPRows, selectedUserProgressId]
   );
 
-  const [approvedSamples, setApprovedSamples] = useState<any[]>([]);
-  const [detailModal, setDetailModal] = useState<null | { index: number }>(
-    null
-  );
-
   const mapSamples = useMemo(() => {
     return (approvedSamples ?? []).filter((s: any) => {
       const lat = Number(s.geoLat);
@@ -349,6 +348,15 @@ export default function SupervisorManagePage() {
     if (!detailModal) return null;
     return (approvedSamples ?? [])[detailModal.index] ?? null;
   }, [detailModal, approvedSamples]);
+
+  const filteredSamples = useMemo(() => {
+    const name = qIdentity.trim().toLowerCase();
+    return (approvedSamples ?? []).filter((s: any) => {
+      const sIdentity = String(s.identity ?? "").toLowerCase();
+      const okIdentity = !name || sIdentity.includes(name);
+      return okIdentity;
+    });
+  }, [approvedSamples, qIdentity]);
 
   const goPrev = () =>
     setDetailModal((prev) =>
@@ -730,6 +738,17 @@ export default function SupervisorManagePage() {
             {isListing ? "Approve Listing Petugas" : "Approve Sample Petugas"}
           </h3>
 
+          <div className="bg-white border rounded-lg p-3">
+            <div className="w-full">
+              <input
+                value={qIdentity}
+                onChange={(e) => setQIdentity(e.target.value)}
+                placeholder="Cari nama"
+                className="w-full rounded-md border px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+
           {/* Tabel sampel */}
           <div>
             <div className="w-full rounded-lg border border-gray-200 overflow-x-auto bg-white">
@@ -745,7 +764,7 @@ export default function SupervisorManagePage() {
                 </thead>
 
                 <tbody>
-                  {approvedSamples.map((s: any) => {
+                  {filteredSamples.map((s: any) => {
                     const canApprove = s.cacahStatus === "Selesai";
                     return (
                       <tr key={s.id} className="border-t">

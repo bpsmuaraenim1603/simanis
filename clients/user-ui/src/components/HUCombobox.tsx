@@ -13,7 +13,7 @@ export type HUOption = {
 type Props = {
   value: string | null;
   onValueChange: (v: string | null) => void;
-  options: HUOption[];
+  options?: HUOption[];
   placeholder?: string;
   emptyText?: string;
   disabled?: boolean;
@@ -25,7 +25,7 @@ type Props = {
 export default function HUComboBox({
   value,
   onValueChange,
-  options,
+  options = [],
   placeholder = "Pilih…",
   emptyText = "Tidak ada hasil",
   disabled = false,

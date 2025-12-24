@@ -9,7 +9,7 @@ import { UPDATE_ROLE } from "@/src/graphql/actions/update-role.action";
 import { UPDATE_BILL_LIMIT } from "@/src/graphql/actions/update-limitbill.action";
 import { GET_USER_PROGRESS_BY_USER_ID } from "@/src/graphql/actions/find-usersurveyprogressbyuser.action";
 import useUser from "@/src/hooks/useUser";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { GET_MONTHLY_ACTIVITY_STAFF_USAGE } from "@/src/graphql/actions/get-monthly-activity-staff-usage.action";
 import { GET_STAFF_YEARLY_EXPORT } from "@/src/graphql/actions/get-staff-yearly-export.action";
 import HUSelect, { HUSelectOption } from "@/src/components/HUSelect";
@@ -772,10 +772,31 @@ export default function SuperAdminManagePage() {
   const [pendingRole, setPendingRole] = useState<Record<string, string>>({});
   const [pendingLimit, setPendingLimit] = useState<Record<string, string>>({});
   const [updating, setUpdating] = useState<Record<string, boolean>>({});
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const setQuery = useCallback(
+    (patch: Record<string, string | null>) => {
+      const params = new URLSearchParams(searchParams?.toString() || "");
+      for (const [k, v] of Object.entries(patch)) {
+        if (v == null || v === "") params.delete(k);
+        else params.set(k, v);
+      }
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [router, pathname, searchParams]
+  );
 
   // Modal Honor
   const [honorUser, setHonorUser] = useState<any | null>(null);
   type AdminTab = "users" | "staffUsage";
+  React.useEffect(() => {
+    const t = searchParams?.get("tab");
+    if (t === "users" || t === "staffUsage") {
+      setActiveTab(t);
+    }
+  }, [searchParams]);
+
   const [activeTab, setActiveTab] = useState<AdminTab>("users");
 
   const now = new Date();
@@ -1001,7 +1022,10 @@ export default function SuperAdminManagePage() {
           { key: "staffUsage", label: "Pemakaian Petugas" },
         ]}
         value={activeTab}
-        onChange={setActiveTab}
+        onChange={(k) => {
+          setActiveTab(k);
+          setQuery({ tab: k });
+        }}
       />
 
       <div>

@@ -48,26 +48,19 @@ export default function UserPage() {
     lastUpdated: "",
     districtId: "",
   });
-
   const [selectedBlock, setSelectedBlock] = useState<string>("");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [showCameraModal, setShowCameraModal] = useState(false);
-
   const [fetchUserProgress, { data: userProgressData, loading: upLoading }] =
     useLazyQuery(GET_USER_PROGRESS_BY_USER_ID, { fetchPolicy: "network-only" });
-
   useEffect(() => {
     if (user?.id) fetchUserProgress({ variables: { userId: user.id } });
   }, [user?.id, fetchUserProgress]);
-
   const [patchUserSamples] = useMutation(PATCH_USER_SAMPLES);
   const [uploadSurveySamplePhoto] = useMutation(UPLOAD_SURVEY_SAMPLE_PHOTO);
-
   const [editableSamples, setEditableSamples] = useState<any[]>([]);
   const [locatingId, setLocatingId] = useState<string | null>(null);
   const [resettingId, setResettingId] = useState<string | null>(null);
-
-  // ===== Modal pencacahan =====
   const [showCacahModal, setShowCacahModal] = useState(false);
   const [activeSampleId, setActiveSampleId] = useState<string | null>(null);
   const [draftIdentity, setDraftIdentity] = useState<string>("");
@@ -78,6 +71,7 @@ export default function UserPage() {
     null
   );
   const [savingModal, setSavingModal] = useState(false);
+  const [qIdentity, setQIdentity] = useState("");
 
   // ===== Formatter tanggal =====
   function fmtDate(d: any) {
@@ -185,12 +179,15 @@ export default function UserPage() {
       });
   }, [userProgressData]);
 
-  // ===== Card kegiatan terpilih =====
-  const selectedActivityCard = useMemo(() => {
-    const id = updateUserProgressForm.subSurveyActivityId;
-    if (!id) return undefined;
-    return activityCards.find((c) => c.activity?.id === id);
-  }, [activityCards, updateUserProgressForm.subSurveyActivityId]);
+  const filteredSamples = useMemo(() => {
+    const name = qIdentity.trim().toLowerCase();
+
+    return (editableSamples ?? []).filter((s: any) => {
+      const sIdentity = String(s.identity ?? "").toLowerCase();
+      const okIdentity = !name || sIdentity.includes(name);
+      return okIdentity;
+    });
+  }, [editableSamples, qIdentity]);
 
   // ===== Cards BLOK (setelah pilih kegiatan) =====
   const blockCards = useMemo(() => {
@@ -881,6 +878,17 @@ export default function UserPage() {
                 </h3>
               </div>
 
+              <div className="bg-white border rounded-md p-3">
+                <div className="w-full">
+                  <input
+                    value={qIdentity}
+                    onChange={(e) => setQIdentity(e.target.value)}
+                    placeholder="Cari nama"
+                    className="w-full rounded-md border px-3 py-2 text-sm bg-white"
+                  />
+                </div>
+              </div>
+
               {editableSamples.length === 0 ? (
                 <div className="text-sm opacity-70">Belum ada sampel.</div>
               ) : (
@@ -898,7 +906,7 @@ export default function UserPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {editableSamples.map((s) => {
+                      {filteredSamples.map((s) => {
                         const isDone = s.cacahStatus === "Selesai";
                         const isApproved = s.approvalStatus === "Disetujui";
                         return (

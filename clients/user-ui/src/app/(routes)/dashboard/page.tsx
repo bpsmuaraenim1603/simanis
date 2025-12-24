@@ -43,7 +43,6 @@ function formatDateTime(date: Date | string, use12h = true) {
     hour: "numeric",
     minute: "2-digit",
     hour12: use12h,
-    // timeZone: "Asia/Jakarta", // opsional
   }).formatToParts(new Date(date));
 
   const get = (t: Intl.DateTimeFormatPart["type"]) =>
@@ -54,9 +53,8 @@ function formatDateTime(date: Date | string, use12h = true) {
   const year = get("year");
   const hour = get("hour");
   const minute = get("minute");
-  const dayPeriod = (get("dayPeriod") || "").toUpperCase(); // AM/PM
+  const dayPeriod = (get("dayPeriod") || "").toUpperCase();
 
-  // rakit manual: dd/mm/yyyy spasi hh.mm AM/PM (tanpa koma)
   return `${month}/${day}/${year} ${hour}:${minute}${dayPeriod ? " " + dayPeriod : ""}`;
 }
 
@@ -113,22 +111,30 @@ function Dashboard() {
     getAllSubSurveyProgress: SubSurveyProgress[];
   }>(GET_REAL_ALL_SUB_SURVEY_PROGRESS);
 
-  const surveyNameOptions = useMemo(() => {
-    const names = [
-      ...new Set(
-        (surveyPogressData?.getAllSubSurveyProgress ?? [])
-          .map((it) => it.name)
-          .filter(Boolean)
-      ),
-    ];
-    return names.map((name) => ({ value: String(name), label: String(name) }));
-  }, [surveyPogressData]);
+  const { data: monthlyStats } = useQuery(GET_MONTHLY_DASHBOARD_STATS);
+  console.log("Monthly Stats:", monthlyStats);
 
-  const { data: monthlyStats } = useQuery(GET_MONTHLY_DASHBOARD_STATS, {
-    variables: selectedSubSurveyId
-      ? { subSurveyActivityId: selectedSubSurveyId }
-      : {},
-  });
+  const activeUserIdSet = useMemo(() => {
+    const ids = monthlyStats?.getMonthlySurveyStats?.activeUserIds ?? [];
+    return new Set(ids);
+  }, [monthlyStats]);
+
+  const activeSubSurveyIdSet = useMemo(() => {
+    const ids =
+      monthlyStats?.getMonthlySurveyStats?.activeSubSurveyActivityIds ?? [];
+    return new Set(ids);
+  }, [monthlyStats]);
+
+  const surveyNameOptions = useMemo(() => {
+    const rows = surveyPogressData?.getAllSubSurveyProgress ?? [];
+
+    const onlyActive = activeSubSurveyIdSet.size
+      ? rows.filter((r) => activeSubSurveyIdSet.has(r.subSurveyActivityId))
+      : [];
+
+    const names = [...new Set(onlyActive.map((r) => r.name).filter(Boolean))];
+    return names.map((n) => ({ value: String(n), label: String(n) }));
+  }, [surveyPogressData, activeSubSurveyIdSet]);
 
   const { data: userProgressData } = useQuery<{
     allUserSurveyProgress: UserProgress[];
@@ -137,12 +143,18 @@ function Dashboard() {
   const aggregatedUserProgress = useMemo(() => {
     const rows = userProgressData?.allUserSurveyProgress ?? [];
 
+    if (!activeSubSurveyIdSet.size || !activeUserIdSet.size) return [];
+
+    const onlyActive = rows
+      .filter((r) => activeSubSurveyIdSet.has(r.subSurveyActivity.id))
+      .filter((r) => activeUserIdSet.has(r.user.id));
+
     const filtered = selectedSubSurveyId
-      ? rows.filter((r) => r.subSurveyActivity.id === selectedSubSurveyId)
-      : rows;
+      ? onlyActive.filter((r) => r.subSurveyActivity.id === selectedSubSurveyId)
+      : onlyActive;
 
     type Agg = {
-      key: string; // userId__ssaId
+      key: string;
       user: { id: string; name: string };
       subSurveyActivity: { id: string; name: string };
       totalAssigned: number;
@@ -157,6 +169,7 @@ function Dashboard() {
     for (const r of filtered) {
       const key = `${r.user.id}__${r.subSurveyActivity.id}`;
       const prev = map.get(key);
+
       if (!prev) {
         map.set(key, {
           key,
@@ -172,7 +185,6 @@ function Dashboard() {
           lastUpdated: r.lastUpdated,
         });
       } else {
-        // jika ada multi baris (mis. beda blok) untuk kegiatan yang sama → jumlahkan
         prev.totalAssigned += r.totalAssigned;
         prev.submitCount += r.submitCount;
         prev.approvedCount += r.approvedCount;
@@ -187,37 +199,44 @@ function Dashboard() {
     return Array.from(map.values()).sort(
       (a, b) => b.approvedCount - a.approvedCount
     );
-  }, [userProgressData, selectedSubSurveyId]);
+  }, [
+    userProgressData,
+    selectedSubSurveyId,
+    activeSubSurveyIdSet,
+    activeUserIdSet,
+  ]);
 
   const subSurveyIdOptions = useMemo(() => {
     const list = userProgressData?.allUserSurveyProgress ?? [];
+
+    const onlyActive = activeSubSurveyIdSet.size
+      ? list.filter((r) => activeSubSurveyIdSet.has(r.subSurveyActivity.id))
+      : [];
+
     const map = new Map<string, string>();
-    for (const it of list) {
+    for (const it of onlyActive) {
       map.set(it.subSurveyActivity.id, it.subSurveyActivity.name);
     }
+
     return Array.from(map.entries()).map(([value, label]) => ({
       value,
       label,
     }));
-  }, [userProgressData]);
+  }, [userProgressData, activeSubSurveyIdSet]);
 
   const filteredProgress = useMemo(() => {
     const rows = surveyPogressData?.getAllSubSurveyProgress ?? [];
-    return rows.filter((item) =>
-      !selectedSurvey
-        ? true
-        : (item.name || "").toLowerCase().includes(selectedSurvey.toLowerCase())
-    );
-  }, [surveyPogressData, selectedSurvey]);
 
-  const subSurveyOptions = [
-    ...new Map(
-      userProgressData?.allUserSurveyProgress?.map((item) => [
-        item.subSurveyActivity.id,
-        item.subSurveyActivity.name,
-      ]) ?? []
-    ),
-  ];
+    const onlyActive = activeSubSurveyIdSet.size
+      ? rows.filter((r) => activeSubSurveyIdSet.has(r.subSurveyActivityId))
+      : [];
+
+    return !selectedSurvey
+      ? onlyActive
+      : onlyActive.filter((r) =>
+          (r.name || "").toLowerCase().includes(selectedSurvey.toLowerCase())
+        );
+  }, [surveyPogressData, selectedSurvey, activeSubSurveyIdSet]);
 
   const fetchEvents = async () => {
     try {
@@ -265,7 +284,6 @@ function Dashboard() {
     setIsMinimized(newState);
   };
 
-  // Buka modal dan isi form dengan data event terpilih
   function openEdit(ev: CalendarEvent) {
     setEditEvent(ev);
     setEditTitle(ev.title || "");
@@ -281,7 +299,6 @@ function Dashboard() {
     setEditEvent(null);
   }
 
-  // Submit PUT ke /api/cals/:id sesuai signature kamu
   async function handleUpdate(e: React.SyntheticEvent) {
     e.preventDefault();
     if (!editEvent || !("_id" in editEvent) || !editEvent._id) return;
@@ -299,7 +316,6 @@ function Dashboard() {
             : new Date(editEnd).toISOString(),
         newAllDay: editAllDay,
         newInfo: editInfo,
-        // aku mapping ke "id" existing sebagai eveId (kalau kamu punya field lain, tinggal ganti di sini)
         newEveId: editEvent.id,
       };
 
@@ -312,7 +328,6 @@ function Dashboard() {
       );
 
       if (res.status === 200) {
-        // update state lokal biar tabel langsung refresh
         setEvents((prev) =>
           prev.map((it) =>
             it._id === editEvent._id
@@ -333,7 +348,6 @@ function Dashboard() {
       }
     } catch (err) {
       console.error("Error update:", err);
-      // boleh tambahkan toast kalau kamu pakai lib toast
     }
   }
 
@@ -657,41 +671,6 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* ======= Headline Cards =======
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="p-3 md:p-4 bg-orange-50 rounded-lg shadow-md font-bold">
-          <h2>PROGRES PENDATAAN</h2>
-        </div>
-        <div className="p-3 md:p-4 bg-orange-50 rounded-lg shadow-md font-bold">
-          <h2>PENCAPAIAN PETUGAS</h2>
-        </div>
-      </div>
-
-      {/* ======= KPI Cards ======= */}
-      {/* <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
-        <div className="p-4 bg-orange-50 rounded-lg shadow-md">
-          <p className="text-sm font-semibold">Petugas Aktif</p>
-          <h2 className="font-bold text-2xl">
-            {monthlyStats?.getMonthlySurveyStats?.totalActiveUsers ?? "0"}
-          </h2>
-        </div>
-        <div className="p-4 bg-orange-50 rounded-lg shadow-md">
-          <p className="text-sm font-semibold">Kendala Petugas</p>
-          <h2 className="font-bold text-2xl">0</h2>
-        </div>
-        <div className="p-4 bg-orange-50 rounded-lg shadow-md">
-          <p className="text-sm font-semibold">Pengumpulan ST</p>
-          <h2 className="font-bold text-2xl">
-            {monthlyStats?.getMonthlySurveyStats?.totalJobLetters ?? "0"}
-          </h2>
-        </div>
-        <div className="p-4 bg-orange-50 rounded-lg shadow-md">
-          <p className="text-sm font-semibold">Pengajuan Honor</p>
-          <h2 className="font-bold text-2xl">
-            {monthlyStats?.getMonthlySurveyStats?.totalSPJ ?? "0"}
-          </h2>
-        </div>
-      </div>*/}
       <MonthlyStaffUsageWidget />
 
       {/* ======= Chart & Leaderboard ======= */}
@@ -712,12 +691,16 @@ function Dashboard() {
             <ResponsiveContainer>
               <BarChart
                 data={filteredProgress}
-                margin={{ top: 20, right: 20, left: 4, bottom: 8 }}
-                barCategoryGap="100%"
-                barGap={100}
+                margin={{ top: 20, right: 20, left: 4, bottom: 20 }}
               >
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
+                <XAxis
+                  dataKey="name"
+                  angle={-15}
+                  textAnchor="end"
+                  height={60}
+                  interval={0}
+                />
                 <YAxis />
                 <Tooltip />
                 <Legend />
@@ -802,8 +785,8 @@ function Dashboard() {
 
                   <p className="text-xs text-gray-600">
                     Target: {agg.totalAssigned} sampel, Disubmit:{" "}
-                    {agg.submitCount+agg.rejectedCount} sampel, Disetujui: {agg.approvedCount}{" "}
-                    sampel
+                    {agg.submitCount + agg.rejectedCount} sampel, Disetujui:{" "}
+                    {agg.approvedCount} sampel
                   </p>
 
                   <div className="flex items-center gap-3 text-[11px] text-gray-600">

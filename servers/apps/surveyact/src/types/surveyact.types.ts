@@ -7,12 +7,7 @@ import {
   GraphQLISODateTime,
   Float,
 } from '@nestjs/graphql';
-import {
-  AgreeState,
-  CacahStatus,
-  IssueStatus,
-  StatusST,
-} from '@prisma/client';
+import { AgreeState, CacahStatus, IssueStatus, StatusST } from '@prisma/client';
 import { UserType } from 'apps/users/src/types/users.types';
 
 registerEnumType(AgreeState, {
@@ -126,7 +121,7 @@ export class UserProgressType {
 
   @Field({ nullable: true })
   blockCount?: string;
-  
+
   @Field({ nullable: true })
   villageName?: string;
 
@@ -175,7 +170,6 @@ export class UserSampleType {
   @Field({ nullable: true })
   photoSignedUrl?: string;
 }
-
 
 @ObjectType()
 export class SubSurveyProgressType {
@@ -328,6 +322,12 @@ export class MonthlyStatsType {
 
   @Field(() => Int)
   totalActiveUsers: number;
+
+  @Field(() => [ID])
+  activeUserIds: string[];
+
+  @Field(() => [ID])
+  activeSubSurveyActivityIds: string[];
 }
 
 @ObjectType()
@@ -349,10 +349,14 @@ export class MonthlyActivityStaffUsageRowType {
   @Field(() => GraphQLISODateTime)
   endDate!: Date;
 
-  @Field(() => Number, { description: "Jumlah petugas (distinct userId) dipakai pada kegiatan" })
+  @Field(() => Number, {
+    description: 'Jumlah petugas (distinct userId) dipakai pada kegiatan',
+  })
   staffCount!: number;
 
-  @Field(() => [UserType], { description: "Daftar petugas (distinct userId) dipakai pada kegiatan" })
+  @Field(() => [UserType], {
+    description: 'Daftar petugas (distinct userId) dipakai pada kegiatan',
+  })
   staffUsers!: UserType[];
 }
 

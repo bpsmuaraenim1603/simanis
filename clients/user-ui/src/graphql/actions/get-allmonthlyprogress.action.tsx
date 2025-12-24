@@ -6,6 +6,8 @@ export const GET_MONTHLY_DASHBOARD_STATS = gql`
       totalJobLetters
       totalSPJ
       totalActiveUsers
+      activeUserIds
+      activeSubSurveyActivityIds
     }
   }
 `;

@@ -30,7 +30,7 @@ import { LayoutGroup, motion } from "framer-motion";
 import HUComboBox from "@/src/components/HUCombobox";
 import HUSelect from "@/src/components/HUSelect";
 import useUser from "@/src/hooks/useUser";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 /* ====== (type definitions sama persis dengan punyamu) ====== */
 type SurveyActivity = { id: string; name: string; slug: string };
@@ -159,6 +159,17 @@ function Admin() {
   const router = useRouter();
   const ALLOWED = new Set(["Superadmin", "Admin"]);
   const formatNUS = (n: number) => String(n).padStart(3, "0");
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const setQuery = (patch: Record<string, string | null>) => {
+    const params = new URLSearchParams(searchParams?.toString() || "");
+    Object.entries(patch).forEach(([k, v]) => {
+      if (v == null || v === "") params.delete(k);
+      else params.set(k, v);
+    });
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
 
   React.useEffect(() => {
     if (userLoading) return;
@@ -169,11 +180,23 @@ function Admin() {
     }
   }, [userLoading, currentUser?.role, router]);
 
-  const [section, setSection] = useState<"tim" | "kegiatan" | "petugas">("tim");
-  const [mode, setMode] = useState<"add" | "update">("add");
+  type Section = "tim" | "kegiatan" | "petugas";
+  type Mode = "add" | "update";
+
+  const [section, setSection] = useState<Section>("tim");
+  const [mode, setMode] = useState<Mode>("add");
+  const [deleteMode, setDeleteMode] = useState(false);
+
+  // baca query params → set state (jalan setiap kali URL berubah, termasuk refresh)
   useEffect(() => {
-    setMode("add");
-  }, [section]);
+    const tab = (searchParams?.get("tab") as Section) || "tim";
+    const m = (searchParams?.get("mode") as Mode) || "add";
+    const del = searchParams?.get("delete") === "1";
+
+    setSection(tab);
+    setMode(m);
+    setDeleteMode(del);
+  }, [searchParams]);
 
   const client = useApolloClient();
   const [refreshing, setRefreshing] = useState(false);
@@ -250,7 +273,6 @@ function Admin() {
   const [qSupervisor, setQSupervisor] = useState("");
   const [qEnumerator, setQEnumerator] = useState("");
   const [qUPUser, setQUPUser] = useState("");
-  const [deleteMode, setDeleteMode] = useState(false);
   const qSupervisorDeb = useDebounced(qSupervisor);
 
   function matchesSearch(u: Partial<User>, q: string) {
@@ -1072,10 +1094,27 @@ function Admin() {
 
   useEffect(() => {
     const onEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setDeleteMode(false);
+      if (e.key === "Escape") {
+        setDeleteMode(false);
+        setQuery({ tab: section, mode, delete: null });
+      }
     };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
+  }, [section, mode]);
+
+  useEffect(() => {
+    const hasTab = searchParams?.has("tab");
+    const hasMode = searchParams?.has("mode");
+
+    if (hasTab && hasMode) return;
+
+    const params = new URLSearchParams(searchParams?.toString() || "");
+    if (!hasTab) params.set("tab", section);
+    if (!hasMode) params.set("mode", mode);
+    if (deleteMode) params.set("delete", "1");
+
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   }, []);
 
   /*===================== LOGIC ===================== */
@@ -1314,7 +1353,10 @@ function Admin() {
             { key: "petugas", label: "Petugas" },
           ]}
           value={section}
-          onChange={setSection}
+          onChange={(k) => {
+            setSection(k);
+            setQuery({ tab: k, mode, delete: deleteMode ? "1" : null });
+          }}
         />
 
         <div
@@ -1323,7 +1365,11 @@ function Admin() {
           {mode === "update" && (
             <button
               type="button"
-              onClick={() => setDeleteMode((v) => !v)}
+              onClick={() => {
+                const next = !deleteMode;
+                setDeleteMode(next);
+                setQuery({ tab: section, mode, delete: next ? "1" : null });
+              }}
               className={`px-4 py-1 my-3 rounded-lg text-sm text-white ${
                 deleteMode
                   ? "bg-red-600 hover:bg-red-700"
@@ -1342,7 +1388,17 @@ function Admin() {
               { key: "update", label: "Ubah" },
             ]}
             value={mode}
-            onChange={setMode}
+            onChange={(m) => {
+              setMode(m);
+              // kalau mode jadi add, matikan deleteMode otomatis biar aman
+              const nextDelete = m === "update" ? deleteMode : false;
+              setDeleteMode(nextDelete);
+              setQuery({
+                tab: section,
+                mode: m,
+                delete: nextDelete ? "1" : null,
+              });
+            }}
           />
         </div>
       </div>
@@ -1505,26 +1561,6 @@ function Admin() {
             </div>
             <div>
               <label
-                htmlFor="surveyActivityId"
-                className="block text-sm font-bold mb-2"
-              >
-                Tim Penyelenggara
-              </label>
-
-              <HUSelect
-                value={formStateF2.surveyActivityId || null}
-                onValueChange={(v) =>
-                  setF2Field("surveyActivityId", (v ?? "") as string)
-                }
-                options={data?.allSurveyActivities.map((s: SurveyActivity) => ({
-                  value: s.id,
-                  label: s.name,
-                }))}
-                placeholder="-- Pilih Tim --"
-              />
-            </div>
-            <div>
-              <label
                 htmlFor="startDate"
                 className="block text-sm font-bold mb-2"
               >
@@ -1548,6 +1584,26 @@ function Admin() {
                 value={formStateF2.endDate}
                 onChange={handleChangeF2}
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="surveyActivityId"
+                className="block text-sm font-bold mb-2"
+              >
+                Tim Penyelenggara
+              </label>
+
+              <HUSelect
+                value={formStateF2.surveyActivityId || null}
+                onValueChange={(v) =>
+                  setF2Field("surveyActivityId", (v ?? "") as string)
+                }
+                options={data?.allSurveyActivities.map((s: SurveyActivity) => ({
+                  value: s.id,
+                  label: s.name,
+                }))}
+                placeholder="-- Pilih Tim --"
               />
             </div>
             <div>

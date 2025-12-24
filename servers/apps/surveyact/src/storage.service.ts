@@ -15,7 +15,10 @@ export class StorageService {
     this.sb = createClient(url, key, { auth: { persistSession: false } });
   }
 
-  private toObjectPath(bucket: string, pathOrUrl?: string | null): string | null {
+  private toObjectPath(
+    bucket: string,
+    pathOrUrl?: string | null,
+  ): string | null {
     if (!pathOrUrl) return null;
     if (!pathOrUrl.startsWith('http')) {
       // diasumsikan sudah path relatif
@@ -37,7 +40,10 @@ export class StorageService {
     }
   }
 
-  async removeMany(bucket: string, pathsOrUrls: Array<string | null | undefined>) {
+  async removeMany(
+    bucket: string,
+    pathsOrUrls: Array<string | null | undefined>,
+  ) {
     const list = (pathsOrUrls || [])
       .map((x) => this.toObjectPath(bucket, x || undefined))
       .filter((p): p is string => !!p);
@@ -58,6 +64,11 @@ export class StorageService {
 
   async removeJobLetterFiles(pathsOrUrls: Array<string | null | undefined>) {
     const bucket = process.env.SUPABASE_JL_BUCKET || 'jobletter-docs';
+    return this.removeMany(bucket, pathsOrUrls);
+  }
+
+  async removeSampleFiles(pathsOrUrls: Array<string | null | undefined>) {
+    const bucket = process.env.SUPABASE_SAMPLE_BUCKET || 'sample-photos';
     return this.removeMany(bucket, pathsOrUrls);
   }
 }
