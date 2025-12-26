@@ -112,7 +112,7 @@ function SPJ() {
   const [deleteMode, setDeleteMode] = useState(false);
 
   // ====== QUERIES ======
-  useQuery(GET_ALL_USERS); // untuk konsistensi cache (opsional)
+  useQuery(GET_ALL_USERS);
   const { data: subSurveyData } = useQuery(GET_ALL_OF_SUB_SURVEY_ACTIVITIES);
   const { data: SPJData } = useQuery(GET_ALL_SPJ);
   const {
@@ -157,7 +157,6 @@ function SPJ() {
     return groupPetugasByUserId(raw);
   }, [userProgressData]);
 
-  // Reset baris saat kegiatan ganti & refetch petugas
   useEffect(() => {
     if (subSurveyActivityId) {
       setRows([{ id: uid(), userId: "", verifyNote: "" }]);
@@ -188,7 +187,7 @@ function SPJ() {
 
   const statusOptions = useMemo(
     () => [
-      { value: "", label: "Semua Status" }, // untuk filter
+      { value: "", label: "Semua Status" },
       { value: "Menunggu", label: "Menunggu" },
       { value: "Disetujui", label: "Disetujui" },
       { value: "Ditolak", label: "Ditolak" },
@@ -346,7 +345,7 @@ function SPJ() {
                 { value: "", label: "Semua Jenis Survei" },
                 ...(subSurveyData?.allSubSurveyActivities ?? []).map(
                   (sub: SubSurveyActivity) => ({
-                    value: sub.name, // filter membandingkan by name (sesuai file lama)
+                    value: sub.name,
                     label: sub.name,
                   })
                 ),
@@ -603,7 +602,7 @@ function SPJ() {
                           id: selectedSPJ.id,
                         }))
                       }
-                      options={statusOptions.filter((o) => o.value)} // tanpa "Semua Status"
+                      options={statusOptions.filter((o) => o.value)}
                       placeholder="Pilih status…"
                     />
                   </div>

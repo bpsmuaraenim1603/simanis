@@ -7,8 +7,8 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(SurveyActModule);
 
   app.enableCors({
-    origin: '*', // Allow all origins, adjust as needed
-    credentials: true, // Enable cookies and credentials if needed
+    origin: '*',
+    credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     allowedHeaders: [
       'content-type',
@@ -19,7 +19,7 @@ async function bootstrap() {
     ],
   });
 
-  app.use(graphqlUploadExpress({ maxFileSize: 20 * 1024 * 1024, maxFiles: 1 })); // 20MB
+  app.use(graphqlUploadExpress({ maxFileSize: 10 * 1024 * 1024, maxFiles: 1 }));
 
   await app.listen(process.env.PORT ?? 4002);
 }

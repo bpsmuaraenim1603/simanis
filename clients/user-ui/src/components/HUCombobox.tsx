@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { Combobox, Transition, Portal } from "@headlessui/react"; // ⬅️ tambahkan Portal
+import { Combobox, Transition, Portal } from "@headlessui/react";
 
 export type HUOption = {
   value: string;
@@ -58,14 +58,14 @@ export default function HUComboBox({
   const updateMenuPos = () => {
     const el = anchorRef.current;
     if (!el) return;
-    const r = el.getBoundingClientRect(); // koordinat relatif viewport
+    const r = el.getBoundingClientRect();
     const viewportH = window.innerHeight;
     const spaceBelow = viewportH - r.bottom;
-    const placeAbove = spaceBelow < 220; // flip kalau ruang bawah < 220px (atur sesuai selera)
+    const placeAbove = spaceBelow < 220;
 
     setMenuPos({
-      left: r.left, // TANPA window.scrollX
-      top: placeAbove ? r.top - offset : r.bottom + offset, // kalau flip, patok di atas input
+      left: r.left,
+      top: placeAbove ? r.top - offset : r.bottom + offset,
       width: r.width,
       placeAbove,
     });
@@ -129,7 +129,7 @@ export default function HUComboBox({
             {/* Toggle */}
             <Combobox.Button
               className="absolute inset-y-0 right-0 flex items-center px-2"
-              onClick={updateMenuPos} // pastikan posisi up-to-date saat buka
+              onClick={updateMenuPos}
             >
               <svg
                 viewBox="0 0 20 20"
@@ -178,7 +178,7 @@ export default function HUComboBox({
                       <Combobox.Option
                         key={o.value}
                         value={o}
-                        disabled={!!o.disabled} // ⬅️ penting
+                        disabled={!!o.disabled}
                         className={({ active, disabled }) =>
                           `cursor-pointer select-none px-3 py-2
                           ${disabled ? "opacity-40 cursor-not-allowed" : ""}
@@ -220,7 +220,6 @@ export default function HUComboBox({
                 </Combobox.Options>
               </Portal>
             ) : (
-              // ========= Mode lama (absolute dalam container) =========
               <Combobox.Options className="absolute z-50 mt-1 max-h-64 w-full overflow-auto rounded-lg border bg-white py-1 shadow-lg focus:outline-none">
                 {filtered.length === 0 ? (
                   <div className="px-3 py-2 text-sm text-gray-500">

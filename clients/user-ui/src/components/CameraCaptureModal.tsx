@@ -69,7 +69,6 @@ export default function CameraCaptureModal({
     setIsReady(false);
 
     try {
-      // Stop stream lama kalau ada
       stopCamera();
 
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -115,7 +114,6 @@ export default function CameraCaptureModal({
     const video = videoRef.current;
     if (!video) return;
 
-    // Pastikan metadata sudah kebaca
     const vw = video.videoWidth;
     const vh = video.videoHeight;
     if (!vw || !vh) {
@@ -123,7 +121,6 @@ export default function CameraCaptureModal({
       return;
     }
 
-    // Scale down ke maxWidth
     const ratio = vw > maxWidth ? maxWidth / vw : 1;
     const w = Math.round(vw * ratio);
     const h = Math.round(vh * ratio);
@@ -152,14 +149,12 @@ export default function CameraCaptureModal({
     const file = new File([blob], filename, { type: "image/jpeg" });
     const previewUrl = URL.createObjectURL(blob);
 
-    // Hentikan kamera setelah capture (biar hemat baterai & jelas “foto saat itu”)
     stopCamera();
 
     onCapture(file, previewUrl);
     onClose();
   }
 
-  // Start/stop otomatis saat open berubah
   useEffect(() => {
     if (!open) {
       stopCamera();
@@ -169,12 +164,9 @@ export default function CameraCaptureModal({
     }
     if (open && autoStart) startCamera();
 
-    // Cleanup saat unmount
     return () => stopCamera();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // Tanda video ready
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;

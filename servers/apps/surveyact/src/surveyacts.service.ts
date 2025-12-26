@@ -44,7 +44,7 @@ import { StorageService } from './storage.service';
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!, // server only
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
 function getExtLower(name?: string | null) {
@@ -100,18 +100,9 @@ export class SurveyActivityService {
     });
   }
 
-  // Update survei by id
-  // async update(id: string, input: UpdateSurveyActivityInput) {
-  //   return this.prisma.surveyActivity.update({
-  //     where: { id },
-  //     data: input,
-  //   });
-  // }
-
   async findBySlug(slug: string) {
     const survey = await this.prisma.surveyActivity.findUnique({
       where: { slug },
-      // include: { issues: true, User: true } // aktifkan jika mau relasi
     });
     if (!survey) throw new NotFoundException('SurveyActivity not found');
     return survey;
@@ -169,8 +160,6 @@ export class SurveyActivityService {
 
   async createUserSurveyProgress(input: CreateUserProgressDTO) {
     const { samples, ...rest } = input;
-
-    // Hitung agregat dari samples kalau dikirim dari FE
     let totalAssigned = rest.totalAssigned ?? 0;
     let submitCount = rest.submitCount ?? 0;
     let approvedCount = rest.approvedCount ?? 0;
@@ -313,107 +302,115 @@ export class SurveyActivityService {
   async updateUserProgress(input: UpdateUserProgressDTO) {
     const { id, samples, deleteSampleIds, ...rest } = input;
 
-    // 1) update field progress dulu (tanpa samples)
-    //    (jangan include samples dulu biar transaksi rapi)
-    // NOTE: kita akan hitung agregat dari samples kalau samples dikirim.
-    let totalAssigned = rest.totalAssigned;
-    let submitCount = rest.submitCount;
-    let approvedCount = rest.approvedCount;
-    let rejectedCount = rest.rejectedCount;
-
-    if (samples) {
-      totalAssigned = samples.length;
-      submitCount = samples.filter(
-        (s) => s.cacahStatus === CacahStatus.Selesai,
-      ).length;
-      approvedCount = samples.filter(
-        (s) => s.approvalStatus === AgreeState.Disetujui,
-      ).length;
-      rejectedCount = samples.filter(
-        (s) => s.approvalStatus === AgreeState.Ditolak,
-      ).length;
-    }
-
     return this.prisma.$transaction(async (tx) => {
-      // 2) update parent progress
-      const updatedProgress = await tx.userProgress.update({
+      await tx.userProgress.update({
         where: { id },
-        data: {
-          ...rest,
-          ...(samples
-            ? {
-                totalAssigned: totalAssigned ?? 0,
-                submitCount: submitCount ?? 0,
-                approvedCount: approvedCount ?? 0,
-                rejectedCount: rejectedCount ?? 0,
-              }
-            : {}),
+        data: { ...rest },
+      });
+
+      const existing = await tx.userSample.findMany({
+        where: { userProgressId: id },
+        select: {
+          id: true,
+          nus: true,
+          photoPath: true,
+          cacahStatus: true,
+          approvalStatus: true,
         },
       });
 
+      const existingByNus = new Map(existing.map((s) => [s.nus, s]));
+
       if (samples) {
-        await tx.userSample.deleteMany({ where: { userProgressId: id } });
+        const nusSet = new Set<string>();
+        for (const s of samples) {
+          if (!s?.nus || String(s.nus).trim() === '') {
+            throw new BadRequestException('NUS tidak boleh kosong.');
+          }
+          if (nusSet.has(s.nus)) {
+            throw new BadRequestException(`Duplikat NUS di payload: ${s.nus}`);
+          }
+          nusSet.add(s.nus);
+        }
 
-        const cleaned = samples.filter(
-          (s) => String(s.nus ?? '').trim().length > 0,
-        );
+        for (const s of samples) {
+          const prev = existingByNus.get(s.nus);
 
-        if (cleaned.length > 0) {
-          await tx.userSample.createMany({
-            data: cleaned.map((s) => ({
-              userProgressId: id,
-              nus: s.nus,
-              identity: s.identity,
-              cacahStatus: s.cacahStatus,
-              approvalStatus: s.approvalStatus,
-              geoLat: s.geoLat ?? null,
-              geoLng: s.geoLng ?? null,
-              geoCapturedAt: s.geoCapturedAt ?? null,
-            })),
+          if (prev) {
+            await tx.userSample.update({
+              where: { id: prev.id },
+              data: {
+                identity: s.identity,
+                cacahStatus: s.cacahStatus,
+                approvalStatus: s.approvalStatus,
+                geoLat: s.geoLat ?? null,
+                geoLng: s.geoLng ?? null,
+                geoCapturedAt: s.geoCapturedAt ?? null,
+              },
+            });
+          } else {
+            await tx.userSample.create({
+              data: {
+                userProgressId: id,
+                nus: s.nus,
+                identity: s.identity,
+                cacahStatus: s.cacahStatus,
+                approvalStatus: s.approvalStatus,
+                geoLat: s.geoLat ?? null,
+                geoLng: s.geoLng ?? null,
+                geoCapturedAt: s.geoCapturedAt ?? null,
+              },
+            });
+          }
+        }
+
+        const incomingNus = new Set(samples.map((s) => s.nus));
+        const toDelete = existing.filter((e) => !incomingNus.has(e.nus));
+
+        if (toDelete.length) {
+          await tx.userSample.deleteMany({
+            where: { id: { in: toDelete.map((x) => x.id) } },
           });
+          await this.storage.removeSampleFiles(
+            toDelete.map((x) => x.photoPath),
+          );
         }
       }
 
-      // 4) (opsional) patch delete spesifik kalau kamu mau pakai deleteSampleIds
-      if (deleteSampleIds && deleteSampleIds.length > 0) {
-        await tx.userSample.deleteMany({
-          where: {
-            userProgressId: id,
-            id: { in: deleteSampleIds },
-          },
+      if (deleteSampleIds?.length) {
+        const willDelete = await tx.userSample.findMany({
+          where: { userProgressId: id, id: { in: deleteSampleIds } },
+          select: { id: true, photoPath: true },
         });
 
-        // Kalau deleteSampleIds dipakai tanpa `samples`,
-        // agregat harus dihitung ulang berdasarkan DB:
-        if (!samples) {
-          const remain = await tx.userSample.findMany({
-            where: { userProgressId: id },
-          });
+        await tx.userSample.deleteMany({
+          where: { userProgressId: id, id: { in: deleteSampleIds } },
+        });
 
-          const ta = remain.length;
-          const sc = remain.filter(
-            (s) => s.cacahStatus === CacahStatus.Selesai,
-          ).length;
-          const ac = remain.filter(
-            (s) => s.approvalStatus === AgreeState.Disetujui,
-          ).length;
-          const rc = remain.filter(
-            (s) => s.approvalStatus === AgreeState.Ditolak,
-          ).length;
-
-          await tx.userProgress.update({
-            where: { id },
-            data: {
-              totalAssigned: ta,
-              submitCount: sc,
-              approvedCount: ac,
-              rejectedCount: rc,
-            },
-          });
-        }
+        await this.storage.removeSampleFiles(
+          willDelete.map((x) => x.photoPath),
+        );
       }
 
-      // 5) return lengkap
+      const all = await tx.userSample.findMany({
+        where: { userProgressId: id },
+      });
+
+      await tx.userProgress.update({
+        where: { id },
+        data: {
+          totalAssigned: all.length,
+          submitCount: all.filter((s) => s.cacahStatus === CacahStatus.Selesai)
+            .length,
+          approvedCount: all.filter(
+            (s) => s.approvalStatus === AgreeState.Disetujui,
+          ).length,
+          rejectedCount: all.filter(
+            (s) => s.approvalStatus === AgreeState.Ditolak,
+          ).length,
+        },
+      });
+
       return tx.userProgress.findUnique({
         where: { id },
         include: { samples: true },
@@ -426,7 +423,6 @@ export class SurveyActivityService {
       input;
 
     return this.prisma.$transaction(async (tx) => {
-      // 1. UPDATE existing samples
       if (updateSamples?.length) {
         for (const s of updateSamples) {
           let oldPhotoPath: string | null = null;
@@ -463,7 +459,6 @@ export class SurveyActivityService {
         }
       }
 
-      // 2. CREATE new samples
       if (createSamples?.length) {
         await tx.userSample.createMany({
           data: createSamples.map((s) => ({
@@ -479,9 +474,7 @@ export class SurveyActivityService {
         });
       }
 
-      // 3. DELETE samples
       if (deleteSampleIds?.length) {
-        // Ambil path foto dulu supaya bisa bersihin storage
         const willDelete = await tx.userSample.findMany({
           where: { userProgressId, id: { in: deleteSampleIds } },
           select: { photoPath: true },
@@ -496,7 +489,6 @@ export class SurveyActivityService {
         );
       }
 
-      // 4. HITUNG ULANG AGREGAT
       const all = await tx.userSample.findMany({
         where: { userProgressId },
       });
@@ -536,11 +528,9 @@ export class SurveyActivityService {
     let eviMimeType: string | null = null;
     let eviSize: number | null = null;
 
-    // === Hanya proses upload jika argumen "file" memang dikirim dan bukan null ===
     if (file) {
       const { filename, mimetype, createReadStream } = file;
 
-      // ---- Validasi ext ∨ mime (tanpa modul 'path') ----
       const ext = getExtLower(filename);
       const allowedExt = new Set(['.pdf', '.jpg', '.jpeg', '.png']);
       const allowedMime = new Set([
@@ -551,7 +541,7 @@ export class SurveyActivityService {
         'image/jpeg',
         'image/jpg',
         'image/png',
-        'application/octet-stream', // beberapa browser, termasuk Edge/Windows
+        'application/octet-stream',
       ]);
 
       const mimeOk = allowedMime.has((mimetype || '').toLowerCase());
@@ -570,7 +560,6 @@ export class SurveyActivityService {
       const contentType = pickContentType(ext, mimetype);
       const key = `spj/${input.subSurveyActivityId}/${input.userId}/${randomUUID()}${ext}`;
 
-      // (opsional) kalau mau hitung size, bisa pipe ke counter; kalau tidak, langsung upload:
       const stream = createReadStream();
       const { error } = await supabase.storage
         .from('spj-docs')
@@ -609,7 +598,7 @@ export class SurveyActivityService {
     if (!pathOrNull) return null;
     const { data, error } = await supabase.storage
       .from('spj-docs')
-      .createSignedUrl(pathOrNull, 60 * 60 * 6); // 6 jam
+      .createSignedUrl(pathOrNull, 60 * 60 * 6);
     if (error) return null;
     return data.signedUrl;
   }
@@ -636,7 +625,7 @@ export class SurveyActivityService {
     if (!path) return null;
     const { data, error } = await supabase.storage
       .from('jobletter-docs')
-      .createSignedUrl(path, 60 * 60); // 1 jam
+      .createSignedUrl(path, 60 * 60);
     if (error) return null;
     return data?.signedUrl ?? null;
   }
@@ -673,7 +662,6 @@ export class SurveyActivityService {
 
     const bucket = process.env.SUPABASE_SAMPLE_BUCKET || 'sample-photos';
 
-    // pastikan bucket ada
     const { data: b } = await supabase.storage.getBucket(bucket);
     if (!b) {
       throw new BadRequestException('Bucket belum tersedia: ' + bucket);
@@ -700,19 +688,16 @@ export class SurveyActivityService {
     let eviLetterPath: string | null = null;
     let eviLetterOriginalName: string | null = null;
     let eviLetterMimeType: string | null = null;
-    let eviLetterSize: number | null = null; // optional
+    let eviLetterSize: number | null = null;
 
     if (file) {
       const { filename, mimetype, createReadStream } = file;
 
-      // pastikan bucket ada
       const { data: b } = await supabase.storage.getBucket('jobletter-docs');
       if (!b)
         throw new BadRequestException(
           'Bucket belum tersedia: ' + 'jobletter-docs',
         );
-
-      // validasi tipe (longgar: ext ∨ mime)
       const ext = getExtLower(filename);
       const allowedExt = new Set(['.pdf', '.jpg', '.jpeg', '.png']);
       const allowedMime = new Set([
@@ -758,11 +743,9 @@ export class SurveyActivityService {
         region: input.region,
         submitDate: input.submitDate,
 
-        // legacy terserah diisi atau tidak:
         eviFieldUrl: input.eviFieldUrl ?? undefined,
         eviSTUrl: input.eviSTUrl ?? undefined,
 
-        // NEW
         eviLetterPath: eviLetterPath ?? undefined,
         eviLetterOriginalName: eviLetterOriginalName ?? undefined,
         eviLetterMimeType: eviLetterMimeType ?? undefined,
@@ -940,7 +923,6 @@ export class SurveyActivityService {
 
     const rows = await Promise.all(
       subs.map(async (s) => {
-        // 1x query saja: ambil distinct userId + data user
         const ups = await this.prisma.userProgress.findMany({
           where: { subSurveyActivityId: s.id },
           distinct: ['userId'],
@@ -977,7 +959,6 @@ export class SurveyActivityService {
 
     const ups = await this.prisma.userProgress.findMany({
       where: {
-        // tahun ditentukan dari startDate kegiatan
         subSurveyActivity: {
           startDate: { gte: from, lte: to },
         },
@@ -1007,7 +988,7 @@ export class SurveyActivityService {
             id: true,
             name: true,
             activityType: true,
-            startDate: true, // ini kunci untuk bulan
+            startDate: true,
           },
         },
       },
@@ -1020,7 +1001,7 @@ export class SurveyActivityService {
       const month =
         sd != null
           ? `${sd.getFullYear()}-${pad2(sd.getMonth() + 1)}`
-          : `${year}-01`; // fallback (harusnya tidak kepakai)
+          : `${year}-01`;
 
       return {
         userId: r.userId,
@@ -1052,7 +1033,6 @@ export class SurveyActivityService {
   }
 
   async createContentIssue(input: CreateContentIssueDto) {
-    // catatan: sebaiknya reporterId diambil dari auth (req.user.id) di resolver/guard
     return this.prisma.contentIssue.create({
       data: {
         content: input.content,
@@ -1100,7 +1080,6 @@ export class SurveyActivityService {
           ? {
               OR: [
                 { content: { contains: search, mode: 'insensitive' } },
-                // ✅ untuk relasi 1–1 gunakan 'is'
                 {
                   reporter: {
                     is: { name: { contains: search, mode: 'insensitive' } },
@@ -1116,23 +1095,20 @@ export class SurveyActivityService {
       include: {
         reporter: true,
         subSurveyActivity: true,
-        // ✅ kirim array komentar + user
         IssueComment: {
           include: { user: true },
           orderBy: { createdAt: 'asc' },
         },
-        _count: { select: { IssueComment: true } }, // opsional, kalau mau tetap punya count cepat
+        _count: { select: { IssueComment: true } },
       },
     });
   }
 
   async updateContentIssue(input: UpdateContentIssueDto) {
-    // hanya field yang diisi yang dipakai
     const cleaned = Object.fromEntries(
       Object.entries(input).filter(([k, v]) => k !== 'id' && v != null),
     );
 
-    // NOTE: pembatasan "issueStatus hanya admin" sebaiknya di guard/resolver
     return this.prisma.contentIssue.update({
       where: { id: input.id },
       data: cleaned,
@@ -1145,8 +1121,6 @@ export class SurveyActivityService {
   }
 
   async addIssueComment(input: createIssueCommentDto) {
-    // catatan: userId juga sebaiknya dari auth di resolver
-    // validasi: pastikan contentIssue ada
     await this.ensureIssueExists(input.contentId);
 
     const comment = await this.prisma.issueComment.create({
@@ -1159,7 +1133,6 @@ export class SurveyActivityService {
       include: { user: true, content: true, subSurveyActivity: true },
     });
 
-    // sekadar menyentuh updatedAt di ContentIssue biar naik ke atas daftar
     await this.prisma.contentIssue.update({
       where: { id: input.contentId },
       data: { updatedAt: new Date() },
@@ -1268,7 +1241,6 @@ export class SurveyActivityService {
     if (!exists)
       throw new NotFoundException('SubSurveyActivity tidak ditemukan');
 
-    // ambil semua SPJ & JL untuk SSA ini (kumpulkan path/URL berkas)
     const [spjs, jls] = await Promise.all([
       this.prisma.submitSPJ.findMany({
         where: { subSurveyActivityId: id },
@@ -1278,7 +1250,7 @@ export class SurveyActivityService {
         where: { subSurveyActivityId: id },
         select: {
           eviFieldUrl: true,
-          eviSTUrl: true /* kalau ada: */ /* eviLetterPath: true */,
+          eviSTUrl: true
         } as any,
       }),
     ]);
@@ -1289,7 +1261,6 @@ export class SurveyActivityService {
 
     await this.storage.removeSampleFiles(samplePhotos.map((x) => x.photoPath));
 
-    // hapus file-file terkait
     await Promise.all([
       this.storage.removeSpjFiles(spjs.map((x) => x.eviDocumentPath)),
       this.storage.removeJobLetterFiles(
@@ -1297,7 +1268,6 @@ export class SurveyActivityService {
       ),
     ]);
 
-    // lalu hapus DB child → parent (seperti versi sebelumnya)
     await this.prisma.$transaction([
       this.prisma.issueComment.deleteMany({
         where: { subSurveyActivityId: id },
@@ -1335,11 +1305,10 @@ export class SurveyActivityService {
     const jl = await this.prisma.jobLetter.findUnique({ where: { id } });
     if (!jl) throw new NotFoundException('JobLetter tidak ditemukan');
 
-    // Kamu punya beberapa field bukti: eviLetterPath (path), eviFieldUrl (URL), eviSTUrl (URL)
     await this.storage.removeJobLetterFiles([
-      (jl as any).eviLetterPath, // jika ada path file utama
-      jl.eviFieldUrl, // URL bukti lapangan
-      jl.eviSTUrl, // URL bukti surat tugas
+      (jl as any).eviLetterPath,
+      jl.eviFieldUrl,
+      jl.eviSTUrl,
     ]);
 
     await this.prisma.jobLetter.delete({ where: { id } });
@@ -1350,10 +1319,8 @@ export class SurveyActivityService {
     const spj = await this.prisma.submitSPJ.findUnique({ where: { id } });
     if (!spj) throw new NotFoundException('SubmitSPJ tidak ditemukan');
 
-    // 1) hapus file di storage (eviDocumentPath bisa path relatif atau URL)
     await this.storage.removeSpjFiles([spj.eviDocumentPath]);
 
-    // 2) hapus row
     await this.prisma.submitSPJ.delete({ where: { id } });
     return {
       success: true,

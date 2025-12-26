@@ -31,7 +31,6 @@ function formatDateTime(date: Date | string, use12h = true) {
     hour: "numeric",
     minute: "2-digit",
     hour12: use12h,
-    // timeZone: "Asia/Jakarta", // opsional
   }).formatToParts(new Date(date));
 
   const get = (t: Intl.DateTimeFormatPart["type"]) =>
@@ -42,9 +41,8 @@ function formatDateTime(date: Date | string, use12h = true) {
   const year = get("year");
   const hour = get("hour");
   const minute = get("minute");
-  const dayPeriod = (get("dayPeriod") || "").toUpperCase(); // AM/PM
+  const dayPeriod = (get("dayPeriod") || "").toUpperCase();
 
-  // rakit manual: dd/mm/yyyy spasi hh.mm AM/PM (tanpa koma)
   return `${month}/${day}/${year} ${hour}:${minute}${dayPeriod ? " " + dayPeriod : ""}`;
 }
 

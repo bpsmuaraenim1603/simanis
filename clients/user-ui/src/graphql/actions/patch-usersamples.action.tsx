@@ -21,6 +21,7 @@ export const PATCH_USER_SAMPLES = gql`
         photoCapturedAt
         photoSignedUrl
       }
+      lastUpdated
     }
   }
 `;

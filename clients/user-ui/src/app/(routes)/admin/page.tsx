@@ -31,6 +31,8 @@ import HUComboBox from "@/src/components/HUCombobox";
 import HUSelect from "@/src/components/HUSelect";
 import useUser from "@/src/hooks/useUser";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { PATCH_USER_SAMPLES } from "@/src/graphql/actions/patch-usersamples.action";
+import { format } from "path";
 
 /* ====== (type definitions sama persis dengan punyamu) ====== */
 type SurveyActivity = { id: string; name: string; slug: string };
@@ -183,11 +185,11 @@ function Admin() {
   type Section = "tim" | "kegiatan" | "petugas";
   type Mode = "add" | "update";
 
+  const [deleteSampleIds, setDeleteSampleIds] = useState<string[]>([]);
   const [section, setSection] = useState<Section>("tim");
   const [mode, setMode] = useState<Mode>("add");
   const [deleteMode, setDeleteMode] = useState(false);
 
-  // baca query params → set state (jalan setiap kali URL berubah, termasuk refresh)
   useEffect(() => {
     const tab = (searchParams?.get("tab") as Section) || "tim";
     const m = (searchParams?.get("mode") as Mode) || "add";
@@ -260,6 +262,7 @@ function Admin() {
     travelBill: "",
   });
   const emptySampleRow = {
+    id: "",
     nus: "",
     identity: "",
     cacahStatus: "Belum_Cacah",
@@ -343,6 +346,8 @@ function Admin() {
   const [deleteSurveyActivity] = useMutation(DELETE_SURVEY_ACTIVITY);
   const [deleteSubSurveyActivity] = useMutation(DELETE_SUBSURVEY_ACTIVITY);
   const [deleteUserProgressMut] = useMutation(DELETE_USER_SURVEY_PROGRESS);
+  const [patchUserSamples, { loading: patchSampleLoading }] =
+    useMutation(PATCH_USER_SAMPLES);
 
   const toDateInput = (d?: string | Date) =>
     d ? new Date(d).toISOString().slice(0, 10) : "";
@@ -376,7 +381,6 @@ function Admin() {
   const sumTravel = (rows: any[]) =>
     rows.reduce((acc, r) => acc + toMoney(r.travelBill), 0);
 
-  // ===== Helpers tanggal untuk filter bulan aktif =====
   const isSameMonthYear = (a: Date, b: Date) =>
     a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
 
@@ -682,7 +686,6 @@ function Admin() {
           return;
         }
 
-        // Validasi limit_bill (lintas kegiatan) untuk update
         if (currentUP?.userId) {
           if (!upByUserUpdateData) {
             await fetchUserProgressByUserForUpdate({
@@ -711,7 +714,8 @@ function Admin() {
               villageName: updateUserProgressForm.villageName,
               travelBill: updateUserProgressForm.travelBill,
               samples: sampleListUpdate.map((s, idx) => ({
-                nus: formatNUS(idx + 1),
+                ...(s.id ? { id: s.id } : {}),
+                nus: s.nus,
                 identity: s.identity,
                 cacahStatus: s.cacahStatus,
                 approvalStatus: s.approvalStatus,
@@ -743,6 +747,7 @@ function Admin() {
         travelBill: "",
       });
       setSampleListUpdate([emptySampleRow]);
+      setDeleteSampleIds([]);
     } catch (err) {
       toast.error("Gagal perbarui petugas");
       console.error(err);
@@ -760,7 +765,6 @@ function Admin() {
       });
       if (data?.deleteSurveyActivity?.success) {
         toast.success(data?.deleteSurveyActivity?.message ?? "Tim terhapus.");
-        // reset form & refresh
         setUpdateStateF1({ surveyActivityId: "", name: "", slug: "" });
         await handleRefresh();
       } else {
@@ -909,7 +913,6 @@ function Admin() {
     }
   };
 
-  // Setter generik untuk form UserProgress (tanpa event)
   const setUPField = <K extends keyof typeof userProgressForm>(
     key: K,
     value: (typeof userProgressForm)[K]
@@ -1067,8 +1070,8 @@ function Admin() {
     if (curr !== prev) {
       setUpdateUserProgressForm((s: any) => ({
         ...s,
-        subSurveyActivityId: "", // reset kegiatan
-        userId: "", // reset petugas
+        subSurveyActivityId: "",
+        userId: "",
       }));
     }
 
@@ -1202,14 +1205,12 @@ function Admin() {
         .filter((u: User) => u.role !== "Supervisor")
         .filter((u: User) => u.role !== "Admin")
         .filter((u: User) => u.role !== "Superadmin"),
-    // .filter((u: User) => !usedUserIdsForAdd.has(u.id)),
     [userData, usedUserIdsForAdd]
   );
   const filteredEnumeratorsForAdd = useMemo(
     () => enumeratorsForAdd.filter((u) => matchesSearch(u, qEnumerator)),
     [enumeratorsForAdd, qEnumerator]
   );
-  // ==== Tambah ====
   const selectedUserForAdd = useMemo(
     () =>
       (userData?.getUsers ?? []).find(
@@ -1227,7 +1228,6 @@ function Admin() {
   const remainTravelAdd = Math.max(0, limitBillAdd - usedTravelAdd);
   const willExceedAdd = newTravelAdd > remainTravelAdd;
 
-  // ==== Ubah ====
   const selectedUserForUpdate = currentUP
     ? (userData?.getUsers ?? []).find((u: any) => u.id === currentUP.userId)
     : null;
@@ -1240,7 +1240,6 @@ function Admin() {
     return sumTravel(filtered);
   }, [upByUserUpdateData, subMap]);
 
-  // Kurangi travelBill baris yang sedang diedit *hanya jika* baris itu juga terhitung bulan ini
   const currentRowCounted = currentUP ? includeForThisMonth(currentUP) : false;
   const currentRowOldTravel = toMoney(currentUP?.travelBill);
   const usedTravelUpdateOthers = Math.max(
@@ -1253,6 +1252,18 @@ function Admin() {
     limitBillUpdate - usedTravelUpdateOthers
   );
   const willExceedUpdate = newTravelUpdate > remainTravelUpdate;
+  const nusToNumber = (nus: string) => {
+    const n = Number(String(nus ?? "").trim());
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  const getNextNus = (rows: any[]) => {
+    const max = Math.max(0, ...(rows ?? []).map((r) => nusToNumber(r.nus)));
+    return formatNUS(max + 1);
+  };
+
+  const sortByNusAsc = (rows: any[]) =>
+    [...(rows ?? [])].sort((a, b) => nusToNumber(a.nus) - nusToNumber(b.nus));
 
   useEffect(() => {
     if (isListingUpdate) {
@@ -1284,16 +1295,17 @@ function Admin() {
 
     const samples = (currentUP as any)?.samples ?? [];
     if (Array.isArray(samples) && samples.length > 0) {
-      setSampleListUpdate(
-        samples.map((s: any) => ({
-          nus: s.nus ?? "",
-          identity: s.identity ?? "",
-          cacahStatus: s.cacahStatus ?? "Belum_Cacah",
-          approvalStatus: s.approvalStatus ?? "Menunggu",
-          geoLat: s.geoLat != null ? String(s.geoLat) : "",
-          geoLng: s.geoLng != null ? String(s.geoLng) : "",
-        }))
-      );
+      const mapped = samples.map((s: any) => ({
+        id: s.id,
+        nus: s.nus ?? "",
+        identity: s.identity ?? "",
+        cacahStatus: s.cacahStatus ?? "Belum_Cacah",
+        approvalStatus: s.approvalStatus ?? "Menunggu",
+        geoLat: s.geoLat != null ? String(s.geoLat) : "",
+        geoLng: s.geoLng != null ? String(s.geoLng) : "",
+      }));
+
+      setSampleListUpdate(sortByNusAsc(mapped));
     } else {
       setSampleListUpdate([]);
     }
@@ -1308,6 +1320,7 @@ function Admin() {
   useEffect(() => {
     if (!updateUserProgressForm.userProgressId) {
       setSampleListUpdate([]);
+      setDeleteSampleIds([]);
     }
   }, [updateUserProgressForm.userProgressId]);
 
@@ -1390,7 +1403,6 @@ function Admin() {
             value={mode}
             onChange={(m) => {
               setMode(m);
-              // kalau mode jadi add, matikan deleteMode otomatis biar aman
               const nextDelete = m === "update" ? deleteMode : false;
               setDeleteMode(nextDelete);
               setQuery({
@@ -2367,7 +2379,11 @@ function Admin() {
                 <button
                   type="button"
                   onClick={() =>
-                    setSampleListUpdate((prev) => [...prev, emptySampleRow])
+                    setSampleListUpdate((prev) => {
+                      const nus = getNextNus(prev);
+                      const next = [...prev, { ...emptySampleRow, nus }];
+                      return sortByNusAsc(next);
+                    })
                   }
                   className="flex flex-row items-center justify-center px-3 rounded-md cursor-pointer bg-[#2190ff] min-h-[30px] font-Poppins font-semibold text-white hover:bg-[#1977cc] transition-colors text-sm"
                   disabled={!updateUserProgressForm.userProgressId}
@@ -2396,7 +2412,7 @@ function Admin() {
                         >
                           <input
                             placeholder="NUS"
-                            value={formatNUS(idx + 1)}
+                            value={row.nus}
                             readOnly
                             className="w-full sm:col-span-2 md:col-span-1 px-3 py-2 border rounded-md bg-white"
                           />
@@ -2485,12 +2501,51 @@ function Admin() {
                           {/* Hapus baris dari UI */}
                           <button
                             type="button"
-                            onClick={() =>
-                              setSampleListUpdate((prev) =>
-                                prev.filter((_, i) => i !== idx)
+                            disabled={patchSampleLoading}
+                            onClick={async () => {
+                              const row: any = sampleListUpdate[idx];
+
+                              if (!row?.id) {
+                                setSampleListUpdate((prev) =>
+                                  sortByNusAsc(prev.filter((_, i) => i !== idx))
+                                );
+
+                                return;
+                              }
+
+                              const userProgressId =
+                                updateUserProgressForm.userProgressId;
+                              if (!userProgressId) {
+                                toast.error("User Progress belum dipilih.");
+                                return;
+                              }
+
+                              if (
+                                !window.confirm(
+                                  "Hapus sample ini beserta fotonya?"
+                                )
                               )
-                            }
-                            className="px-3 py-2 border rounded-md text-sm bg-red-500 text-white hover:bg-red-600 transition-colors font-semibold"
+                                return;
+
+                              try {
+                                await patchUserSamples({
+                                  variables: {
+                                    input: {
+                                      userProgressId,
+                                      deleteSampleIds: [row.id],
+                                    },
+                                  },
+                                });
+
+                                setSampleListUpdate((prev) =>
+                                  prev.filter((_, i) => i !== idx)
+                                );
+                              } catch (err) {
+                                console.error(err);
+                                toast.error("Gagal menghapus sample.");
+                              }
+                            }}
+                            className="px-3 py-2 border rounded-md text-sm bg-red-500 text-white hover:bg-red-600 transition-colors font-semibold disabled:opacity-60"
                           >
                             Hapus
                           </button>

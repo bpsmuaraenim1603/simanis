@@ -42,7 +42,7 @@ const SideItems = ({activeItem = 0}:{activeItem?:number}) => {
                 href={item.url}
                 className={
                     `px-5 text-[18px] font-Poppins font-[500] ${
-                        activeItem === index && 'text-[#37b668]' //active item based on url
+                        activeItem === index && 'text-[#37b668]'
                     }`
                 }
                 >

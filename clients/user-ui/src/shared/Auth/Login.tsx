@@ -37,10 +37,10 @@ const Login = ({ setActiveState }: { setActiveState: (e: string) => void }) => {
 
   const isProd = process.env.NODE_ENV === "production";
   const cookieOpts = {
-    expires: 30, // 30 hari
+    expires: 30,
     sameSite: "lax" as const,
     path: "/",
-    secure: isProd, // wajib true hanya saat HTTPS (production)
+    secure: isProd,
   };
 
   const [show, setShow] = useState(false);

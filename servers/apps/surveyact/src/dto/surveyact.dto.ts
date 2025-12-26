@@ -15,7 +15,7 @@ import {
 } from 'class-validator';
 
 registerEnumType(AgreeState, {
-  name: 'AgreeState', // ini akan muncul di GraphQL schema
+  name: 'AgreeState',
 });
 
 registerEnumType(StatusST, {
@@ -174,7 +174,7 @@ export class CreateUserProgressDTO {
   blockCount?: string;
 
   @Field(() => GraphQLISODateTime, { nullable: true })
-  lastUpdated?: Date; // sebenernya bisa kamu hapus total, karena DB @updatedAt
+  lastUpdated?: Date;
 
   @Field({ nullable: true })
   districtId?: string;
@@ -191,6 +191,9 @@ export class CreateUserProgressDTO {
 
 @InputType()
 export class UserSampleInput {
+  @Field({ nullable: true })
+  id?: string;
+  
   @Field()
   nus: string;
 
@@ -227,7 +230,6 @@ export class UpdateUserProgressDTO {
   @Field({ nullable: true })
   travelBill?: string;
 
-  // agregat lama optional (boleh tetap ada)
   @Field({ nullable: true })
   totalAssigned?: number;
 
@@ -240,11 +242,9 @@ export class UpdateUserProgressDTO {
   @Field({ nullable: true })
   rejectedCount?: number;
 
-  // NEW: list sampel (optional)
   @Field(() => [UserSampleInput], { nullable: true })
   samples?: UserSampleInput[];
 
-  // OPTIONAL: kalau kamu mau delete spesifik (patch mode)
   @Field(() => [String], { nullable: true })
   deleteSampleIds?: string[];
 }

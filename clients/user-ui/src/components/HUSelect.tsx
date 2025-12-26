@@ -10,8 +10,8 @@ export type HUSelectOption = {
 };
 
 type Props = {
-  value: string | null; // id terpilih
-  onValueChange: (v: string | null) => void; // callback set id
+  value: string | null;
+  onValueChange: (v: string | null) => void;
   options?: HUSelectOption[];
   placeholder?: string;
   disabled?: boolean;

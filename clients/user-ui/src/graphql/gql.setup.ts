@@ -13,12 +13,9 @@ import Cookies from "js-cookie";
 const auth = setContext((operation, prev) => ({
   headers: {
     ...prev.headers,
-    // TOKEN kalau ada:
     accesstoken: typeof window !== 'undefined' ? localStorage.getItem('access_token') ?? '' : '',
     refreshtoken: typeof window !== 'undefined' ? localStorage.getItem('refresh_token') ?? '' : '',
-    // >>> KUNCI ANTI-CSRF UNTUK multipart:
     'apollo-require-preflight': 'true',
-    // (opsional sekaligus) beri operation name:
     'x-apollo-operation-name': operation.operationName || 'unknown',
   },
 }));
@@ -30,7 +27,6 @@ const surveyLink = createUploadLink({
   uri: process.env.NEXT_PUBLIC_SURVEYACT_SERVER_URI, // 4002
 }) as any;
 
-// Split link berdasarkan nama mutation/query
 const splitLink = split(
   ({ query }) => {
     const definition = getMainDefinition(query);
@@ -48,13 +44,12 @@ const splitLink = split(
         definition.name.value.toLowerCase().includes("yearly")
       );
     }
-    return false; // fallback, selalu return boolean
+    return false;
   },
   surveyLink,
   userLink
 );
 
-// Auth middleware tetap bisa disisipkan
 const authMiddleware = new ApolloLink((operation, forward) => {
   operation.setContext({
     headers: {

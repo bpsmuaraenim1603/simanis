@@ -42,7 +42,7 @@ async function saveEvidenceFile(
   const safeName = `${Date.now()}-${filename.replace(/\s+/g, '_')}`;
   const full = path.join(uploadDir, safeName);
   await fs.writeFile(full, buf);
-  const publicBase = process.env.PUBLIC_UPLOAD_BASE_URL; // mis. https://your.host/uploads
+  const publicBase = process.env.PUBLIC_UPLOAD_BASE_URL;
   return {
     path: full,
     originalName: filename,
@@ -88,7 +88,6 @@ export class UsersService {
     });
   }
 
-  // register user
   async register(registerDto: RegisterDto, response: Response) {
     const { name, email, phone_number, password, address } = registerDto;
     const isEmailExist = await this.prisma.user.findUnique({
@@ -96,16 +95,6 @@ export class UsersService {
         email,
       },
     });
-
-    // const isPhoneNumberExist = await this.prisma.user.findUnique({
-    //   where: {
-    //     phone_number,
-    //   },
-    // });
-
-    // if (isPhoneNumberExist) {
-    //   throw new BadRequestException('Nomor telepon ini sudah dipakai!');
-    // }
 
     if (isEmailExist) {
       throw new BadRequestException('Email ini sudah dipakai!');
@@ -133,7 +122,6 @@ export class UsersService {
     return { activation_token, response };
   }
 
-  // create activation token
   async createActivationToken(user: UserData) {
     const activationCode = Math.floor(1000 + Math.random() * 9000).toString();
     const token = this.jwtService.sign(
@@ -146,7 +134,6 @@ export class UsersService {
     return { token, activationCode };
   }
 
-  // activation user
   async activateUser(activationDto: ActivationDto, response: Response) {
     const { activationToken, activationCode } = activationDto;
 
@@ -184,7 +171,6 @@ export class UsersService {
     return { user, response };
   }
 
-  // login service
   async Login(LoginDto: LoginDto) {
     const { email, password } = LoginDto;
 
@@ -209,7 +195,6 @@ export class UsersService {
     }
   }
 
-  //compare with hashed password
   async comparePassword(
     password: string,
     hashedPassword: string,
@@ -217,7 +202,6 @@ export class UsersService {
     return await bcrypt.compare(password, hashedPassword);
   }
 
-  // generate forgot password link
   async generateForgotPasswordLink(user: User) {
     const forgotPasswordToken = this.jwtService.sign(
       {
@@ -231,7 +215,6 @@ export class UsersService {
     return forgotPasswordToken;
   }
 
-  // forgot password
   async forgotPassword(forgotPasswordDto: ForgotPasswordDto) {
     const { email } = forgotPasswordDto;
     const user = await this.prisma.user.findUnique({
@@ -283,7 +266,6 @@ export class UsersService {
     return { user };
   }
 
-  //get logged in user
   async getLoggedInUser(req: any) {
     const user = req.user;
     const accessToken = req.accesstoken;
@@ -291,7 +273,6 @@ export class UsersService {
     return { user, accessToken, refreshToken };
   }
 
-  //log out user
   async Logout(req: any) {
     req.user = null;
     req.accesstoken = null;
@@ -299,25 +280,10 @@ export class UsersService {
     return { message: 'Logout berhasil!' };
   }
 
-  // get all users service
   async getUsers() {
     return this.prisma.user.findMany({});
   }
 
-  // async updateUserSurveyInfo(
-  //   userId: string,
-  //   updateSurveyActivityDto: UpdateSurveyActivityDto,
-  // ) {
-  //   return this.prisma.user.update({
-  //     where: { id: userId },
-  //     data: {
-  //       subSurveyActivityId: updateSurveyActivityDto.subSurveyActivityId,
-  //       region: updateSurveyActivityDto.region,
-  //     },
-  //   });
-  // }
-
-  // update user profile
   async updateUserProfile(
     userId: string,
     updateData: UpdateUserDto,
@@ -375,7 +341,6 @@ export class UsersService {
       throw new Error('defaults.subSurveyActivityId wajib diisi.');
     }
 
-    // Simpan bukti 1x untuk semua baris
     const evidence = await saveEvidenceFile(fileBuffer, fileName, fileMime);
 
     const batchCode = this.genBatchCode();
@@ -392,20 +357,12 @@ export class UsersService {
         const r = rows[i];
         try {
           const userId = String(r.userId || '').trim();
-          // const NIP = String(r.NIP || '').trim();
           let targetUserId = userId;
-
-          // if (!targetUserId && NIP) {
-          //   // lookup user by NIP (ubah sesuai model Users kamu)
-          //   const user = await tx.user.findFirst({ where: { nip: NIP }, select: { id: true } });
-          //   if (user) targetUserId = user.id;
-          // }
           if (!targetUserId) throw new Error('petugas tidak ditemukan.');
 
           const _tanggal = String(r.tanggal || '').trim();
           const submitDate = this.parseTanggalLokal(_tanggal) || defaultSubmitDate;
 
-          // metadata honor & catatan disimpan di verifyNote JSON string
           const honorNominal = r.honorNominal ? Number(r.honorNominal) : undefined;
           const noteObj = {
             batch: batchCode,
@@ -417,11 +374,9 @@ export class UsersService {
           };
           const noteJson = JSON.stringify(noteObj);
 
-          // checksum idempoten
           const checksumBase = `${targetUserId}|${subSurveyActivityId}|${dayjs(submitDate).format('YYYY-MM-DD')}|${honorNominal ?? ''}|${defaults?.noSurat ?? ''}`;
           const checksum = crypto.createHash('sha256').update(checksumBase).digest('hex');
 
-          // Cek duplikat via verifyNote yang mengandung checksum
           const existed = await tx.submitSPJ.findFirst({
             where: { verifyNote: { contains: checksum } },
             select: { id: true },
@@ -442,8 +397,6 @@ export class UsersService {
               eviMimeType: evidence.mimeType || null,
               eviSize: evidence.size,
               eviDocumentSignedUrl: evidence.publicUrl || null,
-
-              // createdAt/updatedAt biar diisi otomatis oleh Prisma/DB jika ada default
             } as any,
           });
 

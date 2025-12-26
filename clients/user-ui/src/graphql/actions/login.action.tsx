@@ -23,5 +23,3 @@ mutation LoginUser($email: String!,$password: String!) {
     }
 }
 `;
-
-// ada password di sini

@@ -122,7 +122,6 @@ export default function ContentIssueForm() {
     label: `#${it.id.slice(0, 6)} • ${it.content?.slice(0, 40) || "(tanpa isi)"}…`,
   }));
 
-  // sinkronisasi isi form update saat pilih issue
   useEffect(() => {
     const sel = issues.find((it) => it.id === updateIssueState.selectedIssueId);
     if (sel) {

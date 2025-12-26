@@ -83,7 +83,7 @@ function IconButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      title={label} // fallback tooltip native
+      title={label}
       className={`group relative inline-flex h-9 w-9 items-center justify-center rounded-md border
                   text-white shadow-sm transition
                   focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-0
@@ -191,11 +191,7 @@ function MonthlyStaffUsagePanel({
     const set = new Set<string>();
 
     for (const r of rows) {
-      // kalau backend kirim staffUsers
       (r.staffUsers ?? []).forEach((u) => u?.id && set.add(u.id));
-
-      // kalau backend kirim staffUserIds (kalau kamu pakai ini)
-      // (r.staffUserIds ?? []).forEach((id) => id && set.add(id));
     }
 
     return set.size;
@@ -259,7 +255,6 @@ function MonthlyStaffUsagePanel({
       const res = await fetchExport({ variables: { year } });
       const rows = res.data?.getStaffYearlyExport ?? [];
 
-      // ===== Sheet 1: DETAIL_PROGRESS (1 baris = 1 userProgress / 1 kegiatan) =====
       const detail = rows.map((r: any, i: number) => ({
         No: i + 1,
         UserID: r.userId,
@@ -278,7 +273,6 @@ function MonthlyStaffUsagePanel({
         Honor_TravelBill: Number(r.travelBill ?? 0),
       }));
 
-      // ===== Sheet 2: RINGKASAN_PETUGAS (1 baris = 1 user) =====
       const byUser = new Map<string, any>();
 
       for (const r of rows) {
@@ -312,12 +306,10 @@ function MonthlyStaffUsagePanel({
           TotalHonor: u.totalHonor,
         }));
 
-      // ===== Build workbook =====
       const wb = XLSX.utils.book_new();
       const wsSummary = XLSX.utils.json_to_sheet(summary);
       const wsDetail = XLSX.utils.json_to_sheet(detail);
 
-      // Optional: set column widths (biar gak sempit)
       wsSummary["!cols"] = [
         { wch: 4 }, // No
         { wch: 20 }, // UserID
@@ -494,7 +486,6 @@ function MonthlyStaffUsagePanel({
                           <button
                             type="button"
                             onClick={() => {
-                              // buka modal petugas kegiatan yang sudah kamu punya
                               setShowActivitiesModal(false);
                               openStaffModal(r);
                             }}
@@ -718,7 +709,6 @@ function MonthlyStaffUsagePanel({
                           key={u.id}
                           type="button"
                           onClick={async () => {
-                            // tutup modal petugas dulu biar transisinya enak
                             closeStaffModal();
                             await onOpenUserActivities(u.id);
                           }}
@@ -755,7 +745,6 @@ export default function SuperAdminManagePage() {
   const { user: currentUser, loading: userLoading } = useUser();
   const router = useRouter();
 
-  // roles yang diizinkan
   const ALLOWED = new Set(["Superadmin", "Keuangan"]);
 
   React.useEffect(() => {
@@ -787,7 +776,6 @@ export default function SuperAdminManagePage() {
     [router, pathname, searchParams]
   );
 
-  // Modal Honor
   const [honorUser, setHonorUser] = useState<any | null>(null);
   type AdminTab = "users" | "staffUsage";
   React.useEffect(() => {
@@ -811,7 +799,6 @@ export default function SuperAdminManagePage() {
   const [updateRole] = useMutation(UPDATE_ROLE);
   const [updateBillLimit] = useMutation(UPDATE_BILL_LIMIT);
 
-  // ====== FILTER: cari berdasarkan nama/email/role LABEL (bukan value) ======
   const filteredUsers = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
     if (!q) return users;
@@ -823,7 +810,6 @@ export default function SuperAdminManagePage() {
     });
   }, [users, searchTerm]);
 
-  // ====== HANDLERS ======
   const handleRoleChange = (id: string, val: string) =>
     setPendingRole((p) => ({ ...p, [id]: val }));
 
@@ -866,7 +852,6 @@ export default function SuperAdminManagePage() {
       let okRole = false,
         okLimit = false;
 
-      // --- update role ---
       if (dirtyRole) {
         try {
           await updateRole({
@@ -885,7 +870,6 @@ export default function SuperAdminManagePage() {
         }
       }
 
-      // --- update limit bill ---
       if (dirtyLimit) {
         try {
           await updateBillLimit({
@@ -893,7 +877,7 @@ export default function SuperAdminManagePage() {
               userId: user.id,
               updateBillLimit: {
                 name: user.name,
-                limit_bill: String(newLimitNum), // DTO kamu minta string
+                limit_bill: String(newLimitNum),
               },
             },
           });
@@ -920,7 +904,6 @@ export default function SuperAdminManagePage() {
     [pendingRole, pendingLimit, updateRole, updateBillLimit, refetch]
   );
 
-  // ===== Modal Honor: open/close & grouping data =====
   const openHonorModal = async (user: any) => {
     setHonorUser(user);
     try {
@@ -931,17 +914,14 @@ export default function SuperAdminManagePage() {
     }
   };
   const openHonorModalById = async (userId: string) => {
-    // ambil user dari daftar yang sudah di-load (GET_ALL_USERS)
     const u = users.find((x: any) => x.id === userId) ?? {
       id: userId,
       name: "-",
       email: "-",
     };
 
-    // pindah ke tab kontrol pengguna (biar “dialihkan” sesuai permintaanmu)
     setActiveTab("users");
 
-    // buka modal honor yang sudah ada
     await openHonorModal(u);
   };
 
@@ -988,7 +968,6 @@ export default function SuperAdminManagePage() {
     [honorGrouped]
   );
 
-  // Ambil limit dari user yang dipilih (fallback dari baris pertama jika perlu)
   const limitBill = useMemo(() => {
     const direct = Number(honorUser?.limit_bill ?? honorUser?.limitBill ?? NaN);
     if (Number.isFinite(direct)) return direct;
@@ -996,7 +975,7 @@ export default function SuperAdminManagePage() {
     return Number.isFinite(fromRow) ? fromRow : 0;
   }, [honorUser, honorRows]);
 
-  const usedTotal = honorGrandTotal; // total honor terpakai (sudah kamu hitung)
+  const usedTotal = honorGrandTotal;
   const remain = Math.max(0, limitBill - usedTotal);
 
   if (userLoading) {

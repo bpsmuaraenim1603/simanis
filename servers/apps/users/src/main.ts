@@ -7,8 +7,8 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(UsersModule);
 
   app.enableCors({
-    origin: '*', // alamat frontend kamu (Next.js)
-    credentials: true, // aktifkan kalau pakai cookie/session
+    origin: '*',
+    credentials: true,
   });
   
   app.useStaticAssets(join(__dirname, '..', 'public'));

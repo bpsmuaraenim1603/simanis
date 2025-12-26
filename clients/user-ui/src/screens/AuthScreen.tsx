@@ -1,4 +1,3 @@
-// src/app/AuthScreen.tsx
 "use client";
 import { useState } from "react";
 import Login from "../shared/Auth/Login";

@@ -128,7 +128,6 @@ export class SurveyActivityResolver {
   async user(@Parent() progress: UserProgress): Promise<UserType | null> {
     const userId = progress.userId;
     try {
-      // Ambil data user dari microservice lain (misalnya HTTP)
       return await this.service.getUser(userId);
     } catch (e) {
       return null;
@@ -284,7 +283,6 @@ export class SurveyActivityResolver {
 
   @Mutation(() => ContentIssueType)
   async createContentIssue(@Args('input') input: CreateContentIssueDto) {
-    // idealnya reporterId diambil dari context auth
     return this.service.createContentIssue(input);
   }
 
@@ -319,7 +317,6 @@ export class SurveyActivityResolver {
 
   @Mutation(() => IssueCommentType)
   async addIssueComment(@Args('input') input: createIssueCommentDto) {
-    // idealnya userId dari context auth
     return this.service.addIssueComment(input);
   }
 

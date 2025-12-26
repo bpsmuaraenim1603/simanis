@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import NavItems from "../NavItems"; // <-- path diperbaiki
+import NavItems from "../NavItems";
 import { AlignJustify, X } from "lucide-react";
 
 export const SideBar = () => {
@@ -35,7 +35,6 @@ export const SideBar = () => {
 
   const broadcast = (val: boolean) => {
     sessionStorage.setItem("isMinimized", String(val));
-    // DEFER dispatch supaya tidak sinkron dengan render komponen lain
     setTimeout(() => {
       window.dispatchEvent(
         new CustomEvent("sidebar-toggle", { detail: { minimized: val } })
@@ -63,11 +62,9 @@ export const SideBar = () => {
     "transition-[transform,width] duration-300 ease-in-out",
     "overflow-hidden",
     "w-[250px]",
-    // MOBILE: minimized => off-screen & non-interaktif; open => overlay & interaktif
     isMinimized
       ? "-translate-x-full pointer-events-none"
       : "translate-x-0 pointer-events-auto",
-    // DESKTOP: selalu terlihat & interaktif; lebar 60/250 sesuai minimized
     "lg:translate-x-0",
     "lg:pointer-events-auto",
     isMinimized ? "lg:w-[60px]" : "lg:w-[250px]",

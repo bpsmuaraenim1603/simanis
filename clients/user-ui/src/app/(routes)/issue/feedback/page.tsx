@@ -161,7 +161,6 @@ export default function Issue() {
 
   const issues: IssueItem[] = useMemo(() => data?.contentIssues ?? [], [data]);
 
-  // Filter pencarian (di content/status/kegiatan/reporter/komentar)
   const filteredIssues = useMemo(() => {
     if (!searchTerm) return issues;
     const q = searchTerm.toLowerCase();
@@ -180,7 +179,6 @@ export default function Issue() {
     });
   }, [issues, searchTerm]);
 
-  // Group by Kegiatan
   const grouped = useMemo(() => {
     const groups: Record<string, IssueItem[]> = {};
     for (const it of filteredIssues) {

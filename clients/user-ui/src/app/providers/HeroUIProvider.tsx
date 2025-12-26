@@ -1,4 +1,3 @@
-// app/providers.tsx
 'use client'
 
 import { graphqlClient } from '@/src/graphql/gql.setup'

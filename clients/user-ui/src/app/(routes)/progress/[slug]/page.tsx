@@ -139,7 +139,6 @@ const ProgressTemplate = () => {
     if (!selectedSubSlug) return;
     if (!subSurveyActivities?.length) return;
 
-    // kalau sudah sesuai, jangan set ulang
     const current = subSurveyActivities.find(
       (s: any) => s.id === selectedSubSurvey
     );

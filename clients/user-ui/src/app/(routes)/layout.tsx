@@ -24,14 +24,11 @@ export default function RouteLayout({ children }: { children: ReactNode }) {
     return () => mql.removeEventListener?.("change", onChange);
   }, []);
 
-  // RouteLayout.tsx (potongan di useEffect yang mendaftarkan handler)
   useEffect(() => {
     const saved = sessionStorage.getItem("isMinimized");
     if (saved != null) setIsMinimized(saved === "true");
 
-    // util kecil agar update state tidak dieksekusi saat komponen lain sedang render
     const defer = (fn: () => void) => {
-      // pakai microtask kalau ada, fallback ke setTimeout(0)
       if (typeof queueMicrotask === "function") queueMicrotask(fn);
       else setTimeout(fn, 0);
     };
@@ -42,17 +39,17 @@ export default function RouteLayout({ children }: { children: ReactNode }) {
       if (typeof detail === "object" && detail) {
         if (typeof detail.minimized === "boolean") {
           const next = detail.minimized;
-          defer(() => setIsMinimized(next)); // <— PENTING: defer
+          defer(() => setIsMinimized(next));
           sessionStorage.setItem("isMinimized", String(next));
         }
         if (typeof detail.drawerOpen === "boolean") {
           const next = !detail.drawerOpen;
-          defer(() => setIsMinimized(next)); // <— PENTING: defer
+          defer(() => setIsMinimized(next));
           sessionStorage.setItem("isMinimized", String(next));
         }
       } else if (typeof detail === "boolean") {
         const next = detail;
-        defer(() => setIsMinimized(next)); // <— PENTING: defer
+        defer(() => setIsMinimized(next));
         sessionStorage.setItem("isMinimized", String(next));
       }
     };
@@ -108,8 +105,8 @@ export default function RouteLayout({ children }: { children: ReactNode }) {
       <main
         className={[
           "pt-[60px] min-h-dvh w-full",
-          "pl-0", // mobile full width
-          isMinimized ? "lg:pl-[60px]" : "lg:pl-[250px]", // desktop terdorong
+          "pl-0",
+          isMinimized ? "lg:pl-[60px]" : "lg:pl-[250px]",
           "transition-[padding-left] duration-300 ease-in-out relative z-20",
         ].join(" ")}
       >

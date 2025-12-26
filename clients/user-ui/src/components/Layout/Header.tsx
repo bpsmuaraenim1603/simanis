@@ -33,7 +33,7 @@ export const Header = () => {
       sessionStorage.setItem("isMinimized", String(next));
       window.dispatchEvent(new CustomEvent("sidebar-toggle", { detail: { minimized: next } }));
     } else {
-      sessionStorage.setItem("isMinimized", "false"); // open overlay
+      sessionStorage.setItem("isMinimized", "false");
       window.dispatchEvent(new CustomEvent("sidebar-toggle", { detail: { minimized: false } }));
     }
   };

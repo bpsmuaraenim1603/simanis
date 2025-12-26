@@ -239,6 +239,10 @@ export default function UserPage() {
     selectedBlock,
   ]);
 
+  const isListingActivity =
+    String(currentUP?.subSurveyActivity?.activityType ?? "").toLowerCase() ===
+    "listing";
+
   useEffect(() => {
     if (!currentUP?.samples) return setEditableSamples([]);
     const sorted = [...currentUP.samples].sort(
@@ -401,6 +405,29 @@ export default function UserPage() {
     }
   }
 
+  async function openAddSampleModal() {
+    resetModalDraft();
+    setActiveSampleId(null);
+    setShowCacahModal(false);
+
+    setLocatingId("__add__");
+    const toastId = toast.loading("Mengambil lokasi...");
+
+    try {
+      const { lat, lng } = await getCurrentLocation();
+      setDraftLat(lat);
+      setDraftLng(lng);
+      toast.success("Lokasi didapat", { id: toastId });
+    } catch (e: any) {
+      toast.error("Gagal ambil lokasi: " + (e?.message || "Unknown"), {
+        id: toastId,
+      });
+    } finally {
+      setLocatingId(null);
+      setShowCacahModal(true);
+    }
+  }
+
   async function compressImage(file: File, maxW = 1280, quality = 0.75) {
     const img = document.createElement("img");
     img.src = URL.createObjectURL(file);
@@ -517,7 +544,8 @@ export default function UserPage() {
     const userProgressId =
       currentUP?.id || updateUserProgressForm.userProgressId;
     if (!userProgressId) return toast.error("Pilih kegiatan & blok dulu ya.");
-    if (!activeSampleId) return toast.error("Sample belum dipilih.");
+
+    const isAddMode = !activeSampleId;
 
     const nextIdentity = String(draftIdentity ?? "").trim();
     if (!nextIdentity) return toast.error("Nama responden wajib diisi.");
@@ -526,7 +554,6 @@ export default function UserPage() {
     }
 
     setSavingModal(true);
-    const toastId = toast.loading("Menyimpan pencacahan...");
 
     try {
       let photoPath: string | null | undefined = undefined;
@@ -534,58 +561,118 @@ export default function UserPage() {
       if (draftPhotoFile) {
         const compressed = await compressImage(draftPhotoFile, 1280, 0.75);
 
-        const up = await uploadSurveySamplePhoto({
-          variables: { sampleId: activeSampleId, file: compressed },
-        });
-
-        photoPath = up?.data?.uploadSurveySamplePhoto || null;
+        if (!isAddMode) {
+          const up = await uploadSurveySamplePhoto({
+            variables: { sampleId: activeSampleId, file: compressed },
+          });
+          photoPath = up?.data?.uploadSurveySamplePhoto || null;
+        }
       }
 
-      await patchUserSamples({
-        variables: {
-          input: {
-            userProgressId,
-            updateSamples: [
-              {
-                id: activeSampleId,
-                identity: nextIdentity,
-                cacahStatus: "Selesai",
-                geoLat: draftLat,
-                geoLng: draftLng,
-                geoCapturedAt: new Date().toISOString(),
-                ...(photoPath !== undefined
-                  ? {
-                      photoPath,
-                      photoCapturedAt: new Date().toISOString(),
-                    }
-                  : {}),
-              },
-            ],
+      if (isAddMode) {
+        const nus = nextNus(editableSamples);
+
+        const createRes = await patchUserSamples({
+          variables: {
+            input: {
+              userProgressId,
+              createSamples: [
+                {
+                  nus,
+                  identity: nextIdentity,
+                  cacahStatus: "Selesai",
+                  approvalStatus: "Menunggu",
+                  geoLat: draftLat,
+                  geoLng: draftLng,
+                  geoCapturedAt: new Date().toISOString(),
+                },
+              ],
+            },
           },
-        },
-      });
-      toast.success("Pencacahan tersimpan", { id: toastId });
-      setEditableSamples((prev) =>
-        prev.map((s) =>
-          s.id === activeSampleId
-            ? {
-                ...s,
-                identity: nextIdentity,
-                cacahStatus: "Selesai",
-                geoLat: draftLat,
-                geoLng: draftLng,
-                geoCapturedAt: new Date().toISOString(),
-                ...(photoPath !== undefined
-                  ? { photoPath, photoCapturedAt: new Date().toISOString() }
-                  : {}),
-              }
-            : s
-        )
-      );
+        });
+
+        const createdSamples = createRes?.data?.patchUserSamples?.samples ?? [];
+        const createdSample = createdSamples.find(
+          (s: any) => Number(s.nus) === Number(nus)
+        );
+
+        const createdSampleId = createdSample?.id;
+        if (!createdSampleId) {
+          throw new Error("Sample berhasil dibuat, tapi ID tidak ditemukan.");
+        }
+
+        if (!createdSample?.id) {
+          await fetchUserProgress({ variables: { userId: user!.id } });
+          const refreshedRows: any[] =
+            userProgressData?.userProgressSurveyByUserId ?? [];
+          const refreshedUP = refreshedRows.find(
+            (x: any) => x?.id === userProgressId
+          );
+          const refreshedSample = refreshedUP?.samples?.find(
+            (s: any) => Number(s.nus) === Number(nus)
+          );
+          if (!refreshedSample?.id)
+            throw new Error("Sample berhasil dibuat, tapi ID tidak ditemukan.");
+        }
+
+        if (draftPhotoFile) {
+          const compressed = await compressImage(draftPhotoFile, 1280, 0.75);
+
+          const up = await uploadSurveySamplePhoto({
+            variables: { sampleId: createdSampleId, file: compressed },
+          });
+
+          const photoPath = up?.data?.uploadSurveySamplePhoto || null;
+
+          await patchUserSamples({
+            variables: {
+              input: {
+                userProgressId,
+                updateSamples: [
+                  {
+                    id: createdSampleId,
+                    photoPath,
+                    photoCapturedAt: new Date().toISOString(),
+                  },
+                ],
+              },
+            },
+          });
+        }
+
+        toast.success("Sampel berhasil ditambahkan");
+      } else {
+        if (!activeSampleId) throw new Error("Sample ID tidak ada.");
+
+        await patchUserSamples({
+          variables: {
+            input: {
+              userProgressId,
+              updateSamples: [
+                {
+                  id: activeSampleId,
+                  identity: nextIdentity,
+                  cacahStatus: "Selesai",
+                  approvalStatus: "Menunggu",
+                  geoLat: draftLat,
+                  geoLng: draftLng,
+                  geoCapturedAt: new Date().toISOString(),
+                  ...(photoPath !== undefined
+                    ? { photoPath, photoCapturedAt: new Date().toISOString() }
+                    : {}),
+                },
+              ],
+            },
+          },
+        });
+
+        toast.success("Sampel berhasil disimpan");
+      }
+
       closeCacahModal();
       await fetchUserProgress({ variables: { userId: user!.id } });
     } catch (e: any) {
-      toast.error("Gagal menyimpan", { id: toastId });
+      toast.error("Gagal menyimpan");
       showApolloError(e);
       await fetchUserProgress({ variables: { userId: user!.id } });
     } finally {
@@ -674,6 +761,17 @@ export default function UserPage() {
     router.push(`?${params.toString()}`);
   }
 
+  function nextNus(samples: any[]) {
+    const nums = (samples ?? [])
+      .map((s) => Number(s.nus))
+      .filter((n) => Number.isFinite(n));
+    const max = nums.length ? Math.max(...nums) : 0;
+    return String(max + 1).padStart(3, "0");
+  }
+
+  const isLocating =
+    locatingId !== null &&
+    (locatingId === activeSampleId || locatingId === "__add__");
   const activeSample = activeSampleId ? getSampleById(activeSampleId) : null;
 
   return (
@@ -876,6 +974,15 @@ export default function UserPage() {
                 <h3 className="font-semibold">
                   Daftar Sampel ({editableSamples.length} Baris)
                 </h3>
+                {isListingActivity && (
+                  <button
+                    type="button"
+                    onClick={openAddSampleModal}
+                    className="px-3 py-2 rounded-md bg-green-600 text-white text-sm font-semibold"
+                  >
+                    + Tambah Sampel
+                  </button>
+                )}
               </div>
 
               <div className="bg-white border rounded-md p-3">
@@ -1062,7 +1169,7 @@ export default function UserPage() {
                                 <button
                                   type="button"
                                   onClick={async () => {
-                                    setLocatingId(activeSampleId);
+                                    setLocatingId(activeSampleId ?? "__add__");
                                     const tId = toast.loading(
                                       "Mengambil lokasi..."
                                     );
@@ -1086,9 +1193,7 @@ export default function UserPage() {
                                   }}
                                   className="px-2 py-1 rounded-md bg-gray-100 text-gray-800 text-xs font-semibold"
                                 >
-                                  {locatingId === activeSampleId
-                                    ? "Mengambil..."
-                                    : "Ambil Lokasi"}
+                                  {isLocating ? "Mengambil..." : "Ambil Lokasi"}
                                 </button>
                               )}
                               <button

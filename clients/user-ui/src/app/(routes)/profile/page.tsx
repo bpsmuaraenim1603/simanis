@@ -1,4 +1,3 @@
-// src/app/profile/page.tsx — versi responsif
 "use client";
 
 import useUser from "@/src/hooks/useUser";
@@ -21,9 +20,6 @@ function Profile() {
     address: user?.address || "",
     role: user?.role || "",
   });
-
-  // const client = useApolloClient();
-  // const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -50,37 +46,11 @@ function Profile() {
     }
   };
 
-  // const handleRefresh = async () => {
-  //   try {
-  //     setRefreshing(true);
-  //     await client.reFetchObservableQueries?.();
-  //     if (user?.id) {
-  //       await fetchUserProgress({
-  //         variables: { userId: user.id },
-  //         fetchPolicy: "network-only",
-  //       });
-  //     }
-  //     toast.success("Data profil & progres telah di-refresh");
-  //   } catch (e) {
-  //     console.error("Refresh error:", e);
-  //     toast.error("Gagal me-refresh data");
-  //   } finally {
-  //     setRefreshing(false);
-  //   }
-  // };
-
   return (
     <div className="max-w-screen-xl mx-auto px-3 sm:px-6 md:px-8 py-4 space-y-4 font-Poppins">
       {/* Header */}
       <div className="bg-orange-50 rounded-lg p-3 md:p-4 font-bold text-lg md:text-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 shadow-md">
         <span>Profil Diri</span>
-        {/* <button
-          onClick={handleRefresh}
-          disabled={refreshing || upLoading}
-          className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm hover:bg-blue-700 transition font-semibold disabled:opacity-60 disabled:cursor-not-allowed w-full sm:w-auto"
-        >
-          {refreshing ? "Refreshing..." : "Refresh"}
-        </button> */}
       </div>
 
       {/* Card profil ringkas */}

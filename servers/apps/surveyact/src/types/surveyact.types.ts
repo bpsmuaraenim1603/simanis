@@ -11,7 +11,7 @@ import { AgreeState, CacahStatus, IssueStatus, StatusST } from '@prisma/client';
 import { UserType } from 'apps/users/src/types/users.types';
 
 registerEnumType(AgreeState, {
-  name: 'AgreeState', // ini akan muncul di GraphQL schema
+  name: 'AgreeState',
 });
 
 registerEnumType(StatusST, {
@@ -19,7 +19,7 @@ registerEnumType(StatusST, {
 });
 
 registerEnumType(IssueStatus, {
-  name: 'IssueStatus', // akan muncul di GraphQL schema
+  name: 'IssueStatus',
 });
 
 registerEnumType(CacahStatus, { name: 'CacahStatus' });

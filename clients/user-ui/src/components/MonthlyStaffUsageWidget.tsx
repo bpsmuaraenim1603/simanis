@@ -7,7 +7,7 @@ import { GET_MONTHLY_ACTIVITY_STAFF_USAGE } from "@/src/graphql/actions/get-mont
 type StaffUser = { id: string; name?: string; email?: string };
 
 type StaffUsageRow = {
-  month: string; // "YYYY-MM"
+  month: string;
   subSurveyActivityId: string;
   subSurveyName: string;
   startDate: string;
@@ -37,7 +37,6 @@ export default function MonthlyStaffUsageWidget() {
   const year = now.getFullYear();
   const monthNow = `${year}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-  // Sama seperti Superadmin: query pakai variables { year }
   const { data, loading, error, refetch } = useQuery(GET_MONTHLY_ACTIVITY_STAFF_USAGE, {
     variables: { year },
     fetchPolicy: "cache-and-network",
@@ -45,14 +44,12 @@ export default function MonthlyStaffUsageWidget() {
 
   const rows: StaffUsageRow[] = (data?.getMonthlyActivityStaffUsage ?? []) as StaffUsageRow[];
 
-  // Filter: hanya bulan berjalan
   const rowsThisMonth = useMemo(() => {
     return rows
       .filter((r) => r?.month === monthNow)
       .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
   }, [rows, monthNow]);
 
-  // KPI ringkas
   const summary = useMemo(() => {
     const uniq = new Map<string, StaffUser>();
     for (const r of rowsThisMonth) {
@@ -67,7 +64,6 @@ export default function MonthlyStaffUsageWidget() {
     };
   }, [rowsThisMonth]);
 
-  // Expand daftar petugas per baris kegiatan
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const toggle = (id: string) => setExpanded((p) => ({ ...p, [id]: !p[id] }));
 

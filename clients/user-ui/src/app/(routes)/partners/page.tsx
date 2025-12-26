@@ -166,7 +166,6 @@ export default function Partners() {
     const raw = upData?.userProgressBySubSurveyActivityId ?? [];
     if (!user) return [];
 
-    // superadmin / admin bebas lihat semua
     if (
       user.role === "Superadmin" ||
       user.role === "Admin" ||
@@ -175,12 +174,10 @@ export default function Partners() {
       return raw;
     }
 
-    // supervisor hanya melihat petugas di bawah pengawasan dirinya
     if (user.role === "Supervisor") {
       return raw.filter((p: any) => (p.superVisorId ?? "") === supervisorId);
     }
 
-    // petugas biasa hanya dirinya sendiri
     return raw.filter((p: any) => p.userId === supervisorId);
   }, [upData, user]);
 
@@ -198,8 +195,8 @@ export default function Partners() {
     user?.role === "Supervisor";
 
   const isInPetugasList = useMemo(() => {
-    if (!input.subSurveyActivityId) return false; // belum pilih kegiatan
-    if (loadingUP) return false; // masih fetch daftar petugas
+    if (!input.subSurveyActivityId) return false;
+    if (loadingUP) return false;
     return petugasList.some((p) => p.userId === user?.id);
   }, [input.subSurveyActivityId, loadingUP, petugasList, user?.id]);
 
@@ -309,7 +306,6 @@ export default function Partners() {
   );
 
   const petugasOptions = useMemo(() => {
-    // satukan per userId persis seperti di SPJ
     return groupPetugasByUserId(petugasList);
   }, [petugasList]);
 
@@ -327,7 +323,7 @@ export default function Partners() {
           <div>
             <label className="block text-sm font-medium mb-1">Wilayah</label>
             <HUComboBox
-              value={filter.wilayah || null} // atau filter.region, sesuaikan nama state-mu
+              value={filter.wilayah || null}
               onValueChange={(v) =>
                 setFilter((prev) => ({ ...prev, wilayah: (v ?? "") as string }))
               }
@@ -345,8 +341,6 @@ export default function Partners() {
                 setFilter((prev) => ({ ...prev, survei: (v ?? "") as string }))
               }
               options={
-                // filter bekerja berdasarkan NAMA survei (bukan ID),
-                // jadi opsi diisi label sebagai value juga:
                 (dataSubSurvey?.allSubSurveyActivities ?? []).map(
                   (s: { id: string; name: string }) => ({
                     value: s.name ?? "-",

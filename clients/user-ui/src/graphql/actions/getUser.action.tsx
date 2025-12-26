@@ -18,5 +18,3 @@ query{
   }
 }
 `;
-
-// ada password di sini

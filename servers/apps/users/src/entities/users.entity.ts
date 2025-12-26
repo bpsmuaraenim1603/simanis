@@ -3,7 +3,7 @@ import { Role } from '@prisma/client';
 import { SubSurveyActivity } from '../../../surveyact/entities/surveyact.entity';
 
 registerEnumType(Role, {
-  name: 'Role', // harus sama dengan yang akan dipakai di @Field(() => Role)
+  name: 'Role',
   description: 'User role enum',
 });
 

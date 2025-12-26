@@ -8,7 +8,7 @@ export class StorageService {
 
   constructor() {
     const url = process.env.SUPABASE_URL!;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY!; // pakai SERVICE ROLE
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
     if (!url || !key) {
       throw new Error('SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY belum diset');
     }
@@ -21,7 +21,6 @@ export class StorageService {
   ): string | null {
     if (!pathOrUrl) return null;
     if (!pathOrUrl.startsWith('http')) {
-      // diasumsikan sudah path relatif
       return pathOrUrl.replace(`${bucket}/`, '');
     }
     try {
@@ -52,7 +51,6 @@ export class StorageService {
 
     const { error } = await this.sb.storage.from(bucket).remove(list);
     if (error) {
-      // tidak meledak: kita log supaya delete DB tetap jalan
       this.logger.warn(`Supabase remove warning (${bucket}): ${error.message}`);
     }
   }
