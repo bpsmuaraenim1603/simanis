@@ -6,6 +6,8 @@ import { join } from 'path';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(UsersModule);
 
+  app.set('trust proxy', 1);
+  
   app.enableCors({
     origin: '*',
     credentials: true,

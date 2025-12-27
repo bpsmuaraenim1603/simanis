@@ -112,7 +112,6 @@ function Dashboard() {
   }>(GET_REAL_ALL_SUB_SURVEY_PROGRESS);
 
   const { data: monthlyStats } = useQuery(GET_MONTHLY_DASHBOARD_STATS);
-  console.log("Monthly Stats:", monthlyStats);
 
   const activeUserIdSet = useMemo(() => {
     const ids = monthlyStats?.getMonthlySurveyStats?.activeUserIds ?? [];

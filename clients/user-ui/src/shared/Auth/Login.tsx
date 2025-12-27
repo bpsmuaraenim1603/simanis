@@ -3,18 +3,14 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
-  AiFillGithub,
   AiOutlineEye,
   AiOutlineEyeInvisible,
 } from "react-icons/ai";
-import { FcGoogle } from "react-icons/fc";
 import { useState } from "react";
 import toast from "react-hot-toast";
 import { useMutation } from "@apollo/client";
 import { LOGIN_USER } from "@/src/graphql/actions/login.action";
 import Cookies from "js-cookie";
-import { signIn } from "next-auth/react";
-import useUser from "@/src/hooks/useUser";
 
 const formSchema = z.object({
   email: z.string().email({ message: "Email tidak valid" }),
@@ -24,7 +20,6 @@ const formSchema = z.object({
 type LoginSchema = z.infer<typeof formSchema>;
 
 const Login = ({ setActiveState }: { setActiveState: (e: string) => void }) => {
-  const { user, loading: loadingUser } = useUser();
   const [Login, { loading }] = useMutation(LOGIN_USER);
   const {
     register,
@@ -57,15 +52,15 @@ const Login = ({ setActiveState }: { setActiveState: (e: string) => void }) => {
     if (response.data.Login.user) {
       Cookies.set("refresh_token", response.data.Login.refreshToken, cookieOpts);
       Cookies.set("access_token", response.data.Login.accessToken, cookieOpts);
-      if (user?.role === "User"){
+      if (response.data.Login.user.role === "User"){
         window.location.href = "/user";
-      } else if (user?.role === "Supervisor"){
+      } else if (response.data.Login.user.role === "Supervisor"){
         window.location.href = "/supervisor";
       } else {
         window.location.href = "/dashboard";
       }
-      
-      toast.success("Login Berhasil!");
+
+      toast.success('Login Berhasil!');
     } else {
       toast.error(response.data.Login.error.message);
     }

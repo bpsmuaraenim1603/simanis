@@ -1,6 +1,5 @@
 "use client";
 
-import CameraCaptureModal from "@/src/components/CameraCaptureModal";
 import { GET_USER_PROGRESS_BY_USER_ID } from "@/src/graphql/actions/find-usersurveyprogressbyuser.action";
 import { PATCH_USER_SAMPLES } from "@/src/graphql/actions/patch-usersamples.action";
 import { UPLOAD_SURVEY_SAMPLE_PHOTO } from "@/src/graphql/actions/upload-survey-sample-photo.action";
@@ -11,6 +10,7 @@ import { useRouter } from "next/navigation";
 import React, { Fragment, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import exifr from "exifr";
+import dynamic from "next/dynamic";
 
 type ViewMode = "list" | "detail";
 
@@ -72,6 +72,8 @@ export default function UserPage() {
   );
   const [savingModal, setSavingModal] = useState(false);
   const [qIdentity, setQIdentity] = useState("");
+  const [isLocationConfirmed, setIsLocationConfirmed] = useState(false);
+  const [coordText, setCoordText] = useState("");
 
   // ===== Formatter tanggal =====
   function fmtDate(d: any) {
@@ -178,6 +180,11 @@ export default function UserPage() {
         return bStart - aStart;
       });
   }, [userProgressData]);
+
+  const LocationPickerMap = dynamic(
+    () => import("@/src/components/LocationPickerMap"),
+    { ssr: false }
+  );
 
   const filteredSamples = useMemo(() => {
     const name = qIdentity.trim().toLowerCase();
@@ -288,6 +295,20 @@ export default function UserPage() {
     return () => window.removeEventListener("popstate", applyFromUrl);
   }, [userProgressData]);
 
+  useEffect(() => {
+    function handlePopState(e: PopStateEvent) {
+      // kalau modal lagi terbuka → tutup modal
+      if (showCacahModal) {
+        setShowCacahModal(false);
+        setActiveSampleId(null);
+        resetModalDraft();
+      }
+    }
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [showCacahModal]);
+
   // ===== Navigasi view =====
   function openActivity(activityId: string) {
     const rows: any[] = userProgressData?.userProgressSurveyByUserId ?? [];
@@ -349,6 +370,27 @@ export default function UserPage() {
     window.open(url, "_blank", "noopener,noreferrer");
   }
 
+  function parseLatLngText(input: string): { lat: number; lng: number } | null {
+    if (!input) return null;
+
+    const cleaned = input.trim().replace(/\s+/g, " ");
+    const parts = cleaned.includes(",")
+      ? cleaned.split(",")
+      : cleaned.split(" ");
+
+    if (parts.length !== 2) return null;
+
+    const lat = Number(parts[0].trim());
+    const lng = Number(parts[1].trim());
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+    if (lat < -11 || lat > 6) return null;
+    if (lng < 95 || lng > 141) return null;
+
+    return { lat, lng };
+  }
+
   function fmtCoord(v: any, digits = 10) {
     const n = Number(v);
     return Number.isFinite(n) ? n.toFixed(digits) : String(v ?? "");
@@ -362,9 +404,11 @@ export default function UserPage() {
     setDraftIdentity("");
     setDraftLat(null);
     setDraftLng(null);
+    setCoordText("");
     setDraftPhotoFile(null);
     if (draftPhotoPreview) URL.revokeObjectURL(draftPhotoPreview);
     setDraftPhotoPreview(null);
+    setIsLocationConfirmed(false);
   }
 
   async function getCurrentLocation() {
@@ -401,6 +445,7 @@ export default function UserPage() {
       });
     } finally {
       setLocatingId(null);
+      window.history.pushState({ cacahModal: true }, "");
       setShowCacahModal(true);
     }
   }
@@ -424,6 +469,7 @@ export default function UserPage() {
       });
     } finally {
       setLocatingId(null);
+      window.history.pushState({ cacahModal: true }, "");
       setShowCacahModal(true);
     }
   }
@@ -462,6 +508,46 @@ export default function UserPage() {
     return new File([blob], file.name.replace(/\.\w+$/, ".jpg"), {
       type: "image/jpeg",
     });
+  }
+
+  function extractLatLngFromTextOrUrl(
+    input: string
+  ): { lat: number; lng: number } | null {
+    if (!input) return null;
+    const s = input.trim();
+
+    // Format koordinat: "lat,lng" atau "lat lng"
+    const coord = (() => {
+      const cleaned = s.replace(/\s+/g, " ");
+      const parts = cleaned.includes(",")
+        ? cleaned.split(",")
+        : cleaned.split(" ");
+      if (parts.length !== 2) return null;
+      const lat = Number(parts[0].trim());
+      const lng = Number(parts[1].trim());
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+      return { lat, lng };
+    })();
+    if (coord) return coord;
+
+    // URL panjang Google Maps: cari pola "@lat,lng" atau "q=lat,lng"
+    // contoh: https://www.google.com/maps/@-3.65,103.75,17z
+    const atMatch = s.match(/@(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/);
+    if (atMatch) return { lat: Number(atMatch[1]), lng: Number(atMatch[2]) };
+
+    // contoh: https://www.google.com/maps?q=-3.65,103.75
+    const qMatch = s.match(/[?&]q=(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/);
+    if (qMatch) return { lat: Number(qMatch[1]), lng: Number(qMatch[2]) };
+
+    return null;
+  }
+
+  function isMapsShortLink(input: string) {
+    const s = input.trim();
+    return (
+      /^https?:\/\/maps\.app\.goo\.gl\/.+/i.test(s) ||
+      /^https?:\/\/goo\.gl\/maps\/.+/i.test(s)
+    );
   }
 
   function isSameLocalDay(a: Date, b: Date) {
@@ -511,6 +597,7 @@ export default function UserPage() {
     setDraftIdentity(String(s.identity ?? "").trim());
     setDraftLat(s.geoLat ?? null);
     setDraftLng(s.geoLng ?? null);
+    window.history.pushState({ cacahModal: true }, "");
     setShowCacahModal(true);
   }
 
@@ -518,6 +605,10 @@ export default function UserPage() {
     setShowCacahModal(false);
     setActiveSampleId(null);
     resetModalDraft();
+
+    if (window.history.state?.cacahModal) {
+      window.history.back();
+    }
   }
 
   async function onPickPhoto(file: File | null) {
@@ -549,9 +640,11 @@ export default function UserPage() {
 
     const nextIdentity = String(draftIdentity ?? "").trim();
     if (!nextIdentity) return toast.error("Nama responden wajib diisi.");
-    if (draftLat == null || draftLng == null) {
-      return toast.error("Lokasi belum ada. Coba ambil lokasi dulu ya.");
-    }
+    // if (draftLat == null || draftLng == null) {
+    //   return toast.error("Lokasi belum ada. Coba ambil lokasi dulu ya.");
+    // }
+    if (!isLocationConfirmed)
+      return toast.error("Centang konfirmasi lokasi dulu ya.");
 
     setSavingModal(true);
 
@@ -1222,7 +1315,113 @@ export default function UserPage() {
                               </div>
                             </div>
                           </div>
+                          {activeSample?.approvalStatus !== "Disetujui" && (
+                            <div className="mt-2">
+                              <label className="text-xs text-gray-500">
+                                Tempel koordinat (lat, lng)
+                              </label>
+
+                              <div className="flex gap-2 mt-1">
+                                <input
+                                  type="text"
+                                  value={coordText}
+                                  onChange={(e) => setCoordText(e.target.value)}
+                                  placeholder="Contoh: -3.652537583654158, 103.75869158307493"
+                                  className="flex-1 rounded-md border px-2 py-1 text-xs bg-white"
+                                />
+
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    const raw = coordText.trim();
+                                    if (!raw)
+                                      return toast.error("Input kosong");
+
+                                    const direct =
+                                      extractLatLngFromTextOrUrl(raw);
+                                    if (direct) {
+                                      setDraftLat(direct.lat);
+                                      setDraftLng(direct.lng);
+                                      toast.success(
+                                        "Koordinat berhasil diterapkan"
+                                      );
+                                      return;
+                                    }
+
+                                    if (isMapsShortLink(raw)) {
+                                      const t = toast.loading(
+                                        "Membuka link Google Maps..."
+                                      );
+                                      try {
+                                        const r = await fetch(
+                                          `/api/expand-maps?url=${encodeURIComponent(raw)}`
+                                        );
+                                        const j = await r.json();
+                                        if (!r.ok)
+                                          throw new Error(
+                                            j?.error || "Gagal expand link"
+                                          );
+
+                                        const parsed =
+                                          extractLatLngFromTextOrUrl(
+                                            j.finalUrl
+                                          );
+                                        if (!parsed)
+                                          throw new Error(
+                                            "Koordinat tidak ditemukan dari link"
+                                          );
+
+                                        setDraftLat(parsed.lat);
+                                        setDraftLng(parsed.lng);
+                                        toast.success(
+                                          "Koordinat berhasil diterapkan",
+                                          { id: t }
+                                        );
+                                        return;
+                                      } catch (e: any) {
+                                        toast.error(
+                                          e?.message || "Gagal membaca link",
+                                          { id: t }
+                                        );
+                                        return;
+                                      }
+                                    }
+
+                                    toast.error(
+                                      "Format tidak dikenali. Paste koordinat atau link Google Maps."
+                                    );
+                                  }}
+                                  className="px-2 py-1 rounded-md bg-gray-100 text-gray-800 text-xs font-semibold"
+                                >
+                                  Terapkan
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
+
+                        {draftLat != null && draftLng != null ? (
+                          <div className="mt-2 space-y-2">
+                            <div className="text-xs text-gray-500">
+                              Klik peta untuk memindahkan pin, atau geser
+                              pinnya.
+                            </div>
+
+                            <LocationPickerMap
+                              lat={Number(draftLat)}
+                              lng={Number(draftLng)}
+                              onChange={(lat, lng) => {
+                                setDraftLat(lat);
+                                setDraftLng(lng);
+                              }}
+                              height={260}
+                            />
+                          </div>
+                        ) : (
+                          <div className="text-xs opacity-70 mt-2">
+                            Koordinat belum ada. Klik “Ambil Lokasi”.
+                          </div>
+                        )}
 
                         <div className="rounded-md border p-3 space-y-2">
                           <div className="flex items-center justify-between">
@@ -1279,6 +1478,15 @@ export default function UserPage() {
                       </div>
                     </div>
                   </div>
+
+                  <label className="flex items-center gap-2 text-xs px-8">
+                    <input
+                      type="checkbox"
+                      checked={isLocationConfirmed}
+                      onChange={(e) => setIsLocationConfirmed(e.target.checked)}
+                    />
+                    Saya sudah memastikan pin lokasi sudah benar
+                  </label>
 
                   <div
                     className={`shrink-0 px-8 py-3 pb-6 sm:px-6 flex items-center ${activeSample?.approvalStatus === "Disetujui" ? "justify-end" : "justify-between"} gap-2`}

@@ -16,6 +16,7 @@ const formSchema = z
     passwordConfirm: z.string(),
     phone: z.string().min(12, { message: "Nomor Telepon minimal 12 angka" }),
     address: z.string().min(5, { message: "Alamat minimal 5 karakter" }),
+    signupCode: z.string().trim().regex(/^[A-Z0-9]{10}$/, { message: "Kode pendaftaran belum sesuai" }),
   })
   .superRefine((data, ctx) => {
     if (data.password !== data.passwordConfirm) {
@@ -50,7 +51,14 @@ const Signup = ({
   const onSubmit = async (data: SignUpSchema) => {
     try {
       const response = await registerUserMutation({
-        variables: data,
+        variables: {
+          name: data.name,
+          email: data.email,
+          password: data.password,
+          phone: data.phone,
+          address: data.address,
+          signupCode: data.signupCode.trim().toUpperCase(),
+        },
       });
       localStorage.setItem(
         "activation_token",
@@ -186,6 +194,24 @@ const Signup = ({
             {`${errors.passwordConfirm.message}`}
           </span>
         )}
+        <div className="w-full relative mb-3 mt-4">
+          <label className="text-[16px] font-Poppins">Kode Pendaftaran</label>
+          <input
+            {...register("signupCode")}
+            type="text"
+            placeholder="A1B2C3"
+            maxLength={10}
+            className={`${styles.input} shadow-sm uppercase`}
+          />
+          {errors.signupCode && (
+            <span className="text-red-500 block mt-1">
+              {`${errors.signupCode.message}`}
+            </span>
+          )}
+          <p className="text-xs text-gray-500 mt-1">
+            Kode ini berubah tiap hari, silahkan minta pada admin untuk mendapatkannya.
+          </p>
+        </div>
         <div className="w-full mt-5">
           <input
             type="submit"

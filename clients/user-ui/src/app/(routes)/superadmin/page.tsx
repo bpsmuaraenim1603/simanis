@@ -13,6 +13,8 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { GET_MONTHLY_ACTIVITY_STAFF_USAGE } from "@/src/graphql/actions/get-monthly-activity-staff-usage.action";
 import { GET_STAFF_YEARLY_EXPORT } from "@/src/graphql/actions/get-staff-yearly-export.action";
 import HUSelect, { HUSelectOption } from "@/src/components/HUSelect";
+import { GET_DAILY_SIGNUP_CODE } from "@/src/graphql/actions/get-daily-signup-code.action";
+import { ROTATE_DAILY_SIGNUP_CODE } from "@/src/graphql/actions/rotate-daily-signup-code.action";
 
 function Tabs<T extends string>({
   tabs,
@@ -747,6 +749,54 @@ export default function SuperAdminManagePage() {
 
   const ALLOWED = new Set(["Superadmin", "Keuangan"]);
 
+  const canViewSignupCode =
+    !!currentUser && ALLOWED.has(currentUser.role ?? "");
+  const isSuperadmin = currentUser?.role === "Superadmin";
+
+  const {
+    data: dailyCodeData,
+    loading: dailyCodeLoading,
+    refetch: refetchDailyCode,
+  } = useQuery(GET_DAILY_SIGNUP_CODE, {
+    fetchPolicy: "cache-and-network",
+    skip: !canViewSignupCode,
+  });
+
+  const [rotateDailySignupCode, { loading: rotatingCode }] = useMutation(
+    ROTATE_DAILY_SIGNUP_CODE
+  );
+
+  const dailySignupCode = dailyCodeData?.getDailySignupCode?.code as
+    | string
+    | undefined;
+  const dailySignupDate = dailyCodeData?.getDailySignupCode?.dateKey as
+    | string
+    | undefined;
+
+  const copyDailyCode = useCallback(async () => {
+    if (!dailySignupCode) return;
+    try {
+      await navigator.clipboard.writeText(dailySignupCode);
+      toast.success("Kode berhasil disalin");
+    } catch {
+      toast.error("Gagal menyalin kode");
+    }
+  }, [dailySignupCode]);
+
+  const regenerateDailyCode = useCallback(async () => {
+    if (!isSuperadmin) {
+      toast.error("Hanya Superadmin yang bisa regenerate");
+      return;
+    }
+    try {
+      await rotateDailySignupCode();
+      await refetchDailyCode();
+      toast.success("Kode hari ini berhasil diperbarui");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Gagal memperbarui kode");
+    }
+  }, [isSuperadmin, rotateDailySignupCode, refetchDailyCode]);
+
   React.useEffect(() => {
     if (userLoading) return;
     const role = currentUser?.role ?? "";
@@ -994,6 +1044,40 @@ export default function SuperAdminManagePage() {
       {/* Header */}
       <div className="bg-orange-50 rounded-lg p-3 md:p-4 font-bold text-lg md:text-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 shadow-md mb-4">
         <span>Panel Kontrol Pengguna</span>
+        <div className="flex flex-col gap-2">
+          {canViewSignupCode && (
+            <div className="flex flex-wrap items-center gap-2 text-xs font-normal">
+              <span className="inline-flex items-center gap-2 rounded-md border bg-white/70 px-2 py-1">
+                <span className="text-gray-600">Kode daftar:</span>
+                {/* <span className="text-gray-600">
+                  {dailySignupDate ? `(${dailySignupDate})` : ""}
+                </span> */}
+                <span className="font-mono font-semibold tracking-widest">
+                  {dailyCodeLoading ? "MEMUAT…" : (dailySignupCode ?? "-")}
+                </span>
+              </span>
+              <button
+                type="button"
+                onClick={copyDailyCode}
+                disabled={!dailySignupCode || dailyCodeLoading}
+                className="rounded-md border bg-white px-2 py-1 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Copy
+              </button>
+              {isSuperadmin && (
+                <button
+                  type="button"
+                  onClick={regenerateDailyCode}
+                  disabled={rotatingCode || dailyCodeLoading}
+                  className="rounded-md border bg-white px-2 py-1 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  {rotatingCode ? "Regenerate…" : "Regenerate"}
+                </button>
+              )}
+              <span className="text-gray-500">Kode berubah tiap hari.</span>
+            </div>
+          )}
+        </div>
       </div>
       <Tabs<AdminTab>
         tabs={[

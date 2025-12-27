@@ -5,6 +5,7 @@ import {
   IsNotEmpty,
   IsString,
   IsUUID,
+  Matches,
   Min,
 } from 'class-validator';
 
@@ -64,6 +65,14 @@ export class RegisterDto {
   @Field()
   @IsNotEmpty({ message: 'Alamat belum diisi' })
   address: string;
+
+  @Field()
+  @IsNotEmpty({ message: 'Kode pendaftaran harus diisi' })
+  @IsString({ message: 'Kode pendaftaran harus berupa teks' })
+  @Matches(/^[A-Za-z0-9]{10}$/, {
+    message: 'Kode pendaftaran harus 10 karakter (kombinasi huruf/angka)',
+  })
+  signupCode: string;
 }
 
 @InputType()

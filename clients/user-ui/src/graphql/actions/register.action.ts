@@ -9,6 +9,7 @@ mutation RegisterUser(
     $password: String!
     $phone: String!
     $address: String!
+    $signupCode: String!
 ) {
     register(registerDto: {
         name: $name,
@@ -16,6 +17,7 @@ mutation RegisterUser(
         password: $password,
         phone_number: $phone,
         address: $address,
+        signupCode: $signupCode
     }) {
         activation_token
     }

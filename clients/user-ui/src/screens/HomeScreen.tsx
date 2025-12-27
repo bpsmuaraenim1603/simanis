@@ -13,10 +13,17 @@ function HomeScreen() {
   useEffect(() => {
     if (user) {
       if (user.role === "User") {
-        toast.success("Anda sudah login. Mengarahkan langsung ke Halaman User");
+        toast.success(
+          "Anda sudah login. Mengarahkan langsung ke Halaman Petugas"
+        );
         router.replace("/user");
+      } else if (user.role === "Supervisor") {
+        toast.success(
+          "Anda sudah login. Mengarahkan langsung ke Halaman Pengawas"
+        );
+        router.replace("/supervisor");
       } else {
-        toast.success("Anda sudah login. Mengarahkan ke Beranda");
+        toast.success("Anda sudah login. Mengarahkan ke Halaman Beranda");
         router.replace("/dashboard");
       }
     }

@@ -5,6 +5,7 @@ import Header from "@/src/components/Layout/Header";
 import useUser from "@/src/hooks/useUser";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import "leaflet/dist/leaflet.css";
 
 type SidebarEventDetail =
   | boolean

@@ -268,4 +268,11 @@ model Notification {
   createdAt   DateTime         @default(now())
 }
 
+model DailySignupCode {
+  id        String   @id @default(uuid())
+  dateKey   String   @unique
+  code      String
+  createdAt DateTime @default(now())
+}
+
 // name,email,password,role,phone_number,address, 

@@ -242,7 +242,7 @@ model SubmitSPJ {
   submitDate          DateTime          @default(now())
   approveDate         DateTime?
   verifyNote          String?
-  eviDocumentPath     String?
+  eviDocumentPath     String? // e.g., spj/<subSurveyActivityId>/<userId>/<uuid>.pdf
   eviOriginalName     String?
   eviMimeType         String?
   eviSize             Int?
@@ -266,6 +266,13 @@ model Notification {
   isRead      Boolean          @default(false)
   readAt      DateTime?
   createdAt   DateTime         @default(now())
+}
+
+model DailySignupCode {
+  id        String   @id @default(uuid())
+  dateKey   String   @unique
+  code      String
+  createdAt DateTime @default(now())
 }
 
 // name,email,password,role,phone_number,address, 

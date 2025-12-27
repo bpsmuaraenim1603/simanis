@@ -358,6 +358,14 @@ export default function SupervisorManagePage() {
     });
   }, [approvedSamples, qIdentity]);
 
+  function closeSupervisorModal() {
+    setDetailModal(null);
+
+    if (window.history.state?.supervisorModal) {
+      window.history.back();
+    }
+  }
+
   const goPrev = () =>
     setDetailModal((prev) =>
       prev ? { index: Math.max(prev.index - 1, 0) } : prev
@@ -391,7 +399,7 @@ export default function SupervisorManagePage() {
       if (!detailModal) return;
       if (e.key === "ArrowLeft") goPrev();
       if (e.key === "ArrowRight") goNext();
-      if (e.key === "Escape") setDetailModal(null);
+      if (e.key === "Escape") closeSupervisorModal();
     };
 
     window.addEventListener("keydown", onKey);
@@ -462,6 +470,17 @@ export default function SupervisorManagePage() {
 
     prefetchAssignedActivities();
   }, [apollo, allSubActivities, currentUser?.id, currentUser?.role]);
+
+  useEffect(() => {
+    function handlePopState() {
+      if (detailModal) {
+        setDetailModal(null);
+      }
+    }
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [detailModal]);
 
   async function setSampleApproval(
     sampleId: string,
@@ -804,7 +823,13 @@ export default function SupervisorManagePage() {
                               const idx = approvedSamples.findIndex(
                                 (x: any) => x.id === s.id
                               );
-                              if (idx >= 0) setDetailModal({ index: idx });
+                              if (idx >= 0) {
+                                window.history.pushState(
+                                  { supervisorModal: true },
+                                  ""
+                                );
+                                setDetailModal({ index: idx });
+                              }
                             }}
                             disabled={s.cacahStatus !== "Selesai"}
                           >
@@ -951,7 +976,7 @@ export default function SupervisorManagePage() {
                                           activeSample.id,
                                           "Disetujui"
                                         );
-                                        setDetailModal(null);
+                                        closeSupervisorModal();
                                       }}
                                     >
                                       Setuju
@@ -966,7 +991,7 @@ export default function SupervisorManagePage() {
                                           activeSample.id,
                                           "Menunggu"
                                         );
-                                        setDetailModal(null);
+                                        closeSupervisorModal();
                                       }}
                                     >
                                       Tolak
