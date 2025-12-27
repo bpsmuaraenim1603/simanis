@@ -101,8 +101,6 @@ const ProfileDropDown = () => {
             Profil Saya
           </DropdownItem>
 
-          <DropdownItem key="notifications">Notifikasi</DropdownItem>
-
           <DropdownItem
             key="logout"
             color="danger"

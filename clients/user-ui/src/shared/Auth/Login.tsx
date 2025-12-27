@@ -2,10 +2,7 @@ import styles from "@/src/utils/style";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  AiOutlineEye,
-  AiOutlineEyeInvisible,
-} from "react-icons/ai";
+import { AiOutlineEye, AiOutlineEyeInvisible } from "react-icons/ai";
 import { useState } from "react";
 import toast from "react-hot-toast";
 import { useMutation } from "@apollo/client";
@@ -45,24 +42,37 @@ const Login = ({ setActiveState }: { setActiveState: (e: string) => void }) => {
       email: data.email,
       password: data.password,
     };
-    const response = await Login({
-      variables: loginData,
-    });
+    try {
+      const response = await Login({
+        variables: loginData,
+      });
 
-    if (response.data.Login.user) {
-      Cookies.set("refresh_token", response.data.Login.refreshToken, cookieOpts);
-      Cookies.set("access_token", response.data.Login.accessToken, cookieOpts);
-      if (response.data.Login.user.role === "User"){
+      const login = response.data?.Login;
+
+      if (!login?.user) {
+        toast.error("Login gagal");
+        return;
+      }
+
+      Cookies.set("refresh_token", login.refreshToken, cookieOpts);
+      Cookies.set("access_token", login.accessToken, cookieOpts);
+
+      toast.success("Login berhasil!");
+
+      if (login.user.role === "User") {
         window.location.href = "/user";
-      } else if (response.data.Login.user.role === "Supervisor"){
+      } else if (login.user.role === "Supervisor") {
         window.location.href = "/supervisor";
       } else {
         window.location.href = "/dashboard";
       }
+    } catch (err: any) {
+      const message =
+        err?.graphQLErrors?.[0]?.message ||
+        err?.networkError?.message ||
+        "Email atau password salah";
 
-      toast.success('Login Berhasil!');
-    } else {
-      toast.error(response.data.Login.error.message);
+      toast.error(message);
     }
   };
 

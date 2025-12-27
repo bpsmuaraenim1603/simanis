@@ -12,10 +12,15 @@ import { SubmitSPJResolver } from './submit-spj.resolver';
 import { GraphQLUpload } from 'graphql-upload-ts';
 import { JobLetterResolver } from './jobletter.resolver';
 import { StorageService } from './storage.service';
+import { AuthGuard } from './guards/auth.guard';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt/dist/jwt.service';
+import { APP_GUARD } from '@nestjs/core/constants';
 
 @Module({
   imports: [
     HttpModule,
+    ConfigModule.forRoot({ isGlobal: true }),
     GraphQLModule.forRoot<ApolloFederationDriverConfig>({
       driver: ApolloFederationDriver,
       autoSchemaFile: {
@@ -23,8 +28,10 @@ import { StorageService } from './storage.service';
       },
       resolvers: { Upload: GraphQLUpload as any },
       csrfPrevention: false,
-      debug: true,
-      context: ({ req }) => ({ req }),
+      context: ({ req, res }) => ({ req, res }),
+      debug: process.env.NODE_ENV !== 'production',
+      introspection: process.env.NODE_ENV !== 'production',
+      playground: process.env.NODE_ENV !== 'production',
     }),
   ],
   providers: [
@@ -35,6 +42,9 @@ import { StorageService } from './storage.service';
     SurveyActivityResolver,
     UserSampleResolver,
     PrismaService,
+    ConfigService,
+    JwtService,
+    { provide: APP_GUARD, useClass: AuthGuard },
   ],
 })
 export class SurveyActModule {}

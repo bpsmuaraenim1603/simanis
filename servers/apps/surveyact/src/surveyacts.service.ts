@@ -25,6 +25,9 @@ import {
 import {
   AgreeState,
   CacahStatus,
+  Channel,
+  NotificationType,
+  TargetType,
   IssueStatus,
   JobLetter,
   SubmitSPJ,
@@ -84,6 +87,52 @@ export class SurveyActivityService {
     private readonly httpService: HttpService,
     private readonly storage: StorageService,
   ) {}
+
+  private async createInAppNotification(input: {
+    recipientId: string;
+    actorId?: string | null;
+    type: NotificationType;
+    targetType: TargetType;
+    targetId: string;
+    title: string;
+    body?: string | null;
+    metadata?: any;
+    dedupKey?: string;
+  }) {
+    if (input.dedupKey) {
+      const exists = await this.prisma.notification.findFirst({
+        where: {
+          recipientId: input.recipientId,
+          type: input.type,
+          targetType: input.targetType,
+          targetId: input.targetId,
+          channel: Channel.IN_APP,
+          metadata: {
+            path: ['dedupKey'],
+            equals: input.dedupKey,
+          },
+        },
+        select: { id: true },
+      });
+      if (exists) return;
+    }
+
+    await this.prisma.notification.create({
+      data: {
+        recipientId: input.recipientId,
+        actorId: input.actorId ?? null,
+        type: input.type,
+        targetType: input.targetType,
+        targetId: input.targetId,
+        title: input.title,
+        body: input.body ?? null,
+        metadata: input.dedupKey
+          ? { ...(input.metadata ?? {}), dedupKey: input.dedupKey }
+          : input.metadata ?? undefined,
+        channel: Channel.IN_APP,
+      },
+    });
+  }
 
   async create(input: CreateSurveyActivityDTO) {
     return this.prisma.surveyActivity.create({ data: input });
@@ -158,7 +207,10 @@ export class SurveyActivityService {
     });
   }
 
-  async createUserSurveyProgress(input: CreateUserProgressDTO) {
+  async createUserSurveyProgress(
+    input: CreateUserProgressDTO,
+    actorId?: string,
+  ) {
     const { samples, ...rest } = input;
     let totalAssigned = rest.totalAssigned ?? 0;
     let submitCount = rest.submitCount ?? 0;
@@ -178,7 +230,7 @@ export class SurveyActivityService {
       ).length;
     }
 
-    return this.prisma.userProgress.create({
+    const created = await this.prisma.userProgress.create({
       data: {
         ...rest,
         totalAssigned,
@@ -195,6 +247,67 @@ export class SurveyActivityService {
         samples: true,
       },
     });
+
+    const [sub, user, supervisor] = await Promise.all([
+      created.subSurveyActivityId
+        ? this.prisma.subSurveyActivity.findUnique({
+            where: { id: created.subSurveyActivityId },
+            select: { name: true },
+          })
+        : Promise.resolve(null),
+      this.prisma.user.findUnique({
+        where: { id: created.userId },
+        select: { name: true },
+      }),
+      created.superVisorId
+        ? this.prisma.user.findUnique({
+            where: { id: created.superVisorId },
+            select: { name: true },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    await this.createInAppNotification({
+      recipientId: created.userId,
+      actorId: actorId ?? null,
+      type: NotificationType.USER_PROGRESS_ASSIGNED,
+      targetType: TargetType.USER_PROGRESS,
+      targetId: created.id,
+      title: 'Kamu ditugaskan ke kegiatan survei',
+      body: sub?.name
+        ? `Kamu ditugaskan di "${sub.name}".`
+        : 'Kamu ditugaskan di kegiatan survei baru.',
+    });
+
+    if (created.superVisorId) {
+      await this.createInAppNotification({
+        recipientId: created.superVisorId,
+        actorId: actorId ?? null,
+        type: NotificationType.SUPERVISOR_ASSIGNED,
+        targetType: TargetType.USER_PROGRESS,
+        targetId: created.id,
+        title: 'Kamu ditetapkan sebagai pengawas',
+        body: sub?.name
+          ? `Kamu jadi pengawas untuk ${user?.name ?? 'petugas'} di "${sub.name}".`
+          : `Kamu jadi pengawas untuk ${user?.name ?? 'petugas'}.`,
+        metadata: { petugasId: created.userId },
+      });
+    }
+
+    if (created.samples?.length) {
+      await this.createInAppNotification({
+        recipientId: created.userId,
+        actorId: actorId ?? null,
+        type: NotificationType.USER_SAMPLES_ASSIGNED,
+        targetType: TargetType.USER_PROGRESS,
+        targetId: created.id,
+        title: 'Sampel ditambahkan',
+        body: `Ada ${created.samples.length} sampel baru untuk kamu kerjakan.`,
+        metadata: { count: created.samples.length },
+      });
+    }
+
+    return created;
   }
 
   async getSamplesByUserProgressId(userProgressId: string) {
@@ -299,10 +412,17 @@ export class SurveyActivityService {
     });
   }
 
-  async updateUserProgress(input: UpdateUserProgressDTO) {
+  async updateUserProgress(input: UpdateUserProgressDTO, actorId?: string) {
     const { id, samples, deleteSampleIds, ...rest } = input;
 
     return this.prisma.$transaction(async (tx) => {
+      const upBefore = await tx.userProgress.findUnique({
+        where: { id },
+        select: { id: true, userId: true, subSurveyActivityId: true },
+      });
+      if (!upBefore)
+        throw new NotFoundException('UserProgress tidak ditemukan');
+
       await tx.userProgress.update({
         where: { id },
         data: { ...rest },
@@ -320,6 +440,7 @@ export class SurveyActivityService {
       });
 
       const existingByNus = new Map(existing.map((s) => [s.nus, s]));
+      let createdCount = 0;
 
       if (samples) {
         const nusSet = new Set<string>();
@@ -361,6 +482,7 @@ export class SurveyActivityService {
                 geoCapturedAt: s.geoCapturedAt ?? null,
               },
             });
+            createdCount++;
           }
         }
 
@@ -411,14 +533,40 @@ export class SurveyActivityService {
         },
       });
 
-      return tx.userProgress.findUnique({
+      const result = await tx.userProgress.findUnique({
         where: { id },
         include: { samples: true },
       });
+      if (createdCount > 0) {
+        const sub = upBefore.subSurveyActivityId
+          ? await tx.subSurveyActivity.findUnique({
+              where: { id: upBefore.subSurveyActivityId },
+              select: { name: true },
+            })
+          : null;
+
+        await tx.notification.create({
+          data: {
+            recipientId: upBefore.userId,
+            actorId: actorId ?? null,
+            type: NotificationType.USER_SAMPLES_ASSIGNED,
+            targetType: TargetType.USER_PROGRESS,
+            targetId: upBefore.id,
+            title: 'Sampel ditambahkan',
+            body: sub?.name
+              ? `Ada ${createdCount} sampel baru untuk kegiatan "${sub.name}".`
+              : `Ada ${createdCount} sampel baru untuk kamu kerjakan.`,
+            metadata: { count: createdCount },
+            channel: Channel.IN_APP,
+          },
+        });
+      }
+
+      return result;
     });
   }
 
-  async patchUserSamples(input: PatchUserSamplesDTO) {
+  async patchUserSamples(input: PatchUserSamplesDTO, actorId?: string) {
     const { userProgressId, updateSamples, createSamples, deleteSampleIds } =
       input;
 
@@ -472,6 +620,34 @@ export class SurveyActivityService {
             geoCapturedAt: s.geoCapturedAt ?? null,
           })),
         });
+
+        const up = await tx.userProgress.findUnique({
+          where: { id: userProgressId },
+          select: { id: true, userId: true, subSurveyActivityId: true },
+        });
+        if (up) {
+          const sub = up.subSurveyActivityId
+            ? await tx.subSurveyActivity.findUnique({
+                where: { id: up.subSurveyActivityId },
+                select: { name: true },
+              })
+            : null;
+          await tx.notification.create({
+            data: {
+              recipientId: up.userId,
+              actorId: actorId ?? null,
+              type: NotificationType.USER_SAMPLES_ASSIGNED,
+              targetType: TargetType.USER_PROGRESS,
+              targetId: up.id,
+              title: 'Sampel ditambahkan',
+              body: sub?.name
+                ? `Ada ${createSamples.length} sampel baru untuk kegiatan "${sub.name}".`
+                : `Ada ${createSamples.length} sampel baru untuk kamu kerjakan.`,
+              metadata: { count: createSamples.length },
+              channel: Channel.IN_APP,
+            },
+          });
+        }
       }
 
       if (deleteSampleIds?.length) {
@@ -610,8 +786,17 @@ export class SurveyActivityService {
     });
   }
 
-  async updateSPJStatus(input: UpdateSPJStatusDTO): Promise<SubmitSPJ> {
-    return this.prisma.submitSPJ.update({
+  async updateSPJStatus(
+    input: UpdateSPJStatusDTO,
+    actorId?: string,
+  ): Promise<SubmitSPJ> {
+    const before = await this.prisma.submitSPJ.findUnique({
+      where: { id: input.id },
+      select: { id: true, userId: true, subSurveyActivityId: true },
+    });
+    if (!before) throw new NotFoundException('SubmitSPJ tidak ditemukan');
+
+    const updated = await this.prisma.submitSPJ.update({
       where: { id: input.id },
       data: {
         submitState: input.status,
@@ -619,6 +804,41 @@ export class SurveyActivityService {
         approveDate: input.status === 'Disetujui' ? new Date() : undefined,
       },
     });
+    const sub = await this.prisma.subSurveyActivity.findUnique({
+      where: { id: before.subSurveyActivityId },
+      select: { name: true },
+    });
+
+    if (input.status === AgreeState.Disetujui) {
+      await this.createInAppNotification({
+        recipientId: before.userId,
+        actorId: actorId ?? null,
+        type: NotificationType.SUBMIT_SPJ_APPROVED,
+        targetType: TargetType.SUBMIT_SPJ,
+        targetId: before.id,
+        title: 'SPJ disetujui',
+        body: sub?.name
+          ? `SPJ kamu untuk kegiatan "${sub.name}" sudah disetujui.`
+          : 'SPJ kamu sudah disetujui.',
+      });
+    }
+
+    if (input.status === AgreeState.Ditolak) {
+      await this.createInAppNotification({
+        recipientId: before.userId,
+        actorId: actorId ?? null,
+        type: NotificationType.SUBMIT_SPJ_REJECTED,
+        targetType: TargetType.SUBMIT_SPJ,
+        targetId: before.id,
+        title: 'SPJ ditolak',
+        body: sub?.name
+          ? `SPJ kamu untuk kegiatan "${sub.name}" ditolak. Catatan: ${input.verifyNote ?? '-'}`
+          : `SPJ kamu ditolak. Catatan: ${input.verifyNote ?? '-'}`,
+        metadata: { verifyNote: input.verifyNote ?? null },
+      });
+    }
+
+    return updated;
   }
 
   async getJobLetterSignedUrl(path: string | null) {
@@ -763,8 +983,15 @@ export class SurveyActivityService {
 
   async updateJobLetterStatus(
     input: UpdateJobLetterStatusDTO,
+    actorId?: string,
   ): Promise<JobLetter> {
-    return this.prisma.jobLetter.update({
+    const before = await this.prisma.jobLetter.findUnique({
+      where: { id: input.id },
+      select: { id: true, userId: true, subSurveyActivityId: true },
+    });
+    if (!before) throw new NotFoundException('Surat tugas tidak ditemukan');
+
+    const updated = await this.prisma.jobLetter.update({
       where: { id: input.id },
       data: {
         agreeState: input.status,
@@ -772,6 +999,41 @@ export class SurveyActivityService {
         approveDate: input.status === 'Disetujui' ? new Date() : undefined,
       },
     });
+    const sub = await this.prisma.subSurveyActivity.findUnique({
+      where: { id: before.subSurveyActivityId },
+      select: { name: true },
+    });
+
+    if (input.status === AgreeState.Disetujui) {
+      await this.createInAppNotification({
+        recipientId: before.userId,
+        actorId: actorId ?? null,
+        type: NotificationType.JOB_LETTER_APPROVED,
+        targetType: TargetType.JOB_LETTER,
+        targetId: before.id,
+        title: 'Surat tugas disetujui',
+        body: sub?.name
+          ? `Surat tugas kamu untuk "${sub.name}" sudah disetujui.`
+          : 'Surat tugas kamu sudah disetujui.',
+      });
+    }
+
+    if (input.status === AgreeState.Ditolak) {
+      await this.createInAppNotification({
+        recipientId: before.userId,
+        actorId: actorId ?? null,
+        type: NotificationType.JOB_LETTER_REJECTED,
+        targetType: TargetType.JOB_LETTER,
+        targetId: before.id,
+        title: 'Surat tugas ditolak',
+        body: sub?.name
+          ? `Surat tugas kamu untuk "${sub.name}" ditolak. Catatan: ${input.rejectNote ?? '-'}`
+          : `Surat tugas kamu ditolak. Catatan: ${input.rejectNote ?? '-'}`,
+        metadata: { rejectNote: input.rejectNote ?? null },
+      });
+    }
+
+    return updated;
   }
 
   async getAllSubSurveyProgress(): Promise<SubSurveyProgressType[]> {
@@ -779,6 +1041,30 @@ export class SurveyActivityService {
       include: { UserProgress: true },
       orderBy: { startDate: 'asc' },
     });
+
+    const now = new Date();
+    const MS_PER_DAY = 24 * 60 * 60 * 1000;
+    for (const s of subSurveys) {
+      const diffDays = Math.ceil(
+        (s.endDate.getTime() - now.getTime()) / MS_PER_DAY,
+      );
+      if (diffDays === 3 || diffDays === 2 || diffDays === 1) {
+        const endKey = s.endDate.toISOString().slice(0, 10); // YYYY-MM-DD
+        for (const p of s.UserProgress) {
+          await this.createInAppNotification({
+            recipientId: p.userId,
+            actorId: null,
+            type: NotificationType.SUBSURVEY_END_SOON,
+            targetType: TargetType.SUBSURVEY_ACTIVITY,
+            targetId: s.id,
+            title: 'Tenggat kegiatan mendekat',
+            body: `Kegiatan "${s.name}" akan berakhir dalam ${diffDays} hari (tenggat: ${endKey}).`,
+            dedupKey: `endsoon:${s.id}:${endKey}:${diffDays}`,
+            metadata: { endDate: endKey, diffDays },
+          });
+        }
+      }
+    }
 
     return subSurveys.map((s) => {
       const totalPetugas = s.UserProgress.length;
@@ -1250,7 +1536,7 @@ export class SurveyActivityService {
         where: { subSurveyActivityId: id },
         select: {
           eviFieldUrl: true,
-          eviSTUrl: true
+          eviSTUrl: true,
         } as any,
       }),
     ]);

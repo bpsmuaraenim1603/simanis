@@ -1,5 +1,5 @@
 import { BadRequestException, UseGuards } from '@nestjs/common';
-import { Args, Context, Mutation, Query, Resolver } from '@nestjs/graphql';
+import { Args, Context, Mutation, Query, Resolver, Int } from '@nestjs/graphql';
 import { UsersService } from './users.service';
 import {
   ActivationResponse,
@@ -7,8 +7,10 @@ import {
   ForgotPasswordResponse,
   LoginResponse,
   LogoutResponse,
+  NotificationListResponse,
   RegisterResponse,
   ResetPasswordResponse,
+  UnreadCountResponse,
   // UserResponse,
   UserType,
 } from './types/users.types';
@@ -29,6 +31,7 @@ import { CurrentUser } from './decorators/current-user.decorator';
 import { BulkSpjDefaultsInput, BulkSpjResult } from './dto/bulk-spj.dto';
 import { FileUpload, GraphQLUpload } from 'graphql-upload-ts';
 import { Throttle } from '@nestjs/throttler';
+import { Public } from './decorators/public.decorator';
 
 @Resolver('User')
 // @UseFilters()
@@ -69,6 +72,7 @@ export class UsersResolver {
   // }
 
   @Mutation(() => RegisterResponse)
+  @Public()
   async register(
     @Args('registerDto') registerDto: RegisterDto,
     @Context() context: { res: Response },
@@ -86,6 +90,7 @@ export class UsersResolver {
   }
 
   @Mutation(() => ActivationResponse)
+  @Public()
   async activateUser(
     @Args('activationDto') activationDto: ActivationDto,
     @Context() context: { res: Response },
@@ -94,6 +99,7 @@ export class UsersResolver {
   }
 
   @Mutation(() => LoginResponse)
+  @Public()
   @Throttle({
     default: {
       ttl: 300,
@@ -140,6 +146,7 @@ export class UsersResolver {
   }
 
   @Mutation(() => ForgotPasswordResponse)
+  @Public()
   async forgotPassword(
     @Args('forgotPasswordDto') forgotPasswordDto: ForgotPasswordDto,
   ): Promise<ForgotPasswordResponse> {
@@ -147,6 +154,7 @@ export class UsersResolver {
   }
 
   @Mutation(() => ResetPasswordResponse)
+  @Public()
   async resetPassword(
     @Args('resetPasswordDto') resetPasswordDto: ResetPasswordDto,
   ): Promise<ResetPasswordResponse> {
@@ -159,10 +167,10 @@ export class UsersResolver {
     return await this.usersService.Logout(context.req);
   }
 
-  // @Query(() => [User])
-  // async getUsers() {
-  //   return this.usersService.getUsers();
-  // }
+  @Query(() => [User])
+  async getUsers() {
+    return this.usersService.getUsers();
+  }
 
   @Mutation(() => User)
   @UseGuards(AuthGuard)
@@ -199,5 +207,46 @@ export class UsersResolver {
     @Args('updateBillLimit') updateBillLimit: UpdateBillLimitDto,
   ): Promise<User> {
     return this.usersService.editUserBillLimit(userId, updateBillLimit);
+  }
+
+  @Query(() => UnreadCountResponse)
+  @UseGuards(AuthGuard)
+  async myUnreadNotificationCount(
+    @CurrentUser() user: User,
+  ): Promise<UnreadCountResponse> {
+    const count = await this.usersService.getUnreadNotificationCount(user.id);
+    return { count };
+  }
+
+  @Query(() => NotificationListResponse)
+  @UseGuards(AuthGuard)
+  async myNotifications(
+    @CurrentUser() user: User,
+    @Args('take', { type: () => Int, nullable: true }) take?: number,
+    @Args('cursor', { type: () => String, nullable: true }) cursor?: string,
+  ): Promise<NotificationListResponse> {
+    return this.usersService.getMyNotifications({
+      recipientId: user.id,
+      take,
+      cursor,
+    });
+  }
+
+  @Mutation(() => Boolean)
+  @UseGuards(AuthGuard)
+  async markNotificationRead(
+    @CurrentUser() user: User,
+    @Args('notificationId') notificationId: string,
+  ): Promise<boolean> {
+    return this.usersService.markNotificationRead({
+      recipientId: user.id,
+      notificationId,
+    });
+  }
+
+  @Mutation(() => Int)
+  @UseGuards(AuthGuard)
+  async markAllNotificationsRead(@CurrentUser() user: User): Promise<number> {
+    return this.usersService.markAllNotificationsRead(user.id);
   }
 }

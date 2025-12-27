@@ -16,6 +16,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { CacheModule } from '@nestjs/cache-manager';
 import { APP_GUARD } from '@nestjs/core';
 import { GqlThrottlerGuard } from './guards/gql-throttler.guard';
+import { AuthGuard } from './guards/auth.guard';
 
 @Module({
   imports: [
@@ -28,6 +29,9 @@ import { GqlThrottlerGuard } from './guards/gql-throttler.guard';
         federation: 2,
       },
       context: ({ req, res }) => ({ req, res }),
+      debug: process.env.NODE_ENV !== 'production',
+      introspection: process.env.NODE_ENV !== 'production',
+      playground: process.env.NODE_ENV !== 'production',
     }),
     EmailModule,
     CacheModule.register({
@@ -52,6 +56,7 @@ import { GqlThrottlerGuard } from './guards/gql-throttler.guard';
     UsersResolver,
     EmailService,
     { provide: APP_GUARD, useClass: GqlThrottlerGuard },
+    { provide: APP_GUARD, useClass: AuthGuard },
   ],
 })
 export class UsersModule {}

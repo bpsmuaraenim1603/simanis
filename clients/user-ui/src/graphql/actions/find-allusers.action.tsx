@@ -6,7 +6,6 @@ export const GET_ALL_USERS = gql`
       id
       name
       email
-      password
       role
       address
       phone_number

@@ -1,5 +1,6 @@
 import {
   Args,
+  Context,
   ID,
   Int,
   Mutation,
@@ -115,8 +116,9 @@ export class SurveyActivityResolver {
   }
 
   @Mutation(() => UserProgressType)
-  async createUserSurveyProgress(@Args('input') input: CreateUserProgressDTO) {
-    return this.service.createUserSurveyProgress(input);
+  async createUserSurveyProgress(@Args('input') input: CreateUserProgressDTO, @Context() ctx: any) {
+    const actorId = ctx?.req?.user?.id;
+    return this.service.createUserSurveyProgress(input, actorId);
   }
 
   @ResolveField(() => [UserSampleType], { name: 'samples' })
@@ -178,13 +180,15 @@ export class SurveyActivityResolver {
   }
 
   @Mutation(() => UserProgressType)
-  async updateUserSurveyProgress(@Args('input') input: UpdateUserProgressDTO) {
-    return this.service.updateUserProgress(input);
+  async updateUserSurveyProgress(@Args('input') input: UpdateUserProgressDTO, @Context() ctx: any) {
+    const actorId = ctx?.req?.user?.id;
+    return this.service.updateUserProgress(input, actorId);
   }
 
   @Mutation(() => UserProgressType)
-  patchUserSamples(@Args('input') input: PatchUserSamplesDTO) {
-    return this.service.patchUserSamples(input);
+  patchUserSamples(@Args('input') input: PatchUserSamplesDTO, @Context() ctx: any) {
+    const actorId = ctx?.req?.user?.id;
+    return this.service.patchUserSamples(input, actorId);
   }
 
   @Mutation(() => String)
@@ -225,8 +229,10 @@ export class SurveyActivityResolver {
   @Mutation(() => SubmitSPJType)
   async updateSPJStatus(
     @Args('input') input: UpdateSPJStatusDTO,
+    @Context() ctx: any,
   ): Promise<SubmitSPJ> {
-    return this.service.updateSPJStatus(input);
+    const actorId = ctx?.req?.user?.id;
+    return this.service.updateSPJStatus(input, actorId);
   }
 
   @Mutation(() => JobLetterType)
@@ -247,8 +253,10 @@ export class SurveyActivityResolver {
   @Mutation(() => JobLetterType)
   async updateJobLetterStatus(
     @Args('input') input: UpdateJobLetterStatusDTO,
+    @Context() ctx: any,
   ): Promise<JobLetter> {
-    return this.service.updateJobLetterStatus(input);
+    const actorId = ctx?.req?.user?.id;
+    return this.service.updateJobLetterStatus(input, actorId);
   }
 
   @Query(() => [SubSurveyProgressType], { name: 'getAllSubSurveyProgress' })

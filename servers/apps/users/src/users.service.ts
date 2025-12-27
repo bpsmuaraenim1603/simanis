@@ -397,9 +397,9 @@ export class UsersService {
     return { message: 'Logout berhasil!' };
   }
 
-  // async getUsers() {
-  //   return this.prisma.user.findMany({});
-  // }
+  async getUsers() {
+    return this.prisma.user.findMany({});
+  }
 
   async updateUserProfile(
     userId: string,
@@ -544,5 +544,74 @@ export class UsersService {
       errors,
       evidenceUrl: evidence.publicUrl,
     };
+  }
+
+  async getUnreadNotificationCount(recipientId: string): Promise<number> {
+    return this.prisma.notification.count({
+      where: { recipientId, channel: 'IN_APP', isRead: false },
+    });
+  }
+
+  async getMyNotifications(params: {
+    recipientId: string;
+    take?: number;
+    cursor?: string;
+  }) {
+    const take = Math.min(Math.max(params.take ?? 10, 1), 30);
+
+    const items = await this.prisma.notification.findMany({
+      where: { recipientId: params.recipientId, channel: 'IN_APP' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: take + 1,
+      ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
+      include: { actor: { select: { name: true } } },
+    });
+
+    let nextCursor: string | undefined;
+    let sliced = items;
+    if (items.length > take) {
+      nextCursor = items[take - 1]?.id;
+      sliced = items.slice(0, take);
+    }
+
+    return {
+      items: sliced.map((n) => ({
+        id: n.id,
+        type: n.type,
+        targetType: n.targetType,
+        targetId: n.targetId,
+        title: n.title,
+        body: n.body ?? null,
+        actorName: n.actor?.name ?? null,
+        channel: n.channel,
+        isRead: n.isRead,
+        readAt: n.readAt ?? null,
+        createdAt: n.createdAt,
+      })),
+      nextCursor,
+    };
+  }
+
+  async markNotificationRead(params: {
+    recipientId: string;
+    notificationId: string;
+  }) {
+    const updated = await this.prisma.notification.updateMany({
+      where: {
+        id: params.notificationId,
+        recipientId: params.recipientId,
+        channel: 'IN_APP',
+      },
+      data: { isRead: true, readAt: new Date() },
+    });
+    return updated.count > 0;
+  }
+
+  async markAllNotificationsRead(recipientId: string): Promise<number> {
+    const updated = await this.prisma.notification.updateMany({
+      where: { recipientId, channel: 'IN_APP', isRead: false },
+      data: { isRead: true, readAt: new Date() },
+    });
+    return updated.count;
   }
 }

@@ -1,4 +1,4 @@
-import { ObjectType, Field, ID } from '@nestjs/graphql';
+import { ObjectType, Field, ID, Int } from '@nestjs/graphql';
 import { User } from '../entities/users.entity';
 
 @ObjectType()
@@ -107,6 +107,57 @@ export class UserType {
 
   @Field(() => Date, { nullable: true })
   updatedAt?: Date;
+}
+
+@ObjectType()
+export class NotificationItem {
+  @Field(() => ID)
+  id: string;
+
+  @Field(() => String)
+  type: string;
+
+  @Field(() => String)
+  targetType: string;
+
+  @Field(() => String)
+  targetId: string;
+
+  @Field(() => String)
+  title: string;
+
+  @Field(() => String, { nullable: true })
+  body?: string | null;
+
+  @Field(() => String, { nullable: true })
+  actorName?: string | null;
+
+  @Field(() => String)
+  channel: string;
+
+  @Field(() => Boolean)
+  isRead: boolean;
+
+  @Field(() => Date, { nullable: true })
+  readAt?: Date | null;
+
+  @Field(() => Date)
+  createdAt: Date;
+}
+
+@ObjectType()
+export class NotificationListResponse {
+  @Field(() => [NotificationItem])
+  items: NotificationItem[];
+
+  @Field(() => String, { nullable: true })
+  nextCursor?: string;
+}
+
+@ObjectType()
+export class UnreadCountResponse {
+  @Field(() => Int)
+  count: number;
 }
 
 @ObjectType()
