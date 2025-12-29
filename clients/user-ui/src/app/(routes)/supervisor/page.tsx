@@ -763,7 +763,7 @@ export default function SupervisorManagePage() {
                 value={qIdentity}
                 onChange={(e) => setQIdentity(e.target.value)}
                 placeholder="Cari nama"
-                className="w-full rounded-md border px-3 py-2 text-sm"
+                className="w-full rounded-md border px-3 py-2 text-sm bg-white"
               />
             </div>
           </div>

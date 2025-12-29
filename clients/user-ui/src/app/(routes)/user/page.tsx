@@ -297,7 +297,6 @@ export default function UserPage() {
 
   useEffect(() => {
     function handlePopState(e: PopStateEvent) {
-      // kalau modal lagi terbuka → tutup modal
       if (showCacahModal) {
         setShowCacahModal(false);
         setActiveSampleId(null);
@@ -516,7 +515,6 @@ export default function UserPage() {
     if (!input) return null;
     const s = input.trim();
 
-    // Format koordinat: "lat,lng" atau "lat lng"
     const coord = (() => {
       const cleaned = s.replace(/\s+/g, " ");
       const parts = cleaned.includes(",")
@@ -530,12 +528,9 @@ export default function UserPage() {
     })();
     if (coord) return coord;
 
-    // URL panjang Google Maps: cari pola "@lat,lng" atau "q=lat,lng"
-    // contoh: https://www.google.com/maps/@-3.65,103.75,17z
     const atMatch = s.match(/@(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/);
     if (atMatch) return { lat: Number(atMatch[1]), lng: Number(atMatch[2]) };
 
-    // contoh: https://www.google.com/maps?q=-3.65,103.75
     const qMatch = s.match(/[?&]q=(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/);
     if (qMatch) return { lat: Number(qMatch[1]), lng: Number(qMatch[2]) };
 

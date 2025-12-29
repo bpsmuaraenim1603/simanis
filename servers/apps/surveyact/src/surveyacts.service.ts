@@ -1049,7 +1049,7 @@ export class SurveyActivityService {
         (s.endDate.getTime() - now.getTime()) / MS_PER_DAY,
       );
       if (diffDays === 3 || diffDays === 2 || diffDays === 1) {
-        const endKey = s.endDate.toISOString().slice(0, 10); // YYYY-MM-DD
+        const endKey = s.endDate.toISOString().slice(0, 10);
         for (const p of s.UserProgress) {
           await this.createInAppNotification({
             recipientId: p.userId,

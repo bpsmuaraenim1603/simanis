@@ -264,7 +264,7 @@ function MonthlyStaffUsagePanel({
         Email_Limit: r.userLimitBill ?? "",
         Kegiatan: r.subSurveyName,
         TipeKegiatan: r.activityType ?? "",
-        Bulan: r.month, // YYYY-MM
+        Bulan: r.month,
         Kecamatan: r.districtName ?? "",
         BlockCount: r.blockCount ?? 0,
         TotalAssigned: r.totalAssigned ?? 0,
@@ -978,7 +978,6 @@ export default function SuperAdminManagePage() {
   const closeHonorModal = () => setHonorUser(null);
 
   const honorRows: any[] = honorData?.userProgressSurveyByUserId ?? [];
-  // Group by subSurveyActivityId
   const honorGrouped = useMemo(() => {
     const map = new Map<
       string,

@@ -29,7 +29,6 @@ const formatWhen = (iso: string) => {
   return d.toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 };
 
-// mapping minimal (nanti bisa kamu refine)
 const buildTargetUrl = (n: NotificationItem) => {
   switch (String(n.targetType)) {
     case "SUBMIT_SPJ": return "/spj";

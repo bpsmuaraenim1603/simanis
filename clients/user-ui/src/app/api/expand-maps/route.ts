@@ -9,14 +9,11 @@ export async function GET(req: Request) {
   }
 
   try {
-    // fetch akan follow redirect otomatis di server (nggak kena CORS)
     const res = await fetch(url, {
       redirect: "follow",
-      // header minimal, biar tidak dicurigai
       headers: { "User-Agent": "Mozilla/5.0" },
     });
 
-    // setelah redirect, res.url biasanya sudah URL final
     return NextResponse.json({ finalUrl: res.url });
   } catch (e: any) {
     return NextResponse.json(
