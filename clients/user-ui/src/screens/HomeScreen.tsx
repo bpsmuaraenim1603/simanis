@@ -40,8 +40,8 @@ function HomeScreen() {
             className="h-10 sm:h-12 w-auto"
           />
           <h1 className="uppercase text-white font-Poppins font-semibold italic leading-tight text-sm sm:text-base lg:text-lg">
-            Badan Pusat Statistik <br className="hidden sm:block" /> Kabupaten
-            Muara Enim
+            Badan Pusat Statistik <br className="hidden sm:block" />
+            Kabupaten Muara Enim
           </h1>
         </div>
       </div>

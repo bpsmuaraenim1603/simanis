@@ -1202,8 +1202,8 @@ function Admin() {
   const enumeratorsForAdd: User[] = useMemo(
     () =>
       (userData?.getUsers ?? [])
-        .filter((u: User) => u.role !== "Supervisor")
-        .filter((u: User) => u.role !== "Admin")
+        // .filter((u: User) => u.role !== "Supervisor")
+        // .filter((u: User) => u.role !== "Admin")
         .filter((u: User) => u.role !== "Superadmin"),
     [userData, usedUserIdsForAdd]
   );
