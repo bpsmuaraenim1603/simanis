@@ -36,6 +36,7 @@ const splitLink = split(
     ) {
       return (
         definition.name.value.toLowerCase().includes("survey") ||
+        definition.name.value.toLowerCase().includes("progress") ||
         definition.name.value.toLowerCase().includes("spj") ||
         definition.name.value.toLowerCase().includes("jobletter") ||
         definition.name.value.toLowerCase().includes("issue") ||

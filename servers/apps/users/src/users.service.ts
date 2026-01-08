@@ -346,7 +346,7 @@ export class UsersService {
     const forgotPasswordToken = await this.generateForgotPasswordLink(user);
 
     const resetPasswordUrl =
-      this.configService.get<string>('CLIENT_SIDE_URI_SECOND') +
+      this.configService.get<string>('CLIENT_SIDE_URI') +
       `/reset-password?verify=${forgotPasswordToken}`;
 
     await this.emailService.sendMail({
