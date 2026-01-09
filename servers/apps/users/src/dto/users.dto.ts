@@ -129,7 +129,10 @@ export class UpdateSurveyActivityDto {
 @InputType()
 export class UpdateUserDto {
   @Field(() => Role, { nullable: true })
-  role?: Role;
+  primaryRole?: Role;
+
+  @Field(() => [Role], { nullable: true })
+  roles?: Role[];
 
   @Field({ nullable: true })
   name?: string;
@@ -152,8 +155,11 @@ export class UpdateRoleDto {
   @Field({ nullable: false })
   name?: string;
 
-  @Field(() => Role, { nullable: false })
-  role?: Role;
+  @Field(() => Role, { nullable: true })
+  primaryRole?: Role;
+
+  @Field(() => [Role], { nullable: true })
+  roles?: Role[];
 }
 
 @InputType()

@@ -14,7 +14,8 @@ mutation LoginUser($email: String!,$password: String!) {
       email
       address
       phone_number
-      role
+      primaryRole
+      roles
     }
     accessToken
     refreshToken

@@ -275,8 +275,8 @@ export class SurveyActivityService {
       targetId: created.id,
       title: 'Kamu ditugaskan ke kegiatan survei',
       body: sub?.name
-        ? `Kamu ditugaskan di "${sub.name}".`
-        : 'Kamu ditugaskan di kegiatan survei baru.',
+        ? `Kamu ditugaskan pada kegiatan "${sub.name}".`
+        : 'Kamu ditugaskan pada kegiatan survei baru.',
     });
 
     if (created.superVisorId) {
@@ -288,9 +288,9 @@ export class SurveyActivityService {
         targetId: created.id,
         title: 'Kamu ditetapkan sebagai pengawas',
         body: sub?.name
-          ? `Kamu jadi pengawas untuk ${user?.name ?? 'petugas'} di "${sub.name}".`
-          : `Kamu jadi pengawas untuk ${user?.name ?? 'petugas'}.`,
-        metadata: { petugasId: created.userId },
+          ? `Kamu ditugaskan menjadi pengawas untuk ${user?.name ?? 'petugas'} di "${sub.name}".`
+          : `Kamu ditugaskan menjadi pengawas untuk ${user?.name ?? 'petugas'}.`,
+        metadata: { petugasId: created.userId, subSurveyActivityId: created.subSurveyActivityId },
       });
     }
 
@@ -303,7 +303,7 @@ export class SurveyActivityService {
         targetId: created.id,
         title: 'Sampel ditambahkan',
         body: `Ada ${created.samples.length} sampel baru untuk kamu kerjakan.`,
-        metadata: { count: created.samples.length },
+        metadata: { count: created.samples.length, subSurveyActivityId: created.subSurveyActivityId},
       });
     }
 

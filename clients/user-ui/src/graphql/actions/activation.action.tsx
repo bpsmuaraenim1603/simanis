@@ -14,7 +14,8 @@ mutation ActivateUser($activationToken: String!, $activationCode: String!) {
       name
       email
       password
-      role
+      primaryRole
+      roles
     }
   }
 }

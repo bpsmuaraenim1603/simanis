@@ -12,6 +12,7 @@ import toast from "react-hot-toast";
 import styles from "@/src/utils/style";
 import useUser from "@/src/hooks/useUser";
 import HUComboBox from "@/src/components/HUCombobox";
+import { hasAnyRole, hasRole } from "@/src/utils/roles";
 
 type SubSurveyActivity = { id: string; name: string };
 type District = { id: string; name?: string; city?: string };
@@ -110,10 +111,7 @@ export default function Partners() {
   );
 
   const canDeleteJL = (jl: JobLetterWithUserNSubSurvey) =>
-    user?.role === "Admin" ||
-    user?.role === "Superadmin" ||
-    user?.role === "Keuangan" ||
-    jl.userId === user?.id;
+    hasAnyRole(user, ["Admin", "Superadmin", "Keuangan"]) || jl.userId === user?.id;
 
   const handleDeleteJobLetter = async (id: string) => {
     if (!id) return;
@@ -166,20 +164,16 @@ export default function Partners() {
     const raw = upData?.userProgressBySubSurveyActivityId ?? [];
     if (!user) return [];
 
-    if (
-      user.role === "Superadmin" ||
-      user.role === "Admin" ||
-      user.role === "Keuangan"
-    ) {
+    if (hasAnyRole(user, ["Superadmin", "Admin", "Keuangan"])) {
       return raw;
     }
 
-    if (user.role === "Supervisor") {
+    if (hasRole(user, "Supervisor")) {
       return raw.filter((p: any) => (p.superVisorId ?? "") === supervisorId);
     }
 
     return raw.filter((p: any) => p.userId === supervisorId);
-  }, [upData, user]);
+  }, [upData, user, supervisorId]);
 
   const regionOptions = useMemo(() => {
     const raw: string[] = (petugasList ?? [])
@@ -189,10 +183,7 @@ export default function Partners() {
     return uniq.map((r) => ({ value: r, label: r }));
   }, [petugasList]);
 
-  const isAdmin =
-    user?.role === "Admin" ||
-    user?.role === "Superadmin" ||
-    user?.role === "Supervisor";
+  const isAdmin = hasAnyRole(user, ["Admin", "Superadmin", "Supervisor"]);
 
   const isInPetugasList = useMemo(() => {
     if (!input.subSurveyActivityId) return false;
@@ -270,9 +261,7 @@ export default function Partners() {
       dataJobLetter?.getAllJobLetters ?? [];
     return rows.filter((jl) => {
       if (
-        user?.role !== "Admin" &&
-        user?.role !== "Superadmin" &&
-        user?.role !== "Keuangan" &&
+        !hasAnyRole(user, ["Admin", "Superadmin", "Keuangan"]) &&
         jl.userId !== user?.id
       )
         return false;
@@ -557,7 +546,7 @@ export default function Partners() {
         )}
       </div>
       <div className="w-full flex justify-end">
-        {(user?.role === "Admin" || user?.role === "Superadmin") && (
+        {hasAnyRole(user, ["Admin", "Superadmin"]) && (
           <button
             type="button"
             onClick={() => setDeleteMode((v) => !v)}
@@ -631,7 +620,7 @@ export default function Partners() {
                   input.subSurveyActivityId &&
                   petugasList.length === 0 && (
                     <p className="text-xs text-red-600 mt-1">
-                      {user?.role === "Supervisor"
+                      {hasRole(user, "Supervisor")
                         ? "Anda tidak memiliki petugas yang diawasi pada kegiatan ini."
                         : "Belum ada petugas untuk kegiatan ini."}
                     </p>
@@ -729,7 +718,7 @@ export default function Partners() {
                 </span>
               </div>
 
-              {user?.role === "Keuangan" || user?.role === "Superadmin" ? (
+              {hasAnyRole(user, ["Keuangan", "Superadmin"]) ? (
                 <form
                   onSubmit={handleUpdate}
                   className="space-y-3 pt-4 border-t mt-2"

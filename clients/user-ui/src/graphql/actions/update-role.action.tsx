@@ -5,7 +5,8 @@ export const UPDATE_ROLE = gql`
     editUserRole(userId: $userId, updateRole: $updateRole) {
       id
       name
-      role
+      primaryRole
+      roles
       email
     }
   }

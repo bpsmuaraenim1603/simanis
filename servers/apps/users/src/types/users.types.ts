@@ -97,7 +97,10 @@ export class UserType {
   phone_number?: string;
 
   @Field(() => String)
-  role: string;
+  primaryRole: string;
+
+  @Field(() => [String])
+  roles: string[];
 
   @Field(() => String, { nullable: true })
   limit_bill?: string;
@@ -140,6 +143,9 @@ export class NotificationItem {
 
   @Field(() => Date, { nullable: true })
   readAt?: Date | null;
+
+  @Field(() => String, { nullable: true })
+  metadata?: string | null;
 
   @Field(() => Date)
   createdAt: Date;

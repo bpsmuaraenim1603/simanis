@@ -11,6 +11,7 @@ import { usePathname } from "next/navigation";
 import { GET_ALL_SURVEY_ACTIVITIES } from "@/src/graphql/actions/find-allsurveyact.action";
 import { useQuery } from "@apollo/client";
 import useUser from "../hooks/useUser";
+import { hasRole, hasAnyRole } from "../utils/roles";
 
 const NavItems = ({ isMinimized = false }: { isMinimized?: boolean }) => {
   const { user } = useUser();
@@ -31,10 +32,10 @@ const NavItems = ({ isMinimized = false }: { isMinimized?: boolean }) => {
     dataprogress?: { title: string; url: string }[]; logo?: LucideIcon;
   }[] = [
     { title: "Beranda", hovertitle: "Beranda", url: "/dashboard", style: "border-b-2 border-t-2 border-white py-2", logo: House },
-    ...(user?.role === "Superadmin" || user?.role === "Keuangan" ? [{ title: "Kontrol Pengguna", hovertitle: "Kontrol Pengguna", url: "/superadmin", logo: User, style: "border-b-2 border-white pb-2" }] : []),
-    ...(user?.role === "Admin" || user?.role === "Superadmin" ? [{ title: "Manajemen Tim", hovertitle: "Manajemen Tim", url: "/admin", logo: User, style: "border-b-2 border-white pb-2" }] : []),
-    ...(user?.role === "Supervisor" || user?.role === "Superadmin" || user?.role === "Admin" ? [{ title: "Pengawas", hovertitle: "Pengawas", url: "/supervisor", logo: User, style: "border-b-2 border-white pb-2" }] : []),
-    ...(user?.role === "User" || user?.role === "Supervisor" || user?.role === "Admin" ? [{ title: "Petugas", hovertitle: "Petugas", url: "/user", logo: User, style: "border-b-2 border-white pb-2" }] : []),
+    ...(hasAnyRole(user, ["Superadmin", "Keuangan"]) ? [{ title: "Kontrol Pengguna", hovertitle: "Kontrol Pengguna", url: "/superadmin", logo: User, style: "border-b-2 border-white pb-2" }] : []),
+    ...(hasAnyRole(user, ["Admin", "Superadmin"]) ? [{ title: "Manajemen Tim", hovertitle: "Manajemen Tim", url: "/admin", logo: User, style: "border-b-2 border-white pb-2" }] : []),
+    ...(hasAnyRole(user, ["Supervisor", "Superadmin"]) ? [{ title: "Pengawas", hovertitle: "Pengawas", url: "/supervisor", logo: User, style: "border-b-2 border-white pb-2" }] : []),
+    ...(hasRole(user, "User") ? [{ title: "Petugas", hovertitle: "Petugas", url: "/user", logo: User, style: "border-b-2 border-white pb-2" }] : []),
     { title: "KEGIATAN LAPANGAN", url: "#kegiatanlapangan", unhover: true },
     { title: "Progres", url: "/progress", hovertitle: "Progres", logo: ChartNoAxesCombined, dataprogress: dynamiSurveyProgress },
     { title: "Kendala", url: "/issue", hovertitle: "Kendala", style: "border-b-2 border-white pb-2", logo: TriangleAlert,

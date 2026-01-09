@@ -414,6 +414,30 @@ export class UsersService {
     });
   }
 
+  async editUserRoles(userId: string, dto: UpdateRoleDto) {
+    const data: any = {};
+
+    if (dto.primaryRole) {
+      data.primaryRole = dto.primaryRole;
+    }
+
+    if (dto.roles) {
+      data.roles = dto.roles;
+
+      if (dto.primaryRole && !dto.roles.includes(dto.primaryRole)) {
+        throw new Error('primaryRole harus termasuk di roles');
+      }
+    }
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        name: dto.name,
+        primaryRole: dto.primaryRole,
+        roles: dto.roles,
+      },
+    });
+  }
+
   async findMany(args: Prisma.UserFindManyArgs) {
     return this.prisma.user.findMany(args);
   }
@@ -421,16 +445,6 @@ export class UsersService {
   async findById(id: string): Promise<User | null> {
     return this.prisma.user.findUnique({
       where: { id },
-    });
-  }
-
-  async editUserRole(userId: string, updateRole: UpdateRoleDto): Promise<User> {
-    return this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        name: updateRole.name,
-        role: updateRole.role,
-      },
     });
   }
 
@@ -587,6 +601,7 @@ export class UsersService {
         isRead: n.isRead,
         readAt: n.readAt ?? null,
         createdAt: n.createdAt,
+        metadata: n.metadata ? JSON.stringify(n.metadata) : null,
       })),
       nextCursor,
     };

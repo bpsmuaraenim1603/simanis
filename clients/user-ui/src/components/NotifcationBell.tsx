@@ -1,6 +1,11 @@
 "use client";
 
-import { Dropdown, DropdownItem, DropdownMenu, DropdownTrigger } from "@heroui/react";
+import {
+  Dropdown,
+  DropdownItem,
+  DropdownMenu,
+  DropdownTrigger,
+} from "@heroui/react";
 import { useMutation, useQuery } from "@apollo/client";
 import { Bell } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -14,6 +19,7 @@ import {
 
 type NotificationItem = {
   id: string;
+  type: string;
   title: string;
   body?: string | null;
   actorName?: string | null;
@@ -21,43 +27,87 @@ type NotificationItem = {
   createdAt: string;
   targetType: string;
   targetId: string;
+  metadata?: string | null;
 };
 
 const formatWhen = (iso: string) => {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleString("id-ID", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+const parseMeta = (metadata?: string | null) => {
+  if (!metadata) return {};
+  try {
+    return JSON.parse(metadata);
+  } catch {
+    return {};
+  }
 };
 
 const buildTargetUrl = (n: NotificationItem) => {
+  const meta: any = parseMeta(n.metadata);
+  const sa = meta?.subSurveyActivityId || "";
+
   switch (String(n.targetType)) {
-    case "SUBMIT_SPJ": return "/spj";
-    case "JOB_LETTER": return "/jobletter";
-    case "CONTENT_ISSUE": return "/issue";
-    case "SUBSURVEY_ACTIVITY": return "/subsurvey";
-    default: return "/";
+    case "SUBMIT_SPJ":
+      return "/spj";
+    case "JOB_LETTER":
+      return "/jobletter";
+    case "CONTENT_ISSUE":
+      return "/issue/feedback";
+    case "SUBSURVEY_ACTIVITY":
+      return "/progress";
+    case "USER_PROGRESS":
+      if (n.type === "SUPERVISOR_ASSIGNED") {
+        if (!sa) return `/supervisor`;
+        return `/supervisor?mode=detail&sa=${encodeURIComponent(sa)}&up=${encodeURIComponent(n.targetId)}`;
+      }
+      if (
+        n.type === "USER_PROGRESS_ASSIGNED" ||
+        n.type === "USER_SAMPLES_ASSIGNED"
+      ) {
+        if (!sa) return `/user`;
+        return `/user?mode=detail&activityId=${encodeURIComponent(sa)}&block=`;
+      }
+    default:
+      return "/dashboard";
   }
 };
 
 export default function NotificationBell() {
   const [open, setOpen] = useState(false);
 
-  const { data: countData, refetch: refetchCount } = useQuery(GET_MY_UNREAD_NOTIFICATION_COUNT, {
-    fetchPolicy: "cache-and-network",
-    pollInterval: 30000,
-  });
+  const { data: countData, refetch: refetchCount } = useQuery(
+    GET_MY_UNREAD_NOTIFICATION_COUNT,
+    {
+      fetchPolicy: "cache-and-network",
+      pollInterval: 30000,
+    }
+  );
 
-  const { data: listData, refetch: refetchList } = useQuery(GET_MY_NOTIFICATIONS, {
-    variables: { take: 10 },
-    fetchPolicy: "cache-and-network",
-    pollInterval: 30000,
-  });
+  const { data: listData, refetch: refetchList } = useQuery(
+    GET_MY_NOTIFICATIONS,
+    {
+      variables: { take: 10 },
+      fetchPolicy: "cache-and-network",
+      pollInterval: 30000,
+    }
+  );
 
   const [markRead] = useMutation(MARK_NOTIFICATION_READ);
-  const [markAllRead, { loading: markingAll }] = useMutation(MARK_ALL_NOTIFICATIONS_READ);
+  const [markAllRead, { loading: markingAll }] = useMutation(
+    MARK_ALL_NOTIFICATIONS_READ
+  );
 
   const unread = countData?.myUnreadNotificationCount?.count ?? 0;
-  const items: NotificationItem[] = listData?.myNotifications?.items?.slice?.() ?? [];
+  const items: NotificationItem[] =
+    listData?.myNotifications?.items?.slice?.() ?? [];
   const hasAny = items.length > 0;
 
   const headerText = useMemo(() => {
@@ -96,7 +146,12 @@ export default function NotificationBell() {
   };
 
   return (
-    <Dropdown placement="bottom-end" offset={8} isOpen={open} onOpenChange={onOpenChange}>
+    <Dropdown
+      placement="bottom-end"
+      offset={8}
+      isOpen={open}
+      onOpenChange={onOpenChange}
+    >
       <DropdownTrigger>
         <button
           aria-label="Notifikasi"
@@ -146,14 +201,16 @@ export default function NotificationBell() {
             >
               <div className="flex flex-col gap-1">
                 <div className="flex items-start justify-between gap-2">
-                  <p className={`text-sm ${n.isRead ? "font-medium" : "font-semibold"}`}>
+                  <p
+                    className={`text-sm ${n.isRead ? "font-medium" : "font-semibold"}`}
+                  >
                     {n.title}
                   </p>
                   <span className="text-[10px] text-gray-500 whitespace-nowrap">
                     {formatWhen(n.createdAt)}
                   </span>
                 </div>
-                {(n.actorName || n.body) ? (
+                {n.actorName || n.body ? (
                   <p className="text-xs text-gray-600 line-clamp-2">
                     {n.actorName ? `${n.actorName}: ` : ""}
                     {n.body || ""}

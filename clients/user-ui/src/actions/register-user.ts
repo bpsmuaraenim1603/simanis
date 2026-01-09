@@ -39,7 +39,9 @@ export const registerUser = async (userData: any) => {
             password: hashedPassword,
             phone_number: userData.phone_number || "000000000000",
             address: userData.address || "Alamat belum diketahui",
-            role: "User",
+            primaryRole: "User",
+            roles: ["User"],
+            limit_bill: "0",
         },
     });
 

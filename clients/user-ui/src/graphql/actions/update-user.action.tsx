@@ -8,7 +8,8 @@ export const UPDATE_PROFILE = gql`
       email
       phone_number
       address
-      role
+      primaryRole
+      roles
     }
   }
 `;

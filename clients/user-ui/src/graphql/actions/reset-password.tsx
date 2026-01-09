@@ -12,7 +12,8 @@ mutation resetPassword($password: String!, $activationToken: String!) {
             name
             email
             password
-            role
+            primaryRole
+            roles
         }
     }
 }

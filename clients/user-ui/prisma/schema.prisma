@@ -53,6 +53,9 @@ enum NotificationType {
   CONTENT_ISSUE_CREATED
   SUBSURVEY_START_SOON
   SUBSURVEY_END_SOON
+  USER_PROGRESS_ASSIGNED
+  SUPERVISOR_ASSIGNED
+  USER_SAMPLES_ASSIGNED
 }
 
 enum TargetType {
@@ -115,7 +118,8 @@ model User {
   phone_number String
   address      String?
   password     String
-  role         Role     @default(User)
+  primaryRole  Role     @default(User)
+  roles        Role[]   @default([User])
   avatar       Avatar?
   limit_bill   String
   createdAt    DateTime @default(now())
@@ -185,20 +189,20 @@ model UserProgress {
 }
 
 model UserSample {
-  id             String       @id @default(uuid())
-  userProgressId String
-  userProgress   UserProgress @relation(fields: [userProgressId], references: [id], onDelete: Cascade)
-  nus            String
-  identity       String
-  cacahStatus    CacahStatus  @default(Belum_Cacah)
-  approvalStatus AgreeState   @default(Menunggu)
-  geoLat         Float?
-  geoLng         Float?
-  geoCapturedAt  DateTime?
-  photoPath      String?
+  id              String       @id @default(uuid())
+  userProgressId  String
+  userProgress    UserProgress @relation(fields: [userProgressId], references: [id], onDelete: Cascade)
+  nus             String
+  identity        String
+  cacahStatus     CacahStatus  @default(Belum_Cacah)
+  approvalStatus  AgreeState   @default(Menunggu)
+  geoLat          Float?
+  geoLng          Float?
+  geoCapturedAt   DateTime?
+  photoPath       String?
   photoCapturedAt DateTime?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
   @@unique([userProgressId, nus])
 }

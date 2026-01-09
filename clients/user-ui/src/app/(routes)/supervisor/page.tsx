@@ -14,6 +14,7 @@ import { GET_ALL_SURVEY_ACTIVITIES } from "@/src/graphql/actions/find-allsurveya
 import { GET_ALL_SUB_SURVEY_ACTIVITIES } from "@/src/graphql/actions/find-allsubsurveyact.action";
 import { GET_USER_PROGRESS_BY_SUBSURVEY_ID } from "@/src/graphql/actions/find-usersurveyprogress.action";
 import { PATCH_USER_SAMPLES } from "@/src/graphql/actions/patch-usersamples.action";
+import { getRoles } from "@/src/utils/roles";
 
 /* ========= Types (minimal & sesuai query) ========= */
 type SurveyActivity = { id: string; name: string };
@@ -89,16 +90,17 @@ export default function SupervisorManagePage() {
   const apollo = useApolloClient();
   const router = useRouter();
 
-  const ALLOWED = new Set(["Superadmin", "Supervisor", "Admin"]);
+  const ALLOWED = ["Superadmin", "Supervisor", "Admin"];
 
   useEffect(() => {
     if (userLoading) return;
-    const role = currentUser?.role ?? "";
-    if (!ALLOWED.has(role)) {
+    const roles = getRoles(currentUser);
+    const allowed = roles.some((r) => ALLOWED.includes(r));
+    if (!allowed) {
       toast.error("Akses ditolak. Mengarahkan ke Beranda");
       router.replace("/dashboard");
     }
-  }, [userLoading, currentUser?.role, router]);
+  }, [userLoading, currentUser, router]);
 
   const { data: saData, loading: saLoading } = useQuery(
     GET_ALL_SURVEY_ACTIVITIES,
@@ -512,7 +514,13 @@ export default function SupervisorManagePage() {
       </div>
     );
   }
-  if (!currentUser || !ALLOWED.has(currentUser.role ?? "")) {
+
+  if (!currentUser) return null;
+
+  const roles = getRoles(currentUser);
+  const allowed = roles.some((r) => ALLOWED.includes(r));
+
+  if (!allowed) {
     return null;
   }
 

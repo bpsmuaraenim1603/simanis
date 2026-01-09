@@ -38,6 +38,22 @@ import { Public } from './decorators/public.decorator';
 export class UsersResolver {
   constructor(private readonly usersService: UsersService) {}
 
+
+  private getReqRoles(req: any): string[] {
+    const u = req?.user;
+    if (!u) return [];
+    if (Array.isArray(u.roles)) return u.roles.filter(Boolean);
+    if (u.primaryRole) return [u.primaryRole];
+    if (u.role) return [u.role]; // legacy
+    return [];
+  }
+
+  private requireAnyRole(req: any, allowed: string[]) {
+    const roles = this.getReqRoles(req);
+    const ok = allowed.some((r) => roles.includes(r));
+    if (!ok) throw new BadRequestException('Akses ditolak');
+  }
+
   @UseGuards(AuthGuard)
   @Mutation(() => BulkSpjResult)
   async bulkSubmitSpjHonor(
@@ -127,10 +143,7 @@ export class UsersResolver {
   @Query(() => DailySignupCodeResponse)
   @UseGuards(AuthGuard)
   async getDailySignupCode(@Context() context: { req: any }) {
-    const role = context.req.user?.role ?? '';
-    if (role !== 'Superadmin' && role !== 'Keuangan') {
-      throw new BadRequestException('Akses ditolak');
-    }
+    this.requireAnyRole(context.req, ['Superadmin','Keuangan']);
     return this.usersService.getOrCreateDailySignupCode();
   }
 
@@ -138,10 +151,7 @@ export class UsersResolver {
   @Mutation(() => DailySignupCodeResponse)
   @UseGuards(AuthGuard)
   async rotateDailySignupCode(@Context() context: { req: any }) {
-    const role = context.req.user?.role ?? '';
-    if (role !== 'Superadmin') {
-      throw new BadRequestException('Akses ditolak');
-    }
+    this.requireAnyRole(context.req, ['Superadmin']);
     return this.usersService.rotateDailySignupCode();
   }
 
@@ -186,7 +196,10 @@ export class UsersResolver {
   async getActivePetugas(): Promise<UserType[]> {
     return this.usersService.findMany({
       where: {
-        role: 'User',
+        OR: [
+          { roles: { has: 'User' } },
+          { primaryRole: 'User' },
+        ],
       },
     });
   }
@@ -197,7 +210,7 @@ export class UsersResolver {
     @Args('userId') userId: string,
     @Args('updateRole') updateRole: UpdateRoleDto,
   ): Promise<User> {
-    return this.usersService.editUserRole(userId, updateRole);
+    return this.usersService.editUserRoles(userId, updateRole);
   }
 
   @Mutation(() => User)

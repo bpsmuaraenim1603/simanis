@@ -8,6 +8,7 @@ import toast from "react-hot-toast";
 import { useMutation } from "@apollo/client";
 import { LOGIN_USER } from "@/src/graphql/actions/login.action";
 import Cookies from "js-cookie";
+import { hasRole } from "@/src/utils/roles";
 
 const formSchema = z.object({
   email: z.string().email({ message: "Email tidak valid" }),
@@ -59,9 +60,9 @@ const Login = ({ setActiveState }: { setActiveState: (e: string) => void }) => {
 
       toast.success("Login berhasil!");
 
-      if (login.user.role === "User") {
+      if (hasRole(login.user, "User")) {
         window.location.href = "/user";
-      } else if (login.user.role === "Supervisor") {
+      } else if (hasRole(login.user, "Supervisor")) {
         window.location.href = "/supervisor";
       } else {
         window.location.href = "/dashboard";

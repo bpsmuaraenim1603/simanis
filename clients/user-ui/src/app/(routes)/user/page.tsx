@@ -11,6 +11,7 @@ import React, { Fragment, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import exifr from "exifr";
 import dynamic from "next/dynamic";
+import { getRoles } from "@/src/utils/roles";
 
 type ViewMode = "list" | "detail";
 
@@ -20,14 +21,17 @@ export default function UserPage() {
 
   const ALLOWED = new Set(["Superadmin", "User"]);
 
+  const roles = useMemo(() => getRoles(user), [user]);
+  const allowed = useMemo(() => roles.some((r) => ALLOWED.has(r)), [roles]);
+
   useEffect(() => {
     if (loading) return;
-    const role = user?.role ?? "";
-    if (!ALLOWED.has(role)) {
+    if (!user) return;
+    if (!allowed) {
       toast.error("Akses ditolak. Mengarahkan ke Beranda");
       router.replace("/dashboard");
     }
-  }, [loading, user?.role, router]);
+  }, [loading, user, allowed, router]);
 
   const getDistrictId = (up: any) =>
     up?.districtId ??
@@ -348,7 +352,10 @@ export default function UserPage() {
       </div>
     );
   }
-  if (!user || !ALLOWED.has(user.role ?? "")) {
+
+  if (!user) return null;
+
+  if (!allowed) {
     return null;
   }
 

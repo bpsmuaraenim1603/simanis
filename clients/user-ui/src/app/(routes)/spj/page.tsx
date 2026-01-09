@@ -13,6 +13,7 @@ import useUser from "@/src/hooks/useUser";
 import { GET_USER_PROGRESS_BY_SUBSURVEY_ID } from "@/src/graphql/actions/find-usersurveyprogress.action";
 import { DELETE_SUBMIT_SPJ } from "@/src/graphql/actions/delete";
 import HUComboBox from "@/src/components/HUCombobox";
+import { hasAnyRole } from "@/src/utils/roles";
 
 /* ================= Helpers ================= */
 const uid = () =>
@@ -169,9 +170,7 @@ function SPJ() {
     const rows: SPJWithUserNSubSurvey[] = SPJData?.getAllSPJ ?? [];
     return rows.filter((spj) => {
       if (
-        user?.role !== "Admin" &&
-        user?.role !== "Superadmin" &&
-        user?.role !== "Keuangan" &&
+        !hasAnyRole(user, ["Admin", "Superadmin", "Keuangan"]) &&
         spj.userId !== user?.id
       )
         return false;
@@ -293,7 +292,7 @@ function SPJ() {
   };
 
   const canDelete = (spj: SPJWithUserNSubSurvey) =>
-    user?.role === "Admin" || user?.role === "Superadmin";
+    hasAnyRole(user, ["Admin", "Superadmin"]);
 
   const handleDeleteSPJ = async (id: string) => {
     if (!id) return;
@@ -519,7 +518,7 @@ function SPJ() {
         )}
       </div>
       <div className="w-full flex justify-end">
-      {(user?.role === "Admin" || user?.role === "Superadmin") && (
+      {hasAnyRole(user, ["Admin", "Superadmin"]) && (
         <button
           type="button"
           onClick={() => setDeleteMode((v) => !v)}
@@ -578,7 +577,7 @@ function SPJ() {
                 <strong>Catatan:</strong> {selectedSPJ.verifyNote || "-"}
               </p>
 
-              {user?.role === "Keuangan" || user?.role === "Superadmin" ? (
+              {hasAnyRole(user, ["Keuangan", "Superadmin"]) ? (
                 <form
                   onSubmit={handleUpdate}
                   className="space-y-3 pt-4 border-t mt-2"
@@ -664,7 +663,7 @@ function SPJ() {
       )}
 
       {/* ===== MASS INPUT AREA ===== */}
-      {(user?.role === "Admin" || user?.role === "Superadmin") && (
+      {hasAnyRole(user, ["Admin", "Superadmin"]) && (
         <div className="bg-white rounded-lg p-4 shadow space-y-3">
           <div>
             <label className="block text-sm font-semibold mb-1">

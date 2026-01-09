@@ -5,6 +5,7 @@ import AuthScreen from "./AuthScreen";
 import useUser from "../hooks/useUser";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import { hasRole } from "../utils/roles";
 
 function HomeScreen() {
   const { user, loading } = useUser();
@@ -12,12 +13,12 @@ function HomeScreen() {
 
   useEffect(() => {
     if (user) {
-      if (user.role === "User") {
+      if (hasRole(user, "User")) {
         toast.success(
           "Anda sudah login. Mengarahkan langsung ke Halaman Petugas"
         );
         router.replace("/user");
-      } else if (user.role === "Supervisor") {
+      } else if (hasRole(user, "Supervisor")) {
         toast.success(
           "Anda sudah login. Mengarahkan langsung ke Halaman Pengawas"
         );
@@ -40,7 +41,7 @@ function HomeScreen() {
             className="h-10 sm:h-12 w-auto"
           />
           <h1 className="uppercase text-white font-Poppins font-semibold italic leading-tight text-sm sm:text-base lg:text-lg">
-            Badan Pusat Statistik <br className="hidden sm:block" />
+            Badan Pusat Statistik <br />
             Kabupaten Muara Enim
           </h1>
         </div>

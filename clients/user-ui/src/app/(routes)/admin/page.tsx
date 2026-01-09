@@ -33,6 +33,7 @@ import useUser from "@/src/hooks/useUser";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { PATCH_USER_SAMPLES } from "@/src/graphql/actions/patch-usersamples.action";
 import { format } from "path";
+import { getRoles } from "@/src/utils/roles";
 
 /* ====== (type definitions sama persis dengan punyamu) ====== */
 type SurveyActivity = { id: string; name: string; slug: string };
@@ -53,7 +54,8 @@ type User = {
   name: string;
   email: string;
   password: string;
-  role: string;
+  primaryRole?: string;
+  roles?: string[];
   address: string;
   phone_number: string;
   updatedAt: string;
@@ -159,7 +161,7 @@ function SubTabs<T extends string>({
 function Admin() {
   const { user: currentUser, loading: userLoading } = useUser();
   const router = useRouter();
-  const ALLOWED = new Set(["Superadmin", "Admin"]);
+  const ALLOWED = ["Superadmin", "Admin"];
   const formatNUS = (n: number) => String(n).padStart(3, "0");
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -175,12 +177,15 @@ function Admin() {
 
   React.useEffect(() => {
     if (userLoading) return;
-    const role = currentUser?.role ?? "";
-    if (!ALLOWED.has(role)) {
+
+    const roles = getRoles(currentUser);
+    const allowed = roles.some((r) => ALLOWED.includes(r));
+
+    if (!allowed) {
       toast.error("Akses ditolak. Mengarahkan ke Beranda");
       router.replace("/dashboard");
     }
-  }, [userLoading, currentUser?.role, router]);
+  }, [userLoading, currentUser, router]);
 
   type Section = "tim" | "kegiatan" | "petugas";
   type Mode = "add" | "update";
@@ -1188,7 +1193,9 @@ function Admin() {
 
   const supervisors: User[] = useMemo(
     () =>
-      (userData?.getUsers ?? []).filter((u: User) => u.role === "Supervisor"),
+      (userData?.getUsers ?? []).filter((u: any) =>
+        getRoles(u).includes("Supervisor")
+      ),
     [userData]
   );
   const filteredSupervisors = useMemo(
@@ -1196,7 +1203,10 @@ function Admin() {
     [supervisors, qSupervisorDeb]
   );
   const admins: User[] = useMemo(
-    () => (userData?.getUsers ?? []).filter((u: User) => u.role === "Admin"),
+    () =>
+      (userData?.getUsers ?? []).filter((u: any) =>
+        getRoles(u).includes("Admin")
+      ),
     [userData]
   );
   const enumeratorsForAdd: User[] = useMemo(
@@ -1204,7 +1214,7 @@ function Admin() {
       (userData?.getUsers ?? [])
         // .filter((u: User) => u.role !== "Supervisor")
         // .filter((u: User) => u.role !== "Admin")
-        .filter((u: User) => u.role !== "Superadmin"),
+        .filter((u: User) => !getRoles(u).includes("Superadmin")),
     [userData, usedUserIdsForAdd]
   );
   const filteredEnumeratorsForAdd = useMemo(
@@ -1333,7 +1343,12 @@ function Admin() {
     );
   }
 
-  if (!currentUser || !ALLOWED.has(currentUser.role ?? "")) {
+  if (!currentUser) return null;
+
+  const roles = getRoles(currentUser);
+  const allowed = roles.some((r) => ALLOWED.includes(r));
+
+  if (!allowed) {
     return null;
   }
 

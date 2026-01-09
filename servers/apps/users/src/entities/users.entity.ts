@@ -33,15 +33,19 @@ export class User {
   @Field(() => Avatars, { nullable: true })
   avatar?: Avatars | null;
   @Field(() => Role)
-  role: Role;
-  @Field()
+  primaryRole: Role;
+  @Field(() => [Role])
+  roles: Role[];
+@Field()
   limit_bill: string;
   @Field(() => String, { nullable: true })
   address?: string | null;
   @Field({ nullable: true })
   phone_number: string;
+  @Field(() => Date)
   createdAt: Date;
-  @Field()
+
+  @Field(() => Date)
   updatedAt: Date;
 }
 

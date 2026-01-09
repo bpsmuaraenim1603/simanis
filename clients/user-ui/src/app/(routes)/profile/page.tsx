@@ -7,18 +7,19 @@ import { UPDATE_PROFILE } from "@/src/graphql/actions/update-user.action";
 import React, { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import styles from "@/src/utils/style";
+import { getRoles } from "@/src/utils/roles";
 
 function Profile() {
-
   const { user } = useUser();
   const { data } = useSession();
   const [updateProfile, { loading }] = useMutation(UPDATE_PROFILE);
+  const roles = useMemo(() => getRoles(user), [user]);
+  const primaryRole = user?.primaryRole ?? roles[0] ?? user?.role ?? "-";
   const [formState, setFormState] = React.useState({
     name: user?.name || "",
     email: user?.email || "",
     phone_number: user?.phone_number || "",
     address: user?.address || "",
-    role: user?.role || "",
   });
 
   useEffect(() => {
@@ -28,7 +29,6 @@ function Profile() {
         email: user.email || "",
         phone_number: user.phone_number || "",
         address: user.address || "",
-        role: user.role || "",
       });
     }
   }, [user]);
@@ -36,7 +36,7 @@ function Profile() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     try {
-      const input = { ...formState, role: formState.role };
+      const input = { ...formState };
       const { data } = await updateProfile({ variables: { input } });
       console.log("✅ Profil diperbarui:", data);
       toast.success("Profil berhasil diperbarui!");
@@ -81,7 +81,13 @@ function Profile() {
             <strong>Alamat:</strong> {user?.address || "-"}
           </p>
           <p>
-            <strong>Role:</strong> {user?.role || "-"}
+            <strong>Role Utama:</strong> {primaryRole}
+            {roles.length > 1 && (
+              <span className="text-gray-600">
+                {" "}
+                (Roles: {roles.join(", ")})
+              </span>
+            )}
           </p>
         </div>
       </div>

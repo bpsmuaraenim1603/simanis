@@ -15,6 +15,7 @@ import { GET_STAFF_YEARLY_EXPORT } from "@/src/graphql/actions/get-staff-yearly-
 import HUSelect, { HUSelectOption } from "@/src/components/HUSelect";
 import { GET_DAILY_SIGNUP_CODE } from "@/src/graphql/actions/get-daily-signup-code.action";
 import { ROTATE_DAILY_SIGNUP_CODE } from "@/src/graphql/actions/rotate-daily-signup-code.action";
+import { getRoles } from "@/src/utils/roles";
 
 function Tabs<T extends string>({
   tabs,
@@ -55,6 +56,8 @@ const ROLE_OPTIONS = [
   { label: "Petugas", value: "User" },
   { label: "Keuangan", value: "Keuangan" },
 ] as const;
+
+const ALL_ROLES = ["User", "Supervisor", "Admin", "Keuangan", "Superadmin"];
 
 const getRoleLabel = (val?: string | null) =>
   ROLE_OPTIONS.find((r) => r.value === val)?.label ?? val ?? "";
@@ -747,11 +750,16 @@ export default function SuperAdminManagePage() {
   const { user: currentUser, loading: userLoading } = useUser();
   const router = useRouter();
 
+  const [roleDraft, setRoleDraft] = useState<Record<string, string[]>>({});
+  const [primaryDraft, setPrimaryDraft] = useState<Record<string, string>>({});
+
   const ALLOWED = new Set(["Superadmin", "Keuangan"]);
 
-  const canViewSignupCode =
-    !!currentUser && ALLOWED.has(currentUser.role ?? "");
-  const isSuperadmin = currentUser?.role === "Superadmin";
+  const roles = getRoles(currentUser);
+  const isAllowed = roles.some((r) => ALLOWED.has(r));
+  const isSuperadmin = roles.includes("Superadmin");
+
+  const canViewSignupCode = !!currentUser && isAllowed;
 
   const {
     data: dailyCodeData,
@@ -799,16 +807,14 @@ export default function SuperAdminManagePage() {
 
   React.useEffect(() => {
     if (userLoading) return;
-    const role = currentUser?.role ?? "";
 
-    if (!ALLOWED.has(role)) {
+    if (!isAllowed) {
       toast.error("Akses ditolak. Mengarahkan ke Beranda");
       router.replace("/dashboard");
     }
-  }, [userLoading, currentUser?.role, router]);
+  }, [userLoading, isAllowed, router]);
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [pendingRole, setPendingRole] = useState<Record<string, string>>({});
   const [pendingLimit, setPendingLimit] = useState<Record<string, string>>({});
   const [updating, setUpdating] = useState<Record<string, boolean>>({});
   const pathname = usePathname();
@@ -853,15 +859,12 @@ export default function SuperAdminManagePage() {
     const q = searchTerm.trim().toLowerCase();
     if (!q) return users;
     return users.filter((u: any) => {
-      const roleLabel = getRoleLabel(u.role);
+      const roleLabel = (getRoles(u) ?? []).map(getRoleLabel).join(", ");
       return [u.name, u.email, roleLabel]
         .filter(Boolean)
         .some((v: string) => String(v).toLowerCase().includes(q));
     });
   }, [users, searchTerm]);
-
-  const handleRoleChange = (id: string, val: string) =>
-    setPendingRole((p) => ({ ...p, [id]: val }));
 
   const handleLimitChange = (id: string, val: string) => {
     const clean = digitsOnly(val);
@@ -869,27 +872,69 @@ export default function SuperAdminManagePage() {
   };
 
   const handleReset = (id: string) => {
-    setPendingRole((p) => {
+    setPendingLimit((p) => {
+      const { [id]: __, ...rest } = p;
+      return rest;
+    });
+
+    // reset drafts (multi-role)
+    setRoleDraft((p) => {
       const { [id]: _, ...rest } = p;
       return rest;
     });
-    setPendingLimit((p) => {
-      const { [id]: __, ...rest } = p;
+    setPrimaryDraft((p) => {
+      const { [id]: _, ...rest } = p;
       return rest;
     });
   };
 
   const handleSave = useCallback(
     async (user: any) => {
-      const newRole = pendingRole[user.id];
       const newLimitStr = pendingLimit[user.id];
       const currentLimit = Number(user.limit_bill ?? user.limitBill ?? 0);
+
       const newLimitNum =
         typeof newLimitStr === "string" && newLimitStr.length > 0
           ? toInt(newLimitStr)
           : null;
 
-      const dirtyRole = !!newRole && newRole !== user.role;
+      // ===== role (multi) =====
+      const currentRolesRaw: string[] = Array.isArray(user.roles)
+        ? user.roles
+        : user.primaryRole
+          ? [user.primaryRole]
+          : user.role
+            ? [user.role]
+            : [];
+
+      const draftRolesRaw: string[] =
+        roleDraft[user.id] ??
+        (Array.isArray(user.roles)
+          ? user.roles
+          : user.primaryRole
+            ? [user.primaryRole]
+            : user.role
+              ? [user.role]
+              : []);
+
+      const currentPrimary = user.primaryRole ?? currentRolesRaw[0] ?? "User";
+      const draftPrimary =
+        typeof primaryDraft[user.id] === "string"
+          ? primaryDraft[user.id]
+          : currentPrimary;
+
+      const normalize = (arr: string[]) =>
+        Array.from(new Set((arr ?? []).filter(Boolean))).sort();
+
+      const currentRoles = normalize(currentRolesRaw);
+      const draftRoles = normalize(
+        draftRolesRaw.length ? draftRolesRaw : ["User"]
+      );
+
+      const dirtyRole =
+        JSON.stringify(draftRoles) !== JSON.stringify(currentRoles) ||
+        String(draftPrimary ?? "") !== String(currentPrimary ?? "");
+
       const dirtyLimit =
         newLimitNum !== null &&
         Number.isFinite(newLimitNum) &&
@@ -907,16 +952,27 @@ export default function SuperAdminManagePage() {
           await updateRole({
             variables: {
               userId: user.id,
-              updateRole: { name: user.name, role: newRole },
+              updateRole: {
+                roles: draftRoles,
+                primaryRole: draftPrimary,
+              },
             },
           });
+
           okRole = true;
-          setPendingRole((p) => {
+
+          // clear drafts after save
+          setRoleDraft((p) => {
+            const { [user.id]: _, ...rest } = p;
+            return rest;
+          });
+          setPrimaryDraft((p) => {
             const { [user.id]: _, ...rest } = p;
             return rest;
           });
         } catch (e) {
           console.error("Update role gagal:", e);
+          toast.error("Gagal memperbarui role. Silakan coba lagi.");
         }
       }
 
@@ -951,7 +1007,14 @@ export default function SuperAdminManagePage() {
       else if (!okRole && okLimit) toast.success("Limit berhasil diperbarui.");
       else toast.error("Gagal menyimpan perubahan.");
     },
-    [pendingRole, pendingLimit, updateRole, updateBillLimit, refetch]
+    [
+      pendingLimit,
+      roleDraft,
+      primaryDraft,
+      updateRole,
+      updateBillLimit,
+      refetch,
+    ]
   );
 
   const openHonorModal = async (user: any) => {
@@ -1034,7 +1097,8 @@ export default function SuperAdminManagePage() {
       </div>
     );
   }
-  if (!currentUser || !ALLOWED.has(currentUser.role ?? "")) {
+
+  if (!currentUser || !isAllowed) {
     return null;
   }
 
@@ -1161,13 +1225,54 @@ export default function SuperAdminManagePage() {
                         const baseLimit = Number(
                           user.limit_bill ?? user.limitBill ?? 0
                         );
-                        const rolePending = pendingRole[user.id];
                         const limitPending = pendingLimit[user.id];
-                        const effectiveRole = rolePending ?? user.role;
                         const effectiveLimit =
                           limitPending ?? String(baseLimit);
+
+                        const currentRolesRaw: string[] = Array.isArray(
+                          user.roles
+                        )
+                          ? user.roles
+                          : user.primaryRole
+                            ? [user.primaryRole]
+                            : user.role
+                              ? [user.role]
+                              : [];
+
+                        const draftRolesRaw: string[] =
+                          roleDraft[user.id] ??
+                          (Array.isArray(user.roles)
+                            ? user.roles
+                            : user.primaryRole
+                              ? [user.primaryRole]
+                              : user.role
+                                ? [user.role]
+                                : []);
+
+                        const normalize = (arr: string[]) =>
+                          Array.from(
+                            new Set((arr ?? []).filter(Boolean))
+                          ).sort();
+
+                        const currentRoles = normalize(currentRolesRaw);
+                        const draftRoles = normalize(
+                          draftRolesRaw.length ? draftRolesRaw : ["User"]
+                        );
+
+                        const currentPrimary =
+                          user.primaryRole ?? currentRolesRaw[0] ?? "User";
+                        const draftPrimary =
+                          typeof primaryDraft[user.id] === "string" &&
+                          primaryDraft[user.id].length > 0
+                            ? primaryDraft[user.id]
+                            : currentPrimary;
+
                         const dirtyRole =
-                          !!rolePending && rolePending !== user.role;
+                          JSON.stringify(draftRoles) !==
+                            JSON.stringify(currentRoles) ||
+                          String(draftPrimary ?? "") !==
+                            String(currentPrimary ?? "");
+
                         const dirtyLimit =
                           !!limitPending && Number(limitPending) !== baseLimit;
                         const isSaving = !!updating[user.id];
@@ -1185,22 +1290,99 @@ export default function SuperAdminManagePage() {
                               {user.email}
                             </td>
 
-                            {/* ROLE */}
+                            {/* ROLE (multi) */}
                             <td className="px-4 md:px-6 py-3 align-middle">
-                              <select
-                                value={effectiveRole}
-                                onChange={(e) =>
-                                  handleRoleChange(user.id, e.target.value)
-                                }
-                                disabled={currentUser?.role !== "Superadmin"}
-                                className={`border px-3 py-2 text-sm rounded-md bg-white ${currentUser?.role !== "Superadmin" ? "cursor-default" : "cursor-pointer"} focus:outline-none`}
-                              >
-                                {ROLE_OPTIONS.map((o) => (
-                                  <option key={o.value} value={o.value}>
-                                    {o.label}
-                                  </option>
-                                ))}
-                              </select>
+                              {(() => {
+                                const baseRoles: string[] =
+                                  roleDraft[user.id] ??
+                                  (Array.isArray(user.roles)
+                                    ? user.roles
+                                    : user.primaryRole
+                                      ? [user.primaryRole]
+                                      : user.role
+                                        ? [user.role]
+                                        : []);
+
+                                const basePrimary =
+                                  primaryDraft[user.id] ??
+                                  user.primaryRole ??
+                                  baseRoles[0] ??
+                                  "User";
+
+                                const toggleRole = (r: string) => {
+                                  if (!isSuperadmin) return;
+
+                                  const next = baseRoles.includes(r)
+                                    ? baseRoles.filter((x) => x !== r)
+                                    : [...baseRoles, r];
+
+                                  // minimal 1 role biar aman
+                                  const safeNext = next.length
+                                    ? next
+                                    : ["User"];
+
+                                  setRoleDraft((p) => ({
+                                    ...p,
+                                    [user.id]: safeNext,
+                                  }));
+
+                                  // kalau primaryRole kehapus, set ke role pertama
+                                  if (!safeNext.includes(basePrimary)) {
+                                    setPrimaryDraft((p) => ({
+                                      ...p,
+                                      [user.id]: safeNext[0],
+                                    }));
+                                  }
+                                };
+
+                                return (
+                                  <div className="space-y-2">
+                                    {/* daftar roles */}
+                                    <div className="grid grid-cols-2 gap-2">
+                                      {ALL_ROLES.map((r) => (
+                                        <label
+                                          key={r}
+                                          className={`flex items-center gap-2 text-sm ${
+                                            !isSuperadmin ? "opacity-60" : ""
+                                          }`}
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={baseRoles.includes(r)}
+                                            onChange={() => toggleRole(r)}
+                                            disabled={!isSuperadmin}
+                                          />
+                                          <span>{getRoleLabel(r)}</span>
+                                        </label>
+                                      ))}
+                                    </div>
+
+                                    {/* primaryRole */}
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs text-gray-500">
+                                        Primary:
+                                      </span>
+                                      <select
+                                        value={basePrimary}
+                                        disabled={!isSuperadmin}
+                                        onChange={(e) =>
+                                          setPrimaryDraft((p) => ({
+                                            ...p,
+                                            [user.id]: e.target.value,
+                                          }))
+                                        }
+                                        className="border px-2 py-1 text-xs rounded-md bg-white focus:outline-none"
+                                      >
+                                        {baseRoles.map((r) => (
+                                          <option key={r} value={r}>
+                                            {getRoleLabel(r)}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
                             </td>
 
                             {/* LIMIT BILL */}
