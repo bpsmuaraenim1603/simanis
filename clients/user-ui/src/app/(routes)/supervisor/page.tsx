@@ -89,18 +89,22 @@ export default function SupervisorManagePage() {
   const { user: currentUser, loading: userLoading } = useUser();
   const apollo = useApolloClient();
   const router = useRouter();
-
   const ALLOWED = ["Superadmin", "Supervisor", "Admin"];
+  const roles = useMemo(() => getRoles(currentUser), [currentUser]);
+  const allowed = useMemo(
+    () => roles.some((r) => ALLOWED.includes(r)),
+    [roles]
+  );
+  const isSuperadmin = useMemo(() => roles.includes("Superadmin"), [roles]);
 
   useEffect(() => {
     if (userLoading) return;
-    const roles = getRoles(currentUser);
-    const allowed = roles.some((r) => ALLOWED.includes(r));
+    if (!currentUser) return;
     if (!allowed) {
       toast.error("Akses ditolak. Mengarahkan ke Beranda");
       router.replace("/dashboard");
     }
-  }, [userLoading, currentUser, router]);
+  }, [userLoading, currentUser, allowed, router]);
 
   const { data: saData, loading: saLoading } = useQuery(
     GET_ALL_SURVEY_ACTIVITIES,
@@ -191,9 +195,9 @@ export default function SupervisorManagePage() {
     );
     if (!svFieldExist) return rows;
 
-    if (currentUser?.role === "Superadmin") return rows;
+    if (isSuperadmin) return rows;
     return rows.filter((r) => (r.superVisorId ?? "") === supervisorId);
-  }, [allUPRows, subSurveyActivityId, supervisorId, currentUser?.role]);
+  }, [allUPRows, subSurveyActivityId, supervisorId, isSuperadmin]);
 
   const selectedSub = useMemo(
     () => allSubActivities.find((s) => s.id === subSurveyActivityId),
@@ -239,7 +243,7 @@ export default function SupervisorManagePage() {
       isTodayInRange(s.startDate, s.endDate)
     );
 
-    if (currentUser?.role === "Superadmin") {
+    if (isSuperadmin) {
       return inSchedule.sort((a, b) => {
         const aStart = a?.startDate ? new Date(a.startDate).getTime() : 0;
         const bStart = b?.startDate ? new Date(b.startDate).getTime() : 0;
@@ -256,7 +260,7 @@ export default function SupervisorManagePage() {
       const bStart = b?.startDate ? new Date(b.startDate).getTime() : 0;
       return bStart - aStart;
     });
-  }, [allSubActivities, assignedSubIds, currentUser?.role]);
+  }, [allSubActivities, assignedSubIds, isSuperadmin]);
 
   function readStateFromUrl() {
     if (typeof window === "undefined") {
@@ -436,7 +440,7 @@ export default function SupervisorManagePage() {
         return;
       }
 
-      if (currentUser.role === "Superadmin") {
+      if (isSuperadmin) {
         setAssignedSubIds(new Set(allSubActivities.map((s) => s.id)));
         return;
       }
@@ -471,7 +475,7 @@ export default function SupervisorManagePage() {
     }
 
     prefetchAssignedActivities();
-  }, [apollo, allSubActivities, currentUser?.id, currentUser?.role]);
+  }, [apollo, allSubActivities, currentUser?.id, isSuperadmin]);
 
   useEffect(() => {
     function handlePopState() {
@@ -516,9 +520,6 @@ export default function SupervisorManagePage() {
   }
 
   if (!currentUser) return null;
-
-  const roles = getRoles(currentUser);
-  const allowed = roles.some((r) => ALLOWED.includes(r));
 
   if (!allowed) {
     return null;
