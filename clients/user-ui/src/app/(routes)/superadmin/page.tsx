@@ -957,6 +957,7 @@ export default function SuperAdminManagePage() {
             variables: {
               userId: user.id,
               updateRole: {
+                name: user.name,
                 roles: draftRoles,
                 primaryRole: draftPrimary,
               },
