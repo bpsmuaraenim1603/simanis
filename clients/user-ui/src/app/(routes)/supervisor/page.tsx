@@ -651,7 +651,7 @@ export default function SupervisorManagePage() {
                     </span>
                   </div>
 
-                  <div className="grid sm:grid-cols-[30%_1fr] grid-cols-[40%_1fr] grid-rows-3 mt-2 text-xs text-gray-700 space-y-0.5">
+                  <div className="grid sm:grid-cols-[auto_1fr] grid-cols-[40%_1fr] grid-rows-3 mt-2 text-xs text-gray-700 space-y-0.5">
                     Kabupaten/Kota
                     <span className="font-medium">
                       : {r.district?.city ?? "-"}
@@ -733,7 +733,7 @@ export default function SupervisorManagePage() {
                 </span>
               </div>
 
-              <div className="text-sm w-full grid sm:grid-cols-[10%_1fr] grid-cols-[35%_1fr] grid-rows-6 text-gray-700 mt-2">
+              <div className="text-sm w-full grid sm:grid-cols-[auto_1fr] grid-cols-[35%_1fr] grid-rows-6 text-gray-700 mt-2">
                 Kegiatan{" "}
                 <span className="font-medium">
                   : {selectedSub?.name ?? "-"}

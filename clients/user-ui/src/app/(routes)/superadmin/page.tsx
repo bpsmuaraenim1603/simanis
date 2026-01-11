@@ -92,7 +92,11 @@ function IconButton({
       className={`group relative inline-flex h-9 w-9 items-center justify-center rounded-md border
                   text-white shadow-sm transition
                   focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-0
-                  ${disabled ? "cursor-not-allowed opacity-50" : "hover:brightness-110"}
+                  ${
+                    disabled
+                      ? "cursor-not-allowed opacity-50"
+                      : "hover:brightness-110"
+                  }
                   ${className}`}
     >
       {children}
@@ -902,20 +906,20 @@ export default function SuperAdminManagePage() {
       const currentRolesRaw: string[] = Array.isArray(user.roles)
         ? user.roles
         : user.primaryRole
-          ? [user.primaryRole]
-          : user.role
-            ? [user.role]
-            : [];
+        ? [user.primaryRole]
+        : user.role
+        ? [user.role]
+        : [];
 
       const draftRolesRaw: string[] =
         roleDraft[user.id] ??
         (Array.isArray(user.roles)
           ? user.roles
           : user.primaryRole
-            ? [user.primaryRole]
-            : user.role
-              ? [user.role]
-              : []);
+          ? [user.primaryRole]
+          : user.role
+          ? [user.role]
+          : []);
 
       const currentPrimary = user.primaryRole ?? currentRolesRaw[0] ?? "User";
       const draftPrimary =
@@ -1116,7 +1120,7 @@ export default function SuperAdminManagePage() {
                   {dailySignupDate ? `(${dailySignupDate})` : ""}
                 </span> */}
                 <span className="font-mono font-semibold tracking-widest">
-                  {dailyCodeLoading ? "MEMUAT…" : (dailySignupCode ?? "-")}
+                  {dailyCodeLoading ? "MEMUAT…" : dailySignupCode ?? "-"}
                 </span>
               </span>
               <button
@@ -1234,20 +1238,20 @@ export default function SuperAdminManagePage() {
                         )
                           ? user.roles
                           : user.primaryRole
-                            ? [user.primaryRole]
-                            : user.role
-                              ? [user.role]
-                              : [];
+                          ? [user.primaryRole]
+                          : user.role
+                          ? [user.role]
+                          : [];
 
                         const draftRolesRaw: string[] =
                           roleDraft[user.id] ??
                           (Array.isArray(user.roles)
                             ? user.roles
                             : user.primaryRole
-                              ? [user.primaryRole]
-                              : user.role
-                                ? [user.role]
-                                : []);
+                            ? [user.primaryRole]
+                            : user.role
+                            ? [user.role]
+                            : []);
 
                         const normalize = (arr: string[]) =>
                           Array.from(
@@ -1298,10 +1302,10 @@ export default function SuperAdminManagePage() {
                                   (Array.isArray(user.roles)
                                     ? user.roles
                                     : user.primaryRole
-                                      ? [user.primaryRole]
-                                      : user.role
-                                        ? [user.role]
-                                        : []);
+                                    ? [user.primaryRole]
+                                    : user.role
+                                    ? [user.role]
+                                    : []);
 
                                 const basePrimary =
                                   primaryDraft[user.id] ??
@@ -1337,48 +1341,79 @@ export default function SuperAdminManagePage() {
 
                                 return (
                                   <div className="space-y-2">
-                                    {/* daftar roles */}
-                                    <div className="grid grid-cols-2 gap-2">
-                                      {ALL_ROLES.map((r) => (
-                                        <label
-                                          key={r}
-                                          className={`flex items-center gap-2 text-sm ${
-                                            !isSuperadmin ? "opacity-60" : ""
-                                          }`}
-                                        >
-                                          <input
-                                            type="checkbox"
-                                            checked={baseRoles.includes(r)}
-                                            onChange={() => toggleRole(r)}
-                                            disabled={!isSuperadmin}
-                                          />
-                                          <span>{getRoleLabel(r)}</span>
-                                        </label>
-                                      ))}
+                                    <div className="flex flex-wrap gap-2">
+                                      {ALL_ROLES.map((r) => {
+                                        const active = baseRoles.includes(r);
+                                        const primary = basePrimary === r;
+
+                                        return (
+                                          <div
+                                            key={r}
+                                            className="flex items-center gap-1"
+                                          >
+                                            <button
+                                              type="button"
+                                              disabled={!isSuperadmin}
+                                              onClick={() => toggleRole(r)}
+                                              className={[
+                                                "px-3 py-1.5 rounded-full border text-xs font-semibold transition",
+                                                active
+                                                  ? "bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100"
+                                                  : "bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100",
+                                                !isSuperadmin
+                                                  ? "opacity-60 cursor-not-allowed"
+                                                  : "",
+                                              ].join(" ")}
+                                              title={
+                                                active
+                                                  ? "Klik untuk nonaktifkan role"
+                                                  : "Klik untuk aktifkan role"
+                                              }
+                                            >
+                                              {getRoleLabel(r)}
+                                            </button>
+
+                                            {active && (
+                                              <button
+                                                type="button"
+                                                disabled={!isSuperadmin}
+                                                onClick={() =>
+                                                  setPrimaryDraft((p) => ({
+                                                    ...p,
+                                                    [user.id]: r,
+                                                  }))
+                                                }
+                                                className={[
+                                                  "h-7 w-7 inline-flex items-center justify-center rounded-full border text-xs transition",
+                                                  primary
+                                                    ? "bg-yellow-50 border-yellow-300 text-yellow-600"
+                                                    : "bg-white border-gray-200 text-gray-400 hover:text-gray-600",
+                                                  !isSuperadmin
+                                                    ? "opacity-60 cursor-not-allowed"
+                                                    : "",
+                                                ].join(" ")}
+                                                title={
+                                                  primary
+                                                    ? "Primary role"
+                                                    : "Jadikan primary"
+                                                }
+                                                aria-label={
+                                                  primary
+                                                    ? "Primary role"
+                                                    : "Jadikan primary"
+                                                }
+                                              >
+                                                {primary ? "⭐" : "☆"}
+                                              </button>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
                                     </div>
 
-                                    {/* primaryRole */}
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-xs text-gray-500">
-                                        Primary:
-                                      </span>
-                                      <select
-                                        value={basePrimary}
-                                        disabled={!isSuperadmin}
-                                        onChange={(e) =>
-                                          setPrimaryDraft((p) => ({
-                                            ...p,
-                                            [user.id]: e.target.value,
-                                          }))
-                                        }
-                                        className="border px-2 py-1 text-xs rounded-md bg-white focus:outline-none"
-                                      >
-                                        {baseRoles.map((r) => (
-                                          <option key={r} value={r}>
-                                            {getRoleLabel(r)}
-                                          </option>
-                                        ))}
-                                      </select>
+                                    <div className="text-[11px] text-gray-500">
+                                      Klik role untuk aktif/nonaktif. Klik ⭐
+                                      untuk menjadikan primary.
                                     </div>
                                   </div>
                                 );
@@ -1446,7 +1481,11 @@ export default function SuperAdminManagePage() {
                                   label={isSaving ? "Menyimpan…" : "Simpan"}
                                   onClick={() => handleSave(user)}
                                   disabled={!dirty || isSaving}
-                                  className={`border-blue-700 bg-blue-700 ${!dirty || isSaving ? "" : "hover:bg-blue-600"}`}
+                                  className={`border-blue-700 bg-blue-700 ${
+                                    !dirty || isSaving
+                                      ? ""
+                                      : "hover:bg-blue-600"
+                                  }`}
                                 >
                                   {/* ikon check/save */}
                                   <svg
@@ -1470,7 +1509,9 @@ export default function SuperAdminManagePage() {
                                   label="Reset"
                                   onClick={() => handleReset(user.id)}
                                   disabled={!dirty || isSaving}
-                                  className={`border-red-700 bg-red-700 ${!dirty || isSaving ? "" : "hover:bg-red-600"}`}
+                                  className={`border-red-700 bg-red-700 ${
+                                    !dirty || isSaving ? "" : "hover:bg-red-600"
+                                  }`}
                                 >
                                   {/* ikon refresh/rotate */}
                                   <svg

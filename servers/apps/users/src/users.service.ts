@@ -430,11 +430,7 @@ export class UsersService {
     }
     return this.prisma.user.update({
       where: { id: userId },
-      data: {
-        name: dto.name,
-        primaryRole: dto.primaryRole,
-        roles: dto.roles,
-      },
+      data,
     });
   }
 

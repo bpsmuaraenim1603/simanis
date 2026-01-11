@@ -934,7 +934,7 @@ export default function UserPage() {
                           </span>
                         </div>
 
-                        <div className="grid grid-cols-[35%,auto] gap-2 my-2 text-xs">
+                        <div className="grid grid-cols-[auto,auto] gap-2 my-2 text-xs">
                           Jadwal<span className="font-medium">: {range}</span>
                           Kabupaten/Kota
                           <span className="font-medium">
@@ -1012,7 +1012,7 @@ export default function UserPage() {
                             <div className="font-semibold">Blok {block}</div>
                           </div>
 
-                          <div className="grid grid-cols-[35%,auto] gap-2 my-2 text-xs">
+                          <div className="grid grid-cols-[auto,auto] gap-2 my-2 text-xs">
                             Kab/Kota
                             <span className="font-medium">
                               : {row?.district?.city ?? "-"}
