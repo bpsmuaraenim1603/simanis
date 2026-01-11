@@ -152,7 +152,7 @@ export class UpdateUserDto {
 
 @InputType()
 export class UpdateRoleDto {
-  @Field({ nullable: false })
+  @Field({ nullable: true })
   name?: string;
 
   @Field(() => Role, { nullable: true })

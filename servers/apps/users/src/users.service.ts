@@ -420,6 +420,8 @@ export class UsersService {
     if (dto.primaryRole) {
       data.primaryRole = dto.primaryRole;
     }
+    
+    if (dto.name !== undefined) data.name = dto.name;
 
     if (dto.roles) {
       data.roles = dto.roles;
