@@ -35,7 +35,7 @@ import { AuthGuard } from './guards/auth.guard';
     }),
     EmailModule,
     CacheModule.register({
-      ttl: 0,
+      ttl: 60,
       isGlobal: true,
     }),
     ThrottlerModule.forRoot({
