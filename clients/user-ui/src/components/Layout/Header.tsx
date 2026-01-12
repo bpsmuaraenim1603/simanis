@@ -2,7 +2,6 @@
 import { useEffect, useRef, useState } from "react";
 import ProfileDropDown from "../ProfileDropDown";
 import { SideBar } from "./SideBar";
-import Calendar from "./Calendar";
 import useUser from "@/src/hooks/useUser";
 import { AlignJustify } from "lucide-react";
 import NotificationBell from "../NotifcationBell";
@@ -66,7 +65,6 @@ export const Header = () => {
           <div className="flex items-center gap-2 lg:gap-3 ml-auto">
             <NotificationBell />
             <ProfileDropDown />
-            {hasAnyRole(user, ["Admin", "Superadmin"]) && <Calendar />}
           </div>
         </div>
       </header>
