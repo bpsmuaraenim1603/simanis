@@ -5,7 +5,6 @@ import {
   DropdownMenu,
   DropdownTrigger,
 } from "@heroui/react";
-import { Avatar } from "@heroui/avatar";
 import { useEffect, useMemo, useState } from "react";
 import useUser from "../hooks/useUser";
 import toast from "react-hot-toast";
@@ -13,7 +12,12 @@ import Cookies from "js-cookie";
 import { signOut, useSession } from "next-auth/react";
 
 const initialsFrom = (name?: string) =>
-  name?.split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase() ?? "U";
+  name
+    ?.split(" ")
+    .map((s) => s[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase() ?? "U";
 
 const ProfileDropDown = () => {
   const [signedIn, setSignedIn] = useState(false);
@@ -23,7 +27,10 @@ const ProfileDropDown = () => {
 
   const displayUser = data?.user ?? user;
   const avatarSrc = displayUser?.image || undefined;
-  const avatarInitials = useMemo(() => initialsFrom(displayUser?.name), [displayUser?.name]);
+  const avatarInitials = useMemo(
+    () => initialsFrom(displayUser?.name),
+    [displayUser?.name]
+  );
 
   useEffect(() => {
     if (!loading) setSignedIn(!!user || !!data?.user);
@@ -63,19 +70,22 @@ const ProfileDropDown = () => {
 
   return (
     <div className="flex items-center">
-      <Dropdown placement="bottom-end" offset={8} isOpen={open} onOpenChange={setOpen}>
+      <Dropdown
+        placement="bottom-end"
+        offset={8}
+        isOpen={open}
+        onOpenChange={setOpen}
+      >
         <DropdownTrigger>
           <button
             aria-label="Buka menu profil"
             title="Profil"
             className="inline-flex items-center justify-center rounded-full focus:outline-none focus:ring-2 focus:ring-white/70"
           >
-            <Avatar
-              as="div"
-              className="transition-transform text-white w-9 h-9 sm:w-10 sm:h-10"
-              src={avatarSrc}
-              name={avatarInitials}
-              radius="full"
+            <img
+              src={user?.image ?? "/avatar.png"}
+              alt="avatar"
+              className="h-8 w-8 rounded-full object-cover"
             />
           </button>
         </DropdownTrigger>
