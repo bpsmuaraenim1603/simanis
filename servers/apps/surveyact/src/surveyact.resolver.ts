@@ -53,6 +53,7 @@ import {
 import { UserType } from 'apps/users/src/types/users.types';
 import { FileUpload, GraphQLUpload } from 'graphql-upload-ts';
 import { DeleteByIdInput, DeleteResult } from './dto/delete.input';
+import { BulkUserProgressResult } from './dto/bulk-userprogress.dto';
 
 @Resolver(() => SurveyActivityType)
 export class SurveyActivityResolver {
@@ -116,7 +117,10 @@ export class SurveyActivityResolver {
   }
 
   @Mutation(() => UserProgressType)
-  async createUserSurveyProgress(@Args('input') input: CreateUserProgressDTO, @Context() ctx: any) {
+  async createUserSurveyProgress(
+    @Args('input') input: CreateUserProgressDTO,
+    @Context() ctx: any,
+  ) {
     const actorId = ctx?.req?.user?.id;
     return this.service.createUserSurveyProgress(input, actorId);
   }
@@ -180,13 +184,19 @@ export class SurveyActivityResolver {
   }
 
   @Mutation(() => UserProgressType)
-  async updateUserSurveyProgress(@Args('input') input: UpdateUserProgressDTO, @Context() ctx: any) {
+  async updateUserSurveyProgress(
+    @Args('input') input: UpdateUserProgressDTO,
+    @Context() ctx: any,
+  ) {
     const actorId = ctx?.req?.user?.id;
     return this.service.updateUserProgress(input, actorId);
   }
 
   @Mutation(() => UserProgressType)
-  patchUserSamples(@Args('input') input: PatchUserSamplesDTO, @Context() ctx: any) {
+  patchUserSamples(
+    @Args('input') input: PatchUserSamplesDTO,
+    @Context() ctx: any,
+  ) {
     const actorId = ctx?.req?.user?.id;
     return this.service.patchUserSamples(input, actorId);
   }
@@ -373,6 +383,34 @@ export class SurveyActivityResolver {
     @Args('input') input: DeleteByIdInput,
   ): Promise<DeleteResult> {
     return this.service.deleteSubmitSPJ(input);
+  }
+
+  @Mutation(() => BulkUserProgressResult)
+  async bulkImportUserProgressExcel(
+    @Args({ name: 'file', type: () => GraphQLUpload }) file: FileUpload,
+  ): Promise<BulkUserProgressResult> {
+    const chunks: Buffer[] = [];
+    const stream = file.createReadStream();
+
+    await new Promise<void>((resolve, reject) => {
+      stream.on('data', (d) =>
+        chunks.push(Buffer.isBuffer(d) ? d : Buffer.from(d)),
+      );
+      stream.on('end', () => resolve());
+      stream.on('error', reject);
+    });
+
+    const buffer = Buffer.concat(chunks);
+
+    const res = await this.service.bulkImportUserProgressFromFile(buffer);
+
+    return {
+      insertedPetugas: res.insertedPetugas,
+      updatedPetugas: res.updatedPetugas,
+      insertedPengawas: res.insertedPengawas,
+      updatedPengawas: res.updatedPengawas,
+      errors: res.errors,
+    };
   }
 }
 

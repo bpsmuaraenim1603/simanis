@@ -44,6 +44,7 @@ import { randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { DeleteByIdInput } from './dto/delete.input';
 import { StorageService } from './storage.service';
+import * as XLSX from 'xlsx';
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -128,7 +129,7 @@ export class SurveyActivityService {
         body: input.body ?? null,
         metadata: input.dedupKey
           ? { ...(input.metadata ?? {}), dedupKey: input.dedupKey }
-          : input.metadata ?? undefined,
+          : (input.metadata ?? undefined),
         channel: Channel.IN_APP,
       },
     });
@@ -207,6 +208,42 @@ export class SurveyActivityService {
     });
   }
 
+  private async ensureSupervisorProgress(params: {
+    subSurveyActivityId?: string | null;
+    superVisorId?: string | null;
+  }) {
+    const subSurveyActivityId = params.subSurveyActivityId ?? null;
+    const superVisorId = params.superVisorId ?? null;
+    if (!subSurveyActivityId || !superVisorId) return;
+
+    const exists = await this.prisma.userProgress.findFirst({
+      where: {
+        userId: superVisorId,
+        subSurveyActivityId,
+        progressRole: 'PENGAWAS',
+      },
+      select: { id: true },
+    });
+    if (exists) return;
+
+    await this.prisma.userProgress.create({
+      data: {
+        userId: superVisorId,
+        subSurveyActivityId,
+        progressRole: 'PENGAWAS',
+        totalAssigned: 0,
+        submitCount: 0,
+        approvedCount: 0,
+        rejectedCount: 0,
+        blockCount: null,
+        districtId: null,
+        villageName: null,
+        travelBill: '0',
+        superVisorId: null,
+      },
+    });
+  }
+
   async createUserSurveyProgress(
     input: CreateUserProgressDTO,
     actorId?: string,
@@ -242,10 +279,16 @@ export class SurveyActivityService {
               create: samples,
             }
           : undefined,
+        progressRole: 'PETUGAS',
       },
       include: {
         samples: true,
       },
+    });
+
+    await this.ensureSupervisorProgress({
+      superVisorId: created.superVisorId,
+      subSurveyActivityId: created.subSurveyActivityId,
     });
 
     const [sub, user, supervisor] = await Promise.all([
@@ -290,7 +333,10 @@ export class SurveyActivityService {
         body: sub?.name
           ? `Kamu ditugaskan menjadi pengawas untuk ${user?.name ?? 'petugas'} di "${sub.name}".`
           : `Kamu ditugaskan menjadi pengawas untuk ${user?.name ?? 'petugas'}.`,
-        metadata: { petugasId: created.userId, subSurveyActivityId: created.subSurveyActivityId },
+        metadata: {
+          petugasId: created.userId,
+          subSurveyActivityId: created.subSurveyActivityId,
+        },
       });
     }
 
@@ -303,7 +349,10 @@ export class SurveyActivityService {
         targetId: created.id,
         title: 'Sampel ditambahkan',
         body: `Ada ${created.samples.length} sampel baru untuk kamu kerjakan.`,
-        metadata: { count: created.samples.length, subSurveyActivityId: created.subSurveyActivityId},
+        metadata: {
+          count: created.samples.length,
+          subSurveyActivityId: created.subSurveyActivityId,
+        },
       });
     }
 
@@ -1611,6 +1660,174 @@ export class SurveyActivityService {
     return {
       success: true,
       message: 'Pengajuan Honor dan file sudah terhapus.',
+    };
+  }
+
+  async bulkImportUserProgressFromFile(fileBuffer: Buffer): Promise<{
+    insertedPetugas: number;
+    updatedPetugas: number;
+    insertedPengawas: number;
+    updatedPengawas: number;
+    errors: { rowIndex: number; message: string }[];
+  }> {
+    const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
+
+    // Prioritas sheet UPLOAD_USERPROGRESS, kalau tidak ada pakai sheet pertama
+    const sheetName =
+      workbook.SheetNames.find((n) => n === 'UPLOAD_USERPROGRESS') ??
+      workbook.SheetNames[0];
+
+    const sheet = workbook.Sheets[sheetName];
+    const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+    let insertedPetugas = 0;
+    let updatedPetugas = 0;
+    let insertedPengawas = 0;
+    let updatedPengawas = 0;
+    const errors: { rowIndex: number; message: string }[] = [];
+
+    await this.prisma.$transaction(async (tx) => {
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
+        const rowIndex = i + 2; // karena header baris 1
+
+        try {
+          const subSurveyActivityId = String(
+            r.subSurveyActivityId || '',
+          ).trim();
+          const userId = String(r.userId || '').trim();
+          const superVisorId = String(r.superVisorId || '').trim() || null;
+
+          if (!subSurveyActivityId)
+            throw new Error('subSurveyActivityId wajib.');
+          if (!userId) throw new Error('userId (petugas) wajib.');
+
+          // Validasi subsurvey exist
+          const subs = await tx.subSurveyActivity.findUnique({
+            where: { id: subSurveyActivityId },
+            select: { id: true },
+          });
+          if (!subs)
+            throw new Error(
+              `subSurveyActivityId tidak ditemukan: ${subSurveyActivityId}`,
+            );
+
+          // Validasi petugas user exist
+          const petugas = await tx.user.findUnique({
+            where: { id: userId },
+            select: { id: true },
+          });
+          if (!petugas)
+            throw new Error(`userId petugas tidak ditemukan: ${userId}`);
+
+          if (superVisorId) {
+            const sup = await tx.user.findUnique({
+              where: { id: superVisorId },
+              select: { id: true },
+            });
+            if (!sup)
+              throw new Error(`superVisorId tidak ditemukan: ${superVisorId}`);
+          }
+
+          const districtId = String(r.districtId || '').trim() || null;
+          const villageName = String(r.villageName || '').trim() || null;
+          const blockCount = String(r.blockCount || '').trim() || null;
+          const travelBillPetugas =
+            String(r.travelBillPetugas || r.travelBill || '').trim() || '0';
+          const travelBillPengawas =
+            String(r.travelBillPengawas || '').trim() || '0';
+
+          // ====== UPSERT PETUGAS (by userId + subsurvey + role PETUGAS) ======
+          const existingPetugas = await tx.userProgress.findFirst({
+            where: {
+              userId,
+              subSurveyActivityId,
+              progressRole: 'PETUGAS',
+            },
+            select: { id: true },
+          });
+
+          if (!existingPetugas) {
+            await tx.userProgress.create({
+              data: {
+                userId,
+                subSurveyActivityId,
+                progressRole: 'PETUGAS',
+                superVisorId,
+                districtId,
+                villageName,
+                blockCount,
+                travelBill: travelBillPetugas,
+                totalAssigned: 0,
+                submitCount: 0,
+                approvedCount: 0,
+                rejectedCount: 0,
+              },
+            });
+            insertedPetugas++;
+          } else {
+            await tx.userProgress.update({
+              where: { id: existingPetugas.id },
+              data: {
+                superVisorId,
+                districtId,
+                villageName,
+                blockCount,
+                travelBill: travelBillPetugas,
+              },
+            });
+            updatedPetugas++;
+          }
+
+          // ====== ENSURE & UPDATE PENGAWAS ======
+          if (superVisorId) {
+            const existingSup = await tx.userProgress.findFirst({
+              where: {
+                userId: superVisorId,
+                subSurveyActivityId,
+                progressRole: 'PENGAWAS',
+              },
+              select: { id: true },
+            });
+
+            if (!existingSup) {
+              await tx.userProgress.create({
+                data: {
+                  userId: superVisorId,
+                  subSurveyActivityId,
+                  progressRole: 'PENGAWAS',
+                  superVisorId: null,
+                  districtId: null,
+                  villageName: null,
+                  blockCount: null,
+                  travelBill: travelBillPengawas,
+                  totalAssigned: 0,
+                  submitCount: 0,
+                  approvedCount: 0,
+                  rejectedCount: 0,
+                },
+              });
+              insertedPengawas++;
+            } else {
+              await tx.userProgress.update({
+                where: { id: existingSup.id },
+                data: { travelBill: travelBillPengawas },
+              });
+              updatedPengawas++;
+            }
+          }
+        } catch (e: any) {
+          errors.push({ rowIndex, message: e?.message ?? 'Row error' });
+        }
+      }
+    });
+
+    return {
+      insertedPetugas,
+      updatedPetugas,
+      insertedPengawas,
+      updatedPengawas,
+      errors,
     };
   }
 }

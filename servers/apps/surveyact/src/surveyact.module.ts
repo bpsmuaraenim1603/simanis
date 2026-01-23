@@ -16,6 +16,7 @@ import { AuthGuard } from './guards/auth.guard';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt/dist/jwt.service';
 import { APP_GUARD } from '@nestjs/core/constants';
+import { ImportModule } from './import/import.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { APP_GUARD } from '@nestjs/core/constants';
       introspection: process.env.NODE_ENV !== 'production',
       playground: process.env.NODE_ENV !== 'production',
     }),
+    ImportModule,
   ],
   providers: [
     SurveyActivityService,

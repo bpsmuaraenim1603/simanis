@@ -8,6 +8,7 @@ import {
   useQuery,
 } from "@apollo/client";
 import toast from "react-hot-toast";
+import * as XLSX from "xlsx";
 import styles from "@/src/utils/style";
 import { ADD_SURVEY_ACTIVITY } from "@/src/graphql/actions/add-surveyact.action";
 import { ADD_SUBSURVEY_ACTIVITY } from "@/src/graphql/actions/add-subsurveyact.action";
@@ -18,6 +19,8 @@ import { GET_ALL_SUB_SURVEY_ACTIVITIES } from "@/src/graphql/actions/find-allsub
 import { CREATE_USER_PROGRESS } from "@/src/graphql/actions/create-userprogress.action";
 import { UPDATE_USER_PROGRESS } from "@/src/graphql/actions/update-userprogress.action";
 import { GET_ALL_USERS } from "@/src/graphql/actions/find-allusers.action";
+import { GET_ALL_OF_SUB_SURVEY_ACTIVITIES } from "@/src/graphql/actions/find-realallsubsurvey.action";
+import { BULK_IMPORT_USERPROGRESS_EXCEL } from "@/src/graphql/actions/bulk-import-userprogress.action";
 import { GET_USER_PROGRESS_BY_SUBSURVEY_ID } from "@/src/graphql/actions/find-usersurveyprogress.action";
 import { GET_USER_PROGRESS_BY_USER_ID } from "@/src/graphql/actions/find-usersurveyprogressbyuser.action";
 import { GET_ALL_DISTRICT } from "@/src/graphql/actions/find-alldistrict.action";
@@ -287,14 +290,14 @@ function Admin() {
     const s = q.trim().toLowerCase();
     if (!s) return true;
     return [u.name, u.email, (u as any)?.phone_number].some((v) =>
-      (v ?? "").toLowerCase().includes(s)
+      (v ?? "").toLowerCase().includes(s),
     );
   }
   function matchesUPSearch(up: UserProgressWithUser, q: string) {
     const s = q.trim().toLowerCase();
     if (!s) return true;
     return [up.user?.name ?? "", up.user?.email ?? ""].some((v) =>
-      v.toLowerCase().includes(s)
+      v.toLowerCase().includes(s),
     );
   }
   function useDebounced<T>(value: T, delay = 200) {
@@ -313,19 +316,26 @@ function Admin() {
     refetch: refetchSurveyActs,
   } = useQuery(GET_ALL_SURVEY_ACTIVITIES);
   const [fetchSubForSubSurveys, { data: SubSurveydata }] = useLazyQuery(
-    GET_ALL_SUB_SURVEY_ACTIVITIES
+    GET_ALL_SUB_SURVEY_ACTIVITIES,
   );
   const [fetchSubForSubmitUP, { data: SubmitUPData }] = useLazyQuery(
-    GET_ALL_SUB_SURVEY_ACTIVITIES
+    GET_ALL_SUB_SURVEY_ACTIVITIES,
   );
   const [fetchSubForUpdateUP, { data: UpdateUPData }] = useLazyQuery(
-    GET_ALL_SUB_SURVEY_ACTIVITIES
+    GET_ALL_SUB_SURVEY_ACTIVITIES,
   );
   const { data: userData, refetch: refetchUsers } = useQuery(GET_ALL_USERS);
+  const { data: allSubsData, refetch: refetchAllSubs } = useQuery(
+    GET_ALL_OF_SUB_SURVEY_ACTIVITIES,
+    { fetchPolicy: "cache-and-network" },
+  );
+  const [bulkImportExcel, { loading: importingExcel }] = useMutation(
+    BULK_IMPORT_USERPROGRESS_EXCEL,
+  );
   const { data: districtData, refetch: refetchDistricts } =
     useQuery(GET_ALL_DISTRICT);
   const [fetchUserProgress, { data: userProgressData }] = useLazyQuery(
-    GET_USER_PROGRESS_BY_SUBSURVEY_ID
+    GET_USER_PROGRESS_BY_SUBSURVEY_ID,
   );
   const [
     fetchUserProgressByUser,
@@ -342,7 +352,7 @@ function Admin() {
   const [addSurveyActivity, { loading: loading1 }] =
     useMutation(ADD_SURVEY_ACTIVITY);
   const [addSubSurveyActivity, { loading: loading2 }] = useMutation(
-    ADD_SUBSURVEY_ACTIVITY
+    ADD_SUBSURVEY_ACTIVITY,
   );
   const [updateSurveyActivity] = useMutation(UPDATE_SURVEY_ACTIVITY);
   const [updateSubSurveyActivity] = useMutation(UPDATE_SUB_SURVEY_ACTIVITY);
@@ -360,27 +370,27 @@ function Admin() {
   const surveyMap = useMemo<Record<string, SurveyActivity>>(
     () =>
       Object.fromEntries(
-        (data?.allSurveyActivities ?? []).map((s: SurveyActivity) => [s.id, s])
+        (data?.allSurveyActivities ?? []).map((s: SurveyActivity) => [s.id, s]),
       ),
-    [data]
+    [data],
   );
   const subMap = useMemo<Record<string, SubSurveyActivity>>(
     () =>
       Object.fromEntries(
         (SubSurveydata?.subSurveyActivityById ?? []).map(
-          (s: SubSurveyActivity) => [s.id, s]
-        )
+          (s: SubSurveyActivity) => [s.id, s],
+        ),
       ),
-    [SubSurveydata]
+    [SubSurveydata],
   );
   const upMap = useMemo<Record<string, UserProgressWithUser>>(
     () =>
       Object.fromEntries(
         (userProgressData?.userProgressBySubSurveyActivityId ?? []).map(
-          (u: any) => [u.id, u]
-        )
+          (u: any) => [u.id, u],
+        ),
       ),
-    [userProgressData]
+    [userProgressData],
   );
   const toMoney = (v: any) => Number(v ?? 0);
   const sumTravel = (rows: any[]) =>
@@ -419,13 +429,13 @@ function Admin() {
   const handleChangeF1 = (e: React.ChangeEvent<HTMLInputElement>) =>
     setFormStateF1((prev) => ({ ...prev, [e.target.id]: e.target.value }));
   const handleChangeF2 = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => setFormStateF2((prev) => ({ ...prev, [e.target.id]: e.target.value }));
   const handleChangeUpdateF1 = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => setUpdateStateF1((prev) => ({ ...prev, [e.target.id]: e.target.value }));
   const handleChangeUpdateF2 = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => setUpdateStateF2((prev) => ({ ...prev, [e.target.id]: e.target.value }));
 
   const handleSubmitSurveyAct = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -446,7 +456,7 @@ function Admin() {
   };
 
   const handleSubmitSubSurveyAct = async (
-    e: React.FormEvent<HTMLFormElement>
+    e: React.FormEvent<HTMLFormElement>,
   ) => {
     e.preventDefault();
     try {
@@ -511,7 +521,7 @@ function Admin() {
   };
 
   const handleUpdateSubSurveyAct = async (
-    e: React.FormEvent<HTMLFormElement>
+    e: React.FormEvent<HTMLFormElement>,
   ) => {
     e.preventDefault();
     try {
@@ -565,11 +575,11 @@ function Admin() {
   };
 
   const handleChangeUserProgress = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) =>
     setUserProgressForm((prev) => ({ ...prev, [e.target.id]: e.target.value }));
   const handleChangeUpdateUserProgress = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) =>
     setUpdateUserProgressForm((prev) => ({
       ...prev,
@@ -577,7 +587,7 @@ function Admin() {
     }));
 
   const handleSubmitUserProgress = async (
-    e: React.FormEvent<HTMLFormElement>
+    e: React.FormEvent<HTMLFormElement>,
   ) => {
     e.preventDefault();
     try {
@@ -605,7 +615,7 @@ function Admin() {
           toast.error(
             `Honor perjalanan melebihi limit pengguna.\n` +
               `Limit: ${limitBillAdd.toLocaleString("id-ID")} • Terpakai: ${usedTravelAdd.toLocaleString("id-ID")} • ` +
-              `Sisa: ${remainTravelAdd.toLocaleString("id-ID")}`
+              `Sisa: ${remainTravelAdd.toLocaleString("id-ID")}`,
           );
           return;
         }
@@ -662,7 +672,7 @@ function Admin() {
   };
 
   const handleUpdateUserProgress = async (
-    e: React.FormEvent<HTMLFormElement>
+    e: React.FormEvent<HTMLFormElement>,
   ) => {
     e.preventDefault();
     try {
@@ -682,7 +692,7 @@ function Admin() {
 
         if (intendedTotalAssigned > allowedMax) {
           toast.error(
-            `Alokasi melebihi batas untuk petugas ini (${allowedMax}).`
+            `Alokasi melebihi batas untuk petugas ini (${allowedMax}).`,
           );
           return;
         }
@@ -701,7 +711,7 @@ function Admin() {
             toast.error(
               `Honor perjalanan melebihi limit pengguna.\n` +
                 `Limit: ${limitBillUpdate.toLocaleString("id-ID")} • Terpakai (kegiatan lain): ${usedTravelUpdateOthers.toLocaleString("id-ID")} • ` +
-                `Sisa untuk baris ini: ${remainTravelUpdate.toLocaleString("id-ID")}`
+                `Sisa untuk baris ini: ${remainTravelUpdate.toLocaleString("id-ID")}`,
             );
             return;
           }
@@ -793,7 +803,7 @@ function Admin() {
       });
       if (data?.deleteSubSurveyActivity?.success) {
         toast.success(
-          data?.deleteSubSurveyActivity?.message ?? "Kegiatan terhapus."
+          data?.deleteSubSurveyActivity?.message ?? "Kegiatan terhapus.",
         );
         setUpdateStateF2((prev) => ({
           ...prev,
@@ -827,7 +837,7 @@ function Admin() {
       });
       if (data?.deleteUserSurveyProgress?.success) {
         toast.success(
-          data?.deleteUserSurveyProgress?.message ?? "Petugas terhapus."
+          data?.deleteUserSurveyProgress?.message ?? "Petugas terhapus.",
         );
         setUpdateUserProgressForm((prev) => ({
           ...prev,
@@ -868,7 +878,7 @@ function Admin() {
           fetchSubForSubSurveys({
             variables: { surveyActivityId: updateStateF2.surveyActivityId },
             fetchPolicy: "network-only",
-          })
+          }),
         );
       }
       if (userProgressForm.surveyActivityId) {
@@ -876,7 +886,7 @@ function Admin() {
           fetchSubForSubmitUP({
             variables: { surveyActivityId: userProgressForm.surveyActivityId },
             fetchPolicy: "network-only",
-          })
+          }),
         );
       }
       if (updateUserProgressForm.surveyActivityId) {
@@ -886,7 +896,7 @@ function Admin() {
               surveyActivityId: updateUserProgressForm.surveyActivityId,
             },
             fetchPolicy: "network-only",
-          })
+          }),
         );
       }
       if (updateUserProgressForm.subSurveyActivityId) {
@@ -896,7 +906,7 @@ function Admin() {
               subSurveyActivityId: updateUserProgressForm.subSurveyActivityId,
             },
             fetchPolicy: "network-only",
-          })
+          }),
         );
       }
       if (userProgressForm.subSurveyActivityId) {
@@ -906,7 +916,7 @@ function Admin() {
               subSurveyActivityId: userProgressForm.subSurveyActivityId,
             },
             fetchPolicy: "network-only",
-          })
+          }),
         );
       }
       if (jobs.length) await Promise.all(jobs);
@@ -918,44 +928,149 @@ function Admin() {
     }
   };
 
+  const handleDownloadTemplateUserProgress = () => {
+    const users = (userData?.getUsers ?? []) as any[];
+    const subs = (allSubsData?.allSubSurveyActivities ?? []) as any[];
+
+    const uploadSheetRows = [
+      {
+        subSurveyActivityId: "",
+        userId: "",
+        superVisorId: "",
+        districtId: "",
+        villageName: "",
+        blockCount: "",
+        travelBillPetugas: "",
+        travelBillPengawas: "",
+      },
+    ];
+
+    const masterUsers = users.map((u, i) => ({
+      No: i + 1,
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.primaryRole ?? u.roles ?? "",
+    }));
+
+    const masterSubs = subs.map((s, i) => ({
+      No: i + 1,
+      subSurveyActivityId: s.id,
+      subSurveyName: s.name,
+      surveyActivityId: s.surveyActivityId,
+      startDate: s.startDate ? new Date(s.startDate).toISOString() : "",
+      endDate: s.endDate ? new Date(s.endDate).toISOString() : "",
+      targetSample: s.targetSample ?? "",
+      sampleType: s.sampleType ?? "",
+      activityType: s.activityType ?? "",
+    }));
+
+    const wb = XLSX.utils.book_new();
+
+    const wsUpload = XLSX.utils.json_to_sheet(uploadSheetRows);
+    wsUpload["!cols"] = [
+      { wch: 36 }, // subSurveyActivityId
+      { wch: 28 }, // userId
+      { wch: 28 }, // superVisorId
+      { wch: 18 }, // districtId
+      { wch: 24 }, // villageName
+      { wch: 12 }, // blockCount
+      { wch: 18 }, // travelBillPetugas
+      { wch: 18 }, // travelBillPengawas
+    ];
+
+    const wsUsers = XLSX.utils.json_to_sheet(masterUsers);
+    wsUsers["!cols"] = [
+      { wch: 5 },
+      { wch: 36 },
+      { wch: 28 },
+      { wch: 28 },
+      { wch: 14 },
+    ];
+
+    const wsSubs = XLSX.utils.json_to_sheet(masterSubs);
+    wsSubs["!cols"] = [
+      { wch: 5 },
+      { wch: 36 },
+      { wch: 32 },
+      { wch: 36 },
+      { wch: 24 },
+      { wch: 24 },
+      { wch: 12 },
+      { wch: 14 },
+      { wch: 14 },
+    ];
+
+    XLSX.utils.book_append_sheet(wb, wsUpload, "UPLOAD_USERPROGRESS");
+    XLSX.utils.book_append_sheet(wb, wsUsers, "MASTER_USERS");
+    XLSX.utils.book_append_sheet(wb, wsSubs, "MASTER_SUBSURVEY");
+
+    XLSX.writeFile(wb, "Template_Upload_UserProgress.xlsx");
+  };
+
+  const handleUploadExcelUserProgress = async (file: File) => {
+    try {
+      const res = await bulkImportExcel({ variables: { file } });
+      const r = res.data?.bulkImportUserProgressExcel;
+
+      const errCount = r?.errors?.length ?? 0;
+      toast.success(
+        `Import selesai.
+        Petugas: +${r.insertedPetugas} / upd ${r.updatedPetugas}
+        Pengawas: +${r.insertedPengawas} / upd ${r.updatedPengawas}
+        Error: ${errCount}`,
+      );
+
+      if (errCount) {
+        console.table(r.errors);
+        toast.error("Ada error baris. Lihat console.table(errors).");
+      }
+
+      handleRefresh();
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e?.message ?? "Gagal import excel");
+    }
+  };
+
   const setUPField = <K extends keyof typeof userProgressForm>(
     key: K,
-    value: (typeof userProgressForm)[K]
+    value: (typeof userProgressForm)[K],
   ) => {
     setUserProgressForm((prev) => ({ ...prev, [key]: value }));
   };
 
   const setUpdateUPField = <K extends keyof typeof updateUserProgressForm>(
     key: K,
-    value: (typeof updateUserProgressForm)[K]
+    value: (typeof updateUserProgressForm)[K],
   ) => {
     setUpdateUserProgressForm((prev) => ({ ...prev, [key]: value }));
   };
 
   const setF2Field = <K extends keyof typeof updateStateF2>(
     key: K,
-    value: (typeof updateStateF2)[K]
+    value: (typeof updateStateF2)[K],
   ) => {
     setFormStateF2((prev) => ({ ...prev, [key]: value }));
   };
 
   const setUpdateF2Field = <K extends keyof typeof updateStateF2>(
     key: K,
-    value: (typeof updateStateF2)[K]
+    value: (typeof updateStateF2)[K],
   ) => {
     setUpdateStateF2((prev) => ({ ...prev, [key]: value }));
   };
 
   const setUpdateF1Field = <K extends keyof typeof updateStateF1>(
     key: K,
-    value: (typeof updateStateF1)[K]
+    value: (typeof updateStateF1)[K],
   ) => {
     setUpdateStateF1((prev) => ({ ...prev, [key]: value }));
   };
 
   const toOpts = <T,>(
     rows: T[],
-    pick: (row: T) => { value: string; label: string; subLabel?: string }
+    pick: (row: T) => { value: string; label: string; subLabel?: string },
   ) => rows.map(pick);
 
   /* ---------- Effects (sama) ---------- */
@@ -1129,30 +1244,30 @@ function Admin() {
   const selectedSubForAdd = useMemo(
     () =>
       (SubmitUPData?.subSurveyActivityById ?? []).find(
-        (s: SubSurveyActivity) => s.id === userProgressForm.subSurveyActivityId
+        (s: SubSurveyActivity) => s.id === userProgressForm.subSurveyActivityId,
       ),
-    [SubmitUPData, userProgressForm.subSurveyActivityId]
+    [SubmitUPData, userProgressForm.subSurveyActivityId],
   );
   const assignedSumForAdd = useMemo(
     () =>
       (userProgressData?.userProgressBySubSurveyActivityId ?? []).reduce(
         (acc: number, up: UserProgress) => acc + Number(up.totalAssigned ?? 0),
-        0
+        0,
       ),
-    [userProgressData]
+    [userProgressData],
   );
   const remainingQuotaForAdd = Math.max(
     0,
-    Number(selectedSubForAdd?.targetSample ?? 0) - assignedSumForAdd
+    Number(selectedSubForAdd?.targetSample ?? 0) - assignedSumForAdd,
   );
 
   const selectedSubForUpdate = useMemo(
     () =>
       (UpdateUPData?.subSurveyActivityById ?? []).find(
         (s: SubSurveyActivity) =>
-          s.id === updateUserProgressForm.subSurveyActivityId
+          s.id === updateUserProgressForm.subSurveyActivityId,
       ),
-    [UpdateUPData, updateUserProgressForm.subSurveyActivityId]
+    [UpdateUPData, updateUserProgressForm.subSurveyActivityId],
   );
   const isListingUpdate =
     (selectedSubForUpdate?.activityType ?? "") === "Listing";
@@ -1160,22 +1275,22 @@ function Admin() {
     userProgressData?.userProgressBySubSurveyActivityId ?? [];
   const filteredUPsForUpdate = useMemo(
     () => upListForUpdate.filter((up) => matchesUPSearch(up as any, qUPUser)),
-    [upListForUpdate, qUPUser]
+    [upListForUpdate, qUPUser],
   );
   const currentUP = useMemo(
     () =>
       upListForUpdate.find(
-        (u) => u.id === updateUserProgressForm.userProgressId
+        (u) => u.id === updateUserProgressForm.userProgressId,
       ),
-    [upListForUpdate, updateUserProgressForm.userProgressId]
+    [upListForUpdate, updateUserProgressForm.userProgressId],
   );
   const sumAllAssignedForUpdate = useMemo(
     () =>
       upListForUpdate.reduce(
         (acc: number, u) => acc + Number(u.totalAssigned ?? 0),
-        0
+        0,
       ),
-    [upListForUpdate]
+    [upListForUpdate],
   );
   const allowedMaxForUpdate = useMemo(() => {
     const target = Number(selectedSubForUpdate?.targetSample ?? 0);
@@ -1188,26 +1303,26 @@ function Admin() {
     userProgressData?.userProgressBySubSurveyActivityId ?? [];
   const usedUserIdsForAdd = useMemo(
     () => new Set(existingUPForAdd.map((up) => up.userId)),
-    [existingUPForAdd]
+    [existingUPForAdd],
   );
 
   const supervisors: User[] = useMemo(
     () =>
       (userData?.getUsers ?? []).filter((u: any) =>
-        getRoles(u).includes("Supervisor")
+        getRoles(u).includes("Supervisor"),
       ),
-    [userData]
+    [userData],
   );
   const filteredSupervisors = useMemo(
     () => supervisors.filter((u) => matchesSearch(u, qSupervisorDeb)),
-    [supervisors, qSupervisorDeb]
+    [supervisors, qSupervisorDeb],
   );
   const admins: User[] = useMemo(
     () =>
       (userData?.getUsers ?? []).filter((u: any) =>
-        getRoles(u).includes("Admin")
+        getRoles(u).includes("Admin"),
       ),
-    [userData]
+    [userData],
   );
   const enumeratorsForAdd: User[] = useMemo(
     () =>
@@ -1215,18 +1330,18 @@ function Admin() {
         // .filter((u: User) => u.role !== "Supervisor")
         // .filter((u: User) => u.role !== "Admin")
         .filter((u: User) => !getRoles(u).includes("Superadmin")),
-    [userData, usedUserIdsForAdd]
+    [userData, usedUserIdsForAdd],
   );
   const filteredEnumeratorsForAdd = useMemo(
     () => enumeratorsForAdd.filter((u) => matchesSearch(u, qEnumerator)),
-    [enumeratorsForAdd, qEnumerator]
+    [enumeratorsForAdd, qEnumerator],
   );
   const selectedUserForAdd = useMemo(
     () =>
       (userData?.getUsers ?? []).find(
-        (u: any) => u.id === userProgressForm.userId
+        (u: any) => u.id === userProgressForm.userId,
       ),
-    [userData, userProgressForm.userId]
+    [userData, userProgressForm.userId],
   );
   const limitBillAdd = toMoney(selectedUserForAdd?.limit_bill);
   const usedTravelAdd = useMemo(() => {
@@ -1254,12 +1369,12 @@ function Admin() {
   const currentRowOldTravel = toMoney(currentUP?.travelBill);
   const usedTravelUpdateOthers = Math.max(
     0,
-    usedTravelUpdateAll - (currentRowCounted ? currentRowOldTravel : 0)
+    usedTravelUpdateAll - (currentRowCounted ? currentRowOldTravel : 0),
   );
   const newTravelUpdate = toMoney(updateUserProgressForm.travelBill);
   const remainTravelUpdate = Math.max(
     0,
-    limitBillUpdate - usedTravelUpdateOthers
+    limitBillUpdate - usedTravelUpdateOthers,
   );
   const willExceedUpdate = newTravelUpdate > remainTravelUpdate;
   const nusToNumber = (nus: string) => {
@@ -1744,7 +1859,7 @@ function Admin() {
                         (s: SubSurveyActivity) => ({
                           value: s.id,
                           label: s.name,
-                        })
+                        }),
                       )
                     : []
                 }
@@ -1881,8 +1996,34 @@ function Admin() {
             onSubmit={handleSubmitUserProgress}
             className="grid grid-cols-1 md:grid-cols-2 gap-4"
           >
-            <div className="md:col-span-2">
+            <div className="md:col-span-2 flex justify-between">
               <h3 className="text-lg font-bold">Tambah Blok Petugas</h3>
+              <div className="flex gap-2 items-center">
+                <button
+                  type="button"
+                  onClick={handleDownloadTemplateUserProgress}
+                  className="px-3 py-2 rounded-md bg-green-600 text-white hover:bg-green-700"
+                >
+                  Download Template Upload
+                </button>
+
+                <label
+                  className={`px-3 py-2 rounded-md text-white cursor-pointer ${importingExcel ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"}`}
+                >
+                  {importingExcel ? "Importing..." : "Upload Excel"}
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) handleUploadExcelUserProgress(f);
+                      e.currentTarget.value = "";
+                    }}
+                    disabled={importingExcel}
+                  />
+                </label>
+              </div>
             </div>
 
             <div>
@@ -1924,7 +2065,7 @@ function Admin() {
                         (sub: SubSurveyActivity) => ({
                           label: sub.name,
                           value: sub.id,
-                        })
+                        }),
                       )
                     : []
                 }
@@ -2006,7 +2147,7 @@ function Admin() {
                   (d: District) => ({
                     value: d.id,
                     label: d.name ?? "-",
-                  })
+                  }),
                 )}
                 placeholder="-- Pilih Kecamatan --"
               />
@@ -2051,7 +2192,7 @@ function Admin() {
                 htmlFor="travelBill"
                 className="block text-sm font-bold mb-2"
               >
-                Honor Perjalanan
+                Honor Petugas
               </label>
               <input
                 id="travelBill"
@@ -2114,8 +2255,8 @@ function Admin() {
                               prev.map((r, i) =>
                                 i === idx
                                   ? { ...r, identity: e.target.value }
-                                  : r
-                              )
+                                  : r,
+                              ),
                             )
                           }
                           className="w-full sm:col-span-2 md:col-span-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -2128,8 +2269,8 @@ function Admin() {
                               prev.map((r, i) =>
                                 i === idx
                                   ? { ...r, cacahStatus: e.target.value }
-                                  : r
-                              )
+                                  : r,
+                              ),
                             )
                           }
                           className="w-full px-3 py-2 border rounded-md bg-white text-sm"
@@ -2146,8 +2287,8 @@ function Admin() {
                               prev.map((r, i) =>
                                 i === idx
                                   ? { ...r, approvalStatus: e.target.value }
-                                  : r
-                              )
+                                  : r,
+                              ),
                             )
                           }
                           className="w-full px-3 py-2 border rounded-md bg-white text-sm"
@@ -2163,8 +2304,10 @@ function Admin() {
                           onChange={(e) =>
                             setSampleListAdd((prev) =>
                               prev.map((r, i) =>
-                                i === idx ? { ...r, geoLat: e.target.value } : r
-                              )
+                                i === idx
+                                  ? { ...r, geoLat: e.target.value }
+                                  : r,
+                              ),
                             )
                           }
                           className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -2175,8 +2318,10 @@ function Admin() {
                           onChange={(e) =>
                             setSampleListAdd((prev) =>
                               prev.map((r, i) =>
-                                i === idx ? { ...r, geoLng: e.target.value } : r
-                              )
+                                i === idx
+                                  ? { ...r, geoLng: e.target.value }
+                                  : r,
+                              ),
                             )
                           }
                           className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -2185,7 +2330,7 @@ function Admin() {
                           type="button"
                           onClick={() => {
                             setSampleListAdd((prev) =>
-                              prev.filter((_, i) => i !== idx)
+                              prev.filter((_, i) => i !== idx),
                             );
                           }}
                           className="px-3 py-2 border rounded-md text-sm bg-red-500 text-white hover:bg-red-600 transition-colors font-semibold"
@@ -2265,7 +2410,7 @@ function Admin() {
                         (s: SubSurveyActivity) => ({
                           value: s.id,
                           label: s.name,
-                        })
+                        }),
                       )
                     : []
                 }
@@ -2296,13 +2441,14 @@ function Admin() {
                 onValueChange={(v) =>
                   setUpdateUPField("userProgressId", (v ?? "") as string)
                 }
-                options={filteredUPsForUpdate.map(
-                  (up: UserProgressWithUser) => ({
-                    value: up.id,
-                    label: `${up.user?.name ?? "-"} - Blok ${up.blockCount ?? "-"}`,
-                    subLabel: up.user?.email ?? "",
-                  })
-                )}
+                options={filteredUPsForUpdate.map((up: any) => ({
+                  value: up.id,
+                  label:
+                    up.progressRole === "PENGAWAS"
+                      ? `${up.user?.name ?? "-"} (Pengawas)`
+                      : `${up.user?.name ?? "-"} - Blok ${up.blockCount ?? "-"}`,
+                  subLabel: up.user?.email ?? "",
+                }))}
                 placeholder="-- Pilih Blok Petugas --"
               />
               {currentUP?.userId && (
@@ -2334,7 +2480,7 @@ function Admin() {
                   (d: District) => ({
                     value: d.id,
                     label: d.name,
-                  })
+                  }),
                 )}
                 placeholder="-- Pilih Kecamatan --"
               />
@@ -2380,7 +2526,7 @@ function Admin() {
                   {willExceedUpdate &&
                     "— Melebihi limit! Total honor sudah mencapai " +
                       (usedTravelUpdateOthers + newTravelUpdate).toLocaleString(
-                        "id-ID"
+                        "id-ID",
                       )}
                 </p>
               )}
@@ -2440,8 +2586,8 @@ function Admin() {
                                 prev.map((r, i) =>
                                   i === idx
                                     ? { ...r, identity: e.target.value }
-                                    : r
-                                )
+                                    : r,
+                                ),
                               )
                             }
                             className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -2454,8 +2600,8 @@ function Admin() {
                                 prev.map((r, i) =>
                                   i === idx
                                     ? { ...r, cacahStatus: e.target.value }
-                                    : r
-                                )
+                                    : r,
+                                ),
                               )
                             }
                             className="w-full px-3 py-2 border rounded-md bg-white text-sm"
@@ -2472,8 +2618,8 @@ function Admin() {
                                 prev.map((r, i) =>
                                   i === idx
                                     ? { ...r, approvalStatus: e.target.value }
-                                    : r
-                                )
+                                    : r,
+                                ),
                               )
                             }
                             className="w-full px-3 py-2 border rounded-md bg-white text-sm"
@@ -2491,8 +2637,8 @@ function Admin() {
                                 prev.map((r, i) =>
                                   i === idx
                                     ? { ...r, geoLat: e.target.value }
-                                    : r
-                                )
+                                    : r,
+                                ),
                               )
                             }
                             className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -2506,8 +2652,8 @@ function Admin() {
                                 prev.map((r, i) =>
                                   i === idx
                                     ? { ...r, geoLng: e.target.value }
-                                    : r
-                                )
+                                    : r,
+                                ),
                               )
                             }
                             className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -2522,7 +2668,9 @@ function Admin() {
 
                               if (!row?.id) {
                                 setSampleListUpdate((prev) =>
-                                  sortByNusAsc(prev.filter((_, i) => i !== idx))
+                                  sortByNusAsc(
+                                    prev.filter((_, i) => i !== idx),
+                                  ),
                                 );
 
                                 return;
@@ -2537,7 +2685,7 @@ function Admin() {
 
                               if (
                                 !window.confirm(
-                                  "Hapus sample ini beserta fotonya?"
+                                  "Hapus sample ini beserta fotonya?",
                                 )
                               )
                                 return;
@@ -2553,7 +2701,7 @@ function Admin() {
                                 });
 
                                 setSampleListUpdate((prev) =>
-                                  prev.filter((_, i) => i !== idx)
+                                  prev.filter((_, i) => i !== idx),
                                 );
                               } catch (err) {
                                 console.error(err);

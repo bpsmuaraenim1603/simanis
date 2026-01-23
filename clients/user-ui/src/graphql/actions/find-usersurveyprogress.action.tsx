@@ -7,6 +7,7 @@ export const GET_USER_PROGRESS_BY_SUBSURVEY_ID = gql`
     ) {
       id
       userId
+      progressRole
       subSurveyActivityId
       districtId
       totalAssigned

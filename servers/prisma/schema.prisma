@@ -27,6 +27,11 @@ enum IssueStatus {
   Resolved
 }
 
+enum ProgressRole {
+  PETUGAS
+  PENGAWAS
+}
+
 enum StatusST {
   Belum_Diserahkan
   Diserahkan
@@ -174,6 +179,7 @@ model UserProgress {
   supervisor          User?              @relation("UserProgress_Supervisor", fields: [superVisorId], references: [id])
   subSurveyActivityId String?
   subSurveyActivity   SubSurveyActivity? @relation(fields: [subSurveyActivityId], references: [id], onDelete: Cascade)
+  progressRole        ProgressRole       @default(PETUGAS)
   totalAssigned       Int                @default(0)
   submitCount         Int                @default(0)
   approvedCount       Int                @default(0)

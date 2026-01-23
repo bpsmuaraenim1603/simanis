@@ -7,7 +7,7 @@ import {
   GraphQLISODateTime,
   Float,
 } from '@nestjs/graphql';
-import { AgreeState, CacahStatus, IssueStatus, StatusST } from '@prisma/client';
+import { AgreeState, CacahStatus, IssueStatus, StatusST, ProgressRole } from '@prisma/client';
 import { UserType } from 'apps/users/src/types/users.types';
 
 registerEnumType(AgreeState, {
@@ -23,6 +23,7 @@ registerEnumType(IssueStatus, {
 });
 
 registerEnumType(CacahStatus, { name: 'CacahStatus' });
+registerEnumType(ProgressRole, { name: 'ProgressRole' });
 
 @ObjectType()
 export class SurveyActivityType {
@@ -127,6 +128,9 @@ export class UserProgressType {
 
   @Field({ nullable: true })
   travelBill?: string;
+
+  @Field(() => ProgressRole)
+  progressRole: ProgressRole;
 
   @Field(() => [UserSampleType], { nullable: 'itemsAndList' })
   samples?: UserSampleType[];
