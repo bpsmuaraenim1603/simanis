@@ -6,6 +6,8 @@ export const GET_MONTHLY_ACTIVITY_STAFF_USAGE = gql`
       month
       subSurveyActivityId
       subSurveyName
+      subSurveySlug
+      surveyActivitySlug
       startDate
       endDate
       staffCount

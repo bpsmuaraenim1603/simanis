@@ -398,7 +398,7 @@ function MonthlyStaffUsagePanel({
                 : "bg-green-600 text-white hover:bg-green-700"
             }`}
           >
-            {exporting ? "Exporting..." : "Export Excel"}
+            {exporting ? "Sedang Ekspor..." : "Ekspor Data Petugas"}
           </button>
         </div>
       </div>

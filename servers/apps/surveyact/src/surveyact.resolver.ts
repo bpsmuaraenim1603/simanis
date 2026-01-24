@@ -141,6 +141,17 @@ export class SurveyActivityResolver {
   }
 
   @ResolveField(() => UserType, { nullable: true })
+  async superVisor(@Parent() progress: UserProgress): Promise<UserType | null> {
+    const superVisorId = progress.superVisorId;
+    if (!superVisorId) return null;
+    try {
+      return await this.service.getUser(superVisorId);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  @ResolveField(() => UserType, { nullable: true })
   async userAdministrator(@Parent() spj: SubmitSPJ): Promise<UserType> {
     return this.service.getUser(spj.userId);
   }

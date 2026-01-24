@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@apollo/client";
 import { GET_MONTHLY_ACTIVITY_STAFF_USAGE } from "@/src/graphql/actions/get-monthly-activity-staff-usage.action";
+import { useRouter } from "next/navigation";
 
 type StaffUser = { id: string; name?: string; email?: string };
 
@@ -10,6 +11,8 @@ type StaffUsageRow = {
   month: string;
   subSurveyActivityId: string;
   subSurveyName: string;
+  subSurveySlug?: string;
+  surveyActivitySlug?: string;
   startDate: string;
   endDate: string;
   staffCount: number;
@@ -20,7 +23,20 @@ const fmtID = new Intl.NumberFormat("id-ID");
 
 function monthLabel(yyyyMM: string) {
   const [y, m] = yyyyMM.split("-").map(Number);
-  const names = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
+  const names = [
+    "Januari",
+    "Februari",
+    "Maret",
+    "April",
+    "Mei",
+    "Juni",
+    "Juli",
+    "Agustus",
+    "September",
+    "Oktober",
+    "November",
+    "Desember",
+  ];
   return `${names[(m ?? 1) - 1]} ${y}`;
 }
 
@@ -33,22 +49,44 @@ function formatDateShort(iso: string) {
 }
 
 export default function MonthlyStaffUsageWidget() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const monthNow = `${year}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const [selectedDate, setSelectedDate] = useState(() => new Date());
+  const router = useRouter();
+  const selectedYear = selectedDate.getFullYear();
+  const selectedMonthKey = `${selectedYear}-${String(
+    selectedDate.getMonth() + 1,
+  ).padStart(2, "0")}`;
 
-  const { data, loading, error, refetch } = useQuery(GET_MONTHLY_ACTIVITY_STAFF_USAGE, {
-    variables: { year },
-    fetchPolicy: "cache-and-network",
-  });
+  const { data, loading, error, refetch } = useQuery(
+    GET_MONTHLY_ACTIVITY_STAFF_USAGE,
+    {
+      variables: { year: selectedYear },
+      fetchPolicy: "cache-and-network",
+    },
+  );
 
-  const rows: StaffUsageRow[] = (data?.getMonthlyActivityStaffUsage ?? []) as StaffUsageRow[];
+  const rows: StaffUsageRow[] = (data?.getMonthlyActivityStaffUsage ??
+    []) as StaffUsageRow[];
+
+  const changeMonth = (delta: number) => {
+    setSelectedDate((prev) => {
+      const d = new Date(prev);
+      d.setMonth(d.getMonth() + delta);
+      return d;
+    });
+  };
+
+  React.useEffect(() => {
+    refetch({ year: selectedYear });
+  }, [selectedYear, refetch]);
 
   const rowsThisMonth = useMemo(() => {
     return rows
-      .filter((r) => r?.month === monthNow)
-      .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
-  }, [rows, monthNow]);
+      .filter((r) => r?.month === selectedMonthKey)
+      .sort(
+        (a, b) =>
+          new Date(a.startDate).getTime() - new Date(b.startDate).getTime(),
+      );
+  }, [rows, selectedMonthKey]);
 
   const summary = useMemo(() => {
     const uniq = new Map<string, StaffUser>();
@@ -72,8 +110,25 @@ export default function MonthlyStaffUsageWidget() {
       <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
         <div className="min-w-0">
           <div className="font-bold text-base sm:text-lg">
-            Kegiatan & Petugas Aktif Bulan {monthLabel(monthNow)}
+            Kegiatan & Petugas Aktif Bulan {monthLabel(selectedMonthKey)}
           </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => changeMonth(-1)}
+            className="px-2 py-1 border rounded text-sm text-white bg-blue-500 hover:bg-blue-600"
+          >
+            ◀
+          </button>
+          <button
+            type="button"
+            onClick={() => changeMonth(1)}
+            className="px-2 py-1 border rounded text-sm text-white bg-blue-500 hover:bg-blue-600"
+          >
+            ▶
+          </button>
         </div>
       </div>
 
@@ -121,20 +176,37 @@ export default function MonthlyStaffUsageWidget() {
                 const isOpen = !!expanded[rowId];
                 const staffList = (r.staffUsers ?? [])
                   .slice()
-                  .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "", "id"));
+                  .sort((a, b) =>
+                    (a.name ?? "").localeCompare(b.name ?? "", "id"),
+                  );
 
                 return (
                   <React.Fragment key={rowId}>
                     <tr className="border-b">
                       <td className="p-3">{i + 1}</td>
                       <td className="p-3">
-                        <div className="font-semibold">{r.subSurveyName}</div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!r.surveyActivitySlug || !r.subSurveySlug)
+                              return;
+                            router.push(
+                              `/progress/${r.surveyActivitySlug}?sub=${r.subSurveySlug}`,
+                            );
+                          }}
+                          className="font-semibold text-left text-blue-600 inline-flex px-2 py-1 rounded hover:bg-gray-100"
+                        >
+                          {r.subSurveyName}
+                        </button>
                       </td>
                       <td className="p-3">
-                        {formatDateShort(r.startDate)} – {formatDateShort(r.endDate)}
+                        {formatDateShort(r.startDate)} –{" "}
+                        {formatDateShort(r.endDate)}
                       </td>
                       <td className="p-3 text-right font-semibold">
-                        {fmtID.format(Number(r.staffCount ?? staffList.length ?? 0))}
+                        {fmtID.format(
+                          Number(r.staffCount ?? staffList.length ?? 0),
+                        )}
                       </td>
                       <td className="p-3">
                         <button

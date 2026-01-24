@@ -14,9 +14,13 @@ import {
 import { useQuery } from "@apollo/client";
 import useUser from "@/src/hooks/useUser";
 import HUComboBox from "@/src/components/HUCombobox";
+import * as XLSX from "xlsx";
 
 type ProgressRow = {
   user: { id: string; name: string; email: string };
+  superVisor?: { id: string; name: string; email: string } | null;
+  superVisorId?: string | null;
+  progressRole?: string | null;
   district?: { name?: string | null; city?: string | null } | null;
   totalAssigned: number;
   submitCount: number;
@@ -39,20 +43,20 @@ const ProgressTemplate = () => {
       }
       router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     },
-    [router, pathname, searchParams]
+    [router, pathname, searchParams],
   );
   const selectedCityQ = searchParams?.get("city") || "";
   const selectedSubSlug = searchParams?.get("sub") || "";
 
   const [selectedSubSurvey, setSelectedSubSurvey] = useState<string | null>(
-    null
+    null,
   );
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [selectedCity, setSelectedCity] = useState<string>("");
 
   const { data: surveyData, loading: loadingSurvey } = useQuery(
     GET_SURVEY_ACTIVITIES_BY_SLUG,
-    { variables: { slug }, skip: !slug, fetchPolicy: "network-only" }
+    { variables: { slug }, skip: !slug, fetchPolicy: "network-only" },
   );
   const surveyActivityId = surveyData?.surveyActivityBySlug?.id;
   const { data: subSurveyDataAll, loading: loadingSubSurveyAll } = useQuery(
@@ -61,7 +65,7 @@ const ProgressTemplate = () => {
       variables: { surveyActivityId },
       skip: !surveyActivityId,
       fetchPolicy: "network-only",
-    }
+    },
   );
   const { data: subSurveyData } = useQuery(GET_ALL_SUB_SURVEY_PROGRESS, {
     variables: { subSurveyActivityId: selectedSubSurvey },
@@ -82,7 +86,7 @@ const ProgressTemplate = () => {
       .map((p) => p?.district?.city ?? "")
       .filter((v): v is string => typeof v === "string" && v.length > 0);
     return Array.from(new Set<string>(list)).sort((a, b) =>
-      a.localeCompare(b, "id")
+      a.localeCompare(b, "id"),
     );
   }, [userProgress]);
   const filteredUserProgress: ProgressRow[] = useMemo(() => {
@@ -97,6 +101,9 @@ const ProgressTemplate = () => {
 
     type Agg = {
       user: { id: string; name: string; email: string };
+      superVisor: { id: string; name: string; email: string } | null;
+      superVisorId?: string | null;
+      progressRole?: string | null;
       totalAssigned: number;
       submitCount: number;
       approvedCount: number;
@@ -106,46 +113,92 @@ const ProgressTemplate = () => {
     };
     const map = new Map<string, Agg>();
     for (const r of rows) {
-      if (!r?.user?.id) continue;
-      const key = r.user.id;
-      const prev = map.get(key);
-      const distName = r?.district?.name ?? "-";
-      const cityName = r?.district?.city ?? "";
-      if (!prev) {
-        map.set(key, {
-          user: r.user,
-          totalAssigned: r.totalAssigned ?? 0,
-          submitCount: r.submitCount ?? 0,
-          approvedCount: r.approvedCount ?? 0,
-          rejectedCount: r.rejectedCount ?? 0,
-          districts: new Set(distName ? [distName] : []),
-          cities: new Set(cityName ? [cityName] : []),
-        });
-      } else {
-        prev.totalAssigned += r.totalAssigned ?? 0;
-        prev.submitCount += r.submitCount ?? 0;
-        prev.approvedCount += r.approvedCount ?? 0;
-        prev.rejectedCount += r.rejectedCount ?? 0;
-        if (distName) prev.districts.add(distName);
-        if (cityName) prev.cities.add(cityName);
+      const key = r.user?.id;
+      if (!key) continue;
+
+      const distName = r.district?.name ?? "";
+      const cityName = r.district?.city ?? "";
+
+      let agg = map.get(key);
+      if (!agg) {
+        agg = {
+          user: { ...r.user },
+          superVisor: r.superVisor ?? null,
+          superVisorId: r.superVisorId ?? null,
+          progressRole: r.progressRole ?? null,
+          totalAssigned: 0,
+          submitCount: 0,
+          approvedCount: 0,
+          rejectedCount: 0,
+          districts: new Set<string>(),
+          cities: new Set<string>(),
+        };
+        map.set(key, agg);
       }
+
+      agg.totalAssigned += r.totalAssigned ?? 0;
+      agg.submitCount += r.submitCount ?? 0;
+      agg.approvedCount += r.approvedCount ?? 0;
+      agg.rejectedCount += r.rejectedCount ?? 0;
+      if (distName) agg.districts.add(distName);
+      if (cityName) agg.cities.add(cityName);
     }
     return Array.from(map.values()).sort(
-      (a, b) => b.approvedCount - a.approvedCount
+      (a, b) => (b.approvedCount ?? 0) - (a.approvedCount ?? 0),
     );
   }, [userProgress, selectedCity]);
+
+  const groupedBySupervisor = useMemo(() => {
+    type Group = {
+      supervisorId: string;
+      supervisorName: string;
+      supervisorEmail?: string;
+      members: typeof aggregatedUserProgress;
+    };
+
+    const groups = new Map<string, Group>();
+
+    for (const row of aggregatedUserProgress) {
+      const id =
+        row.superVisorId && row.superVisorId.length > 0
+          ? row.superVisorId
+          : "NO_SUPERVISOR";
+
+      const supName =
+        id === "NO_SUPERVISOR"
+          ? "Tanpa Pengawas"
+          : (row.superVisor?.name ?? "(Pengawas tidak diketahui)");
+
+      const supEmail = row.superVisor?.email;
+
+      if (!groups.has(id)) {
+        groups.set(id, {
+          supervisorId: id,
+          supervisorName: supName,
+          supervisorEmail: supEmail,
+          members: [],
+        } as Group);
+      }
+
+      groups.get(id)!.members.push(row);
+    }
+
+    return Array.from(groups.values()).sort((a, b) =>
+      a.supervisorName.localeCompare(b.supervisorName, "id"),
+    );
+  }, [aggregatedUserProgress]);
 
   React.useEffect(() => {
     if (!selectedSubSlug) return;
     if (!subSurveyActivities?.length) return;
 
     const current = subSurveyActivities.find(
-      (s: any) => s.id === selectedSubSurvey
+      (s: any) => s.id === selectedSubSurvey,
     );
     if (current?.slug === selectedSubSlug) return;
 
     const found = subSurveyActivities.find(
-      (s: any) => s.slug === selectedSubSlug
+      (s: any) => s.slug === selectedSubSlug,
     );
     if (!found) return;
 
@@ -163,7 +216,7 @@ const ProgressTemplate = () => {
       ? Math.round(
           ((progress.submitCount + progress.approvedCount) /
             progress.targetSample) *
-            100
+            100,
         )
       : 0;
   const cityOptions = useMemo(
@@ -171,8 +224,52 @@ const ProgressTemplate = () => {
       { value: "", label: "-- Semua Wilayah --" },
       ...cities.map((c) => ({ value: c, label: c })),
     ],
-    [cities]
+    [cities],
   );
+
+  const handleExportProgress = () => {
+    if (!aggregatedUserProgress.length) {
+      alert("Tidak ada data untuk diexport.");
+      return;
+    }
+
+    const rows = aggregatedUserProgress.map((row, idx) => {
+      const cityText = Array.from(row.cities).join(", ");
+      const districtText = Array.from(row.districts).join(", ");
+      const percent =
+        row.totalAssigned > 0
+          ? Math.round((row.submitCount / row.totalAssigned) * 100)
+          : 0;
+      const percentApproved =
+        row.totalAssigned > 0
+          ? Math.round((row.approvedCount / row.totalAssigned) * 100)
+          : 0;
+
+      return {
+        No: idx + 1,
+        Nama: row.user.name,
+        Email: row.user.email,
+        Pengawas: row.superVisor?.name ?? "",
+        Kota: cityText,
+        Wilayah: districtText,
+        TotalAssigned: row.totalAssigned,
+        SubmitCount: row.submitCount,
+        ApprovedCount: row.approvedCount,
+        PersenSubmit: percent,
+        PersenApproved: percentApproved,
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "PROGRESS_PETUGAS");
+
+    const fileName = `Progress_${selectedName || "Kegiatan"}_${
+      selectedCity || "ALL"
+    }.xlsx`;
+
+    XLSX.writeFile(wb, fileName);
+  };
 
   if (loadingSurvey || loadingSubSurveyAll) return <div>Loading...</div>;
   if (!surveyData || !surveyData.surveyActivityBySlug)
@@ -217,7 +314,16 @@ const ProgressTemplate = () => {
 
       {selectedSubSurvey && progress && (
         <div className="bg-orange-50 rounded-lg p-3 md:p-4 w-full shadow-md space-y-4">
-          <h1 className="text-lg md:text-xl font-bold">{selectedName}</h1>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-2 gap-2">
+            <h1 className="text-lg md:text-xl font-bold">{selectedName}</h1>
+            <button
+              type="button"
+              onClick={handleExportProgress}
+              className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-semibold border border-gray-300 bg-white hover:bg-gray-50"
+            >
+              Ekspor Progress Petugas
+            </button>
+          </div>
 
           {/* Ringkasan atas */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -335,77 +441,92 @@ const ProgressTemplate = () => {
                     <th className="px-4 py-2">PROGRESS</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y">
-                  {aggregatedUserProgress.map((row: any) => {
-                    const percent =
-                      row.totalAssigned > 0
-                        ? Math.round(
-                            ((row.submitCount + row.rejectedCount) /
-                              row.totalAssigned) *
-                              100
-                          )
-                        : 0;
-
-                    const percentApproved =
-                      row.totalAssigned > 0
-                        ? Math.round(
-                            (row.approvedCount / row.totalAssigned) * 100
-                          )
-                        : 0;
-
-                    const districtText =
-                      Array.from(row.districts ?? []).join(", ") || "-";
-                    const cityText = Array.from(row.cities ?? []).join(", ");
-
-                    return (
-                      <tr key={row.user.id}>
-                        <td className="px-4 py-3 font-medium text-gray-800">
-                          <p className="truncate">{row.user.name}</p>
-                          <p className="text-xs text-gray-500 truncate">
-                            {row.user.email}
-                          </p>
-                        </td>
-
-                        {/* Wilayah tugas: gabungkan nama distrik & kota bila multi */}
-                        <td className="px-4 py-3 text-gray-700">
-                          {cityText ? `${cityText}: ` : ""}
-                          {districtText}
-                        </td>
-
-                        <td className="px-4 py-3">{row.totalAssigned}</td>
-                        <td className="px-4 py-3">{row.submitCount}</td>
-                        <td className="px-4 py-3">{row.approvedCount}</td>
-                        {/* <td className="px-4 py-3">{row.rejectedCount}</td> */}
-                        <td className="px-4 py-3">
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div
-                              className={`h-2 rounded-full ${percent >= 80 ? "bg-green-500" : percent >= 50 ? "bg-yellow-400" : "bg-red-400"}`}
-                              style={{ width: `${percent}%` }}
-                            />
-                          </div>
-                          <p className="text-xs text-gray-600 mt-1">
-                            {percent}% Disubmit
-                          </p>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div
-                              className={`h-2 rounded-full ${percentApproved >= 80 ? "bg-green-500" : percentApproved >= 50 ? "bg-yellow-400" : "bg-red-400"}`}
-                              style={{ width: `${percentApproved}%` }}
-                            />
-                          </div>
-                          <p className="text-xs text-gray-600 mt-1">
-                            {percentApproved}% Disetujui
-                          </p>
+                <tbody className="bg-white">
+                  {groupedBySupervisor.map((group) => (
+                    <React.Fragment key={group.supervisorId}>
+                      <tr className="bg-slate-100">
+                        <td
+                          colSpan={7}
+                          className="px-4 py-2 font-bold text-gray-800"
+                        >
+                          Pengawas: {group.supervisorName}
+                          {group.supervisorEmail && (
+                            <span className="text-xs text-gray-500 ml-2">
+                              ({group.supervisorEmail})
+                            </span>
+                          )}
                         </td>
                       </tr>
-                    );
-                  })}
-                  {!aggregatedUserProgress.length && (
-                    <tr>
-                      <td className="px-4 py-3 text-gray-600" colSpan={7}>
-                        Tidak ada data untuk wilayah yang dipilih.
-                      </td>
-                    </tr>
-                  )}
+
+                      {group.members.map((row, idx) => {
+                        const cityText = Array.from(row.cities).join(", ");
+                        const districtText = Array.from(row.districts).join(
+                          ", ",
+                        );
+                        const percent =
+                          row.totalAssigned > 0
+                            ? Math.round(
+                                (row.submitCount / row.totalAssigned) * 100,
+                              )
+                            : 0;
+                        const percentApproved =
+                          row.totalAssigned > 0
+                            ? Math.round(
+                                (row.approvedCount / row.totalAssigned) * 100,
+                              )
+                            : 0;
+
+                        return (
+                          <tr key={row.user.id} className="border-b">
+                            {/* <td className="px-4 py-3 text-sm text-gray-500">
+                              {idx + 1}
+                            </td> */}
+                            <td className="px-4 py-3">
+                              <p className="font-semibold">{row.user.name}</p>
+                              <p className="text-xs text-gray-500 truncate">
+                                {row.user.email}
+                              </p>
+                            </td>
+                            <td className="px-4 py-3 text-gray-700">
+                              {cityText ? `${cityText}: ` : ""}
+                              {districtText}
+                            </td>
+                            <td className="px-4 py-3">{row.totalAssigned}</td>
+                            <td className="px-4 py-3">{row.submitCount}</td>
+                            <td className="px-4 py-3">{row.approvedCount}</td>
+                            {/* <td className="px-4 py-3">{row.rejectedCount}</td> */}
+                            <td className="px-4 py-3">
+                              <div className="w-full bg-gray-200 rounded-full h-2">
+                                <div
+                                  className={`h-2 rounded-full ${percent >= 80 ? "bg-green-500" : percent >= 50 ? "bg-yellow-400" : "bg-red-400"}`}
+                                  style={{ width: `${percent}%` }}
+                                />
+                              </div>
+                              <p className="text-xs text-gray-600 mt-1">
+                                {percent}% Disubmit
+                              </p>
+                              <div className="w-full bg-gray-200 rounded-full h-2">
+                                <div
+                                  className={`h-2 rounded-full ${percentApproved >= 80 ? "bg-green-500" : percentApproved >= 50 ? "bg-yellow-400" : "bg-red-400"}`}
+                                  style={{ width: `${percentApproved}%` }}
+                                />
+                              </div>
+                              <p className="text-xs text-gray-600 mt-1">
+                                {percentApproved}% Disetujui
+                              </p>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {!aggregatedUserProgress.length && (
+                        <tr>
+                          <td className="px-4 py-3 text-gray-600" colSpan={7}>
+                            Tidak ada data untuk wilayah yang dipilih.
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ))}
                 </tbody>
               </table>
             </div>

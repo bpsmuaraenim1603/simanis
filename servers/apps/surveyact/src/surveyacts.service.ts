@@ -211,9 +211,15 @@ export class SurveyActivityService {
   private async ensureSupervisorProgress(params: {
     subSurveyActivityId?: string | null;
     superVisorId?: string | null;
+    districtId?: string | null;
+    blockCount?: string | null;
+    villageName?: string | null;
   }) {
     const subSurveyActivityId = params.subSurveyActivityId ?? null;
     const superVisorId = params.superVisorId ?? null;
+    const districtId = params.districtId ?? null;
+    const blockCount = params.blockCount ?? null;
+    const villageName = params.villageName ?? null;
     if (!subSurveyActivityId || !superVisorId) return;
 
     const exists = await this.prisma.userProgress.findFirst({
@@ -235,9 +241,9 @@ export class SurveyActivityService {
         submitCount: 0,
         approvedCount: 0,
         rejectedCount: 0,
-        blockCount: null,
-        districtId: null,
-        villageName: null,
+        blockCount: blockCount ?? null,
+        districtId: districtId ?? null,
+        villageName: villageName ?? null,
         travelBill: '0',
         superVisorId: null,
       },
@@ -289,6 +295,9 @@ export class SurveyActivityService {
     await this.ensureSupervisorProgress({
       superVisorId: created.superVisorId,
       subSurveyActivityId: created.subSurveyActivityId,
+      districtId: created.districtId,
+      blockCount: created.blockCount,
+      villageName: created.villageName,
     });
 
     const [sub, user, supervisor] = await Promise.all([
@@ -414,7 +423,7 @@ export class SurveyActivityService {
 
   async getUserProgressBySubSurveyActivityId(subSurveyActivityId: string) {
     return this.prisma.userProgress.findMany({
-      where: { subSurveyActivityId },
+      where: { subSurveyActivityId, superVisorId: { not: null } },
       include: {
         user: true,
         subSurveyActivity: true,
@@ -440,6 +449,7 @@ export class SurveyActivityService {
 
   async getAllUserSurveyProgress() {
     return this.prisma.userProgress.findMany({
+      where: { superVisorId: { not: null } },
       include: {
         user: true,
         subSurveyActivity: true,
@@ -1250,7 +1260,16 @@ export class SurveyActivityService {
 
     const subs = await this.prisma.subSurveyActivity.findMany({
       where: { startDate: { gte: from, lte: to } },
-      select: { id: true, name: true, startDate: true, endDate: true },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        startDate: true,
+        endDate: true,
+        surveyActivity: {
+          select: { slug: true },
+        },
+      },
       orderBy: { startDate: 'asc' },
     });
 
@@ -1275,6 +1294,8 @@ export class SurveyActivityService {
           month,
           subSurveyActivityId: s.id,
           subSurveyName: s.name ?? '-',
+          subSurveySlug: s.slug,
+          surveyActivitySlug: s.surveyActivity?.slug ?? '',
           startDate: s.startDate,
           endDate: s.endDate,
           staffCount: staffUsers.length,
@@ -1797,9 +1818,9 @@ export class SurveyActivityService {
                   subSurveyActivityId,
                   progressRole: 'PENGAWAS',
                   superVisorId: null,
-                  districtId: null,
-                  villageName: null,
-                  blockCount: null,
+                  districtId: districtId,
+                  villageName: villageName,
+                  blockCount: blockCount,
                   travelBill: travelBillPengawas,
                   totalAssigned: 0,
                   submitCount: 0,

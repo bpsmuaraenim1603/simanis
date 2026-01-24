@@ -7,7 +7,13 @@ import {
   GraphQLISODateTime,
   Float,
 } from '@nestjs/graphql';
-import { AgreeState, CacahStatus, IssueStatus, StatusST, ProgressRole } from '@prisma/client';
+import {
+  AgreeState,
+  CacahStatus,
+  IssueStatus,
+  StatusST,
+  ProgressRole,
+} from '@prisma/client';
 import { UserType } from 'apps/users/src/types/users.types';
 
 registerEnumType(AgreeState, {
@@ -90,11 +96,11 @@ export class UserProgressType {
   @Field(() => ID)
   userId: string;
 
-  @Field(() => ID)
-  superVisorId: string;
+  @Field(() => ID, { nullable: true })
+  superVisorId?: string;
 
-  @Field(() => UserType, { nullable: true })
-  superVisor?: UserType;
+  @Field(() => UserType, { nullable: true, name: 'superVisor' })
+  supervisor?: UserType;
 
   @Field(() => ID)
   subSurveyActivityId: string;
@@ -102,8 +108,8 @@ export class UserProgressType {
   @Field(() => SubSurveyActivityType, { nullable: true })
   subSurveyActivity?: SubSurveyActivityType;
 
-  @Field(() => ID)
-  districtId: string;
+  @Field(() => ID, { nullable: true })
+  districtId?: string;
 
   @Field(() => DistrictType, { nullable: true })
   district?: DistrictType;
@@ -346,6 +352,12 @@ export class MonthlyActivityStaffUsageRowType {
 
   @Field(() => String)
   subSurveyName!: string;
+
+  @Field(() => String, { nullable: true })
+  subSurveySlug?: string;
+
+  @Field(() => String, { nullable: true })
+  surveyActivitySlug?: string;
 
   @Field(() => GraphQLISODateTime)
   startDate!: Date;

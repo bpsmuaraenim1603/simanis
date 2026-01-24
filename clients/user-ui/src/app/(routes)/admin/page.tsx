@@ -76,6 +76,7 @@ type UserProgress = {
   districtId: string;
   villageName: string;
   travelBill: string;
+  progressRole: string;
 };
 type UserProgressWithUser = UserProgress & {
   user?: { name: string; email: string; limit_bill: number };
@@ -268,6 +269,7 @@ function Admin() {
     districtId: "",
     villageName: "",
     travelBill: "",
+    progressRole: "",
   });
   const emptySampleRow = {
     id: "",
@@ -613,7 +615,7 @@ function Admin() {
         }
         if (willExceedAdd) {
           toast.error(
-            `Honor perjalanan melebihi limit pengguna.\n` +
+            `Honor petugas melebihi limit pengguna.\n` +
               `Limit: ${limitBillAdd.toLocaleString("id-ID")} • Terpakai: ${usedTravelAdd.toLocaleString("id-ID")} • ` +
               `Sisa: ${remainTravelAdd.toLocaleString("id-ID")}`,
           );
@@ -709,7 +711,7 @@ function Admin() {
           }
           if (willExceedUpdate) {
             toast.error(
-              `Honor perjalanan melebihi limit pengguna.\n` +
+              `Honor petugas melebihi limit pengguna.\n` +
                 `Limit: ${limitBillUpdate.toLocaleString("id-ID")} • Terpakai (kegiatan lain): ${usedTravelUpdateOthers.toLocaleString("id-ID")} • ` +
                 `Sisa untuk baris ini: ${remainTravelUpdate.toLocaleString("id-ID")}`,
             );
@@ -760,6 +762,7 @@ function Admin() {
         districtId: "",
         villageName: "",
         travelBill: "",
+        progressRole: "",
       });
       setSampleListUpdate([emptySampleRow]);
       setDeleteSampleIds([]);
@@ -1163,6 +1166,7 @@ function Admin() {
         districtId: up.districtId ?? "",
         villageName: up.villageName ?? "",
         travelBill: up.travelBill ?? "",
+        progressRole: up.progressRole ?? "",
       }));
     } else {
       setUpdateUserProgressForm((prev) => ({
@@ -1175,6 +1179,7 @@ function Admin() {
         districtId: "",
         villageName: "",
         travelBill: "",
+        progressRole: "",
       }));
     }
   }, [updateUserProgressForm.userProgressId, upMap]);
@@ -2448,6 +2453,9 @@ function Admin() {
                       ? `${up.user?.name ?? "-"} (Pengawas)`
                       : `${up.user?.name ?? "-"} - Blok ${up.blockCount ?? "-"}`,
                   subLabel: up.user?.email ?? "",
+                  onvalueChange: () => {
+                    setUpdateUPField("progressRole", up.progressRole ?? 0);
+                  },
                 }))}
                 placeholder="-- Pilih Blok Petugas --"
               />
@@ -2508,7 +2516,7 @@ function Admin() {
                 htmlFor="travelBill"
                 className="block text-sm font-bold mb-2"
               >
-                Honor Perjalanan
+                Honor Petugas
               </label>
               <input
                 id="travelBill"
@@ -2532,193 +2540,195 @@ function Admin() {
               )}
             </div>
             {/* === Daftar Sampel Blok Petugas (UPDATE) === */}
-            <div className="md:col-span-2 border rounded-md p-3 bg-white">
-              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-2">
-                <h4 className="font-bold text-sm">
-                  Daftar Sampel Blok Petugas ({sampleListUpdate.length} Baris)
-                </h4>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setSampleListUpdate((prev) => {
-                      const nus = getNextNus(prev);
-                      const next = [...prev, { ...emptySampleRow, nus }];
-                      return sortByNusAsc(next);
-                    })
-                  }
-                  className="flex flex-row items-center justify-center px-3 rounded-md cursor-pointer bg-[#2190ff] min-h-[30px] font-Poppins font-semibold text-white hover:bg-[#1977cc] transition-colors text-sm"
-                  disabled={!updateUserProgressForm.userProgressId}
-                  title={
-                    !updateUserProgressForm.userProgressId
-                      ? "Pilih Blok Petugas dulu"
-                      : ""
-                  }
-                >
-                  + Tambah Baris
-                </button>
-              </div>
-
-              {!updateUserProgressForm.userProgressId ? (
-                <div className="text-xs text-gray-600">
-                  Pilih Blok Petugas terlebih dahulu untuk memuat sampel.
+            {updateUserProgressForm.progressRole === "PETUGAS" && (
+              <div className="md:col-span-2 border rounded-md p-3 bg-white">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-2">
+                  <h4 className="font-bold text-sm">
+                    Daftar Sampel Blok Petugas ({sampleListUpdate.length} Baris)
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSampleListUpdate((prev) => {
+                        const nus = getNextNus(prev);
+                        const next = [...prev, { ...emptySampleRow, nus }];
+                        return sortByNusAsc(next);
+                      })
+                    }
+                    className="flex flex-row items-center justify-center px-3 rounded-md cursor-pointer bg-[#2190ff] min-h-[30px] font-Poppins font-semibold text-white hover:bg-[#1977cc] transition-colors text-sm"
+                    disabled={!updateUserProgressForm.userProgressId}
+                    title={
+                      !updateUserProgressForm.userProgressId
+                        ? "Pilih Blok Petugas dulu"
+                        : ""
+                    }
+                  >
+                    + Tambah Baris
+                  </button>
                 </div>
-              ) : (
-                <div className="space-y-2 max-h-64 overflow-y-auto">
-                  <div className="overflow-x-auto">
-                    <div className="min-w-[720px] md:min-w-0 px-1">
-                      {sampleListUpdate.map((row, idx) => (
-                        <div
-                          key={idx}
-                          className="flex gap-2 items-center my-2 w-full"
-                        >
-                          <input
-                            placeholder="NUS"
-                            value={row.nus}
-                            readOnly
-                            className="w-full sm:col-span-2 md:col-span-1 px-3 py-2 border rounded-md bg-white"
-                          />
 
-                          <input
-                            placeholder="Identitas"
-                            value={row.identity}
-                            onChange={(e) =>
-                              setSampleListUpdate((prev) =>
-                                prev.map((r, i) =>
-                                  i === idx
-                                    ? { ...r, identity: e.target.value }
-                                    : r,
-                                ),
-                              )
-                            }
-                            className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                          />
-
-                          <select
-                            value={row.cacahStatus}
-                            onChange={(e) =>
-                              setSampleListUpdate((prev) =>
-                                prev.map((r, i) =>
-                                  i === idx
-                                    ? { ...r, cacahStatus: e.target.value }
-                                    : r,
-                                ),
-                              )
-                            }
-                            className="w-full px-3 py-2 border rounded-md bg-white text-sm"
+                {!updateUserProgressForm.userProgressId ? (
+                  <div className="text-xs text-gray-600">
+                    Pilih Blok Petugas terlebih dahulu untuk memuat sampel.
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    <div className="overflow-x-auto">
+                      <div className="min-w-[720px] md:min-w-0 px-1">
+                        {sampleListUpdate.map((row, idx) => (
+                          <div
+                            key={idx}
+                            className="flex gap-2 items-center my-2 w-full"
                           >
-                            <option value="Belum_Cacah">Belum Dicacah</option>
-                            <option value="Selesai">Selesai</option>
-                            {/* <option value="Drop_Out">Drop Out</option> */}
-                          </select>
+                            <input
+                              placeholder="NUS"
+                              value={row.nus}
+                              readOnly
+                              className="w-full sm:col-span-2 md:col-span-1 px-3 py-2 border rounded-md bg-white"
+                            />
 
-                          <select
-                            value={row.approvalStatus}
-                            onChange={(e) =>
-                              setSampleListUpdate((prev) =>
-                                prev.map((r, i) =>
-                                  i === idx
-                                    ? { ...r, approvalStatus: e.target.value }
-                                    : r,
-                                ),
-                              )
-                            }
-                            className="w-full px-3 py-2 border rounded-md bg-white text-sm"
-                          >
-                            <option value="Menunggu">Menunggu</option>
-                            <option value="Disetujui">Disetujui</option>
-                            <option value="Ditolak">Ditolak</option>
-                          </select>
-
-                          <input
-                            placeholder="Lat"
-                            value={row.geoLat ?? ""}
-                            onChange={(e) =>
-                              setSampleListUpdate((prev) =>
-                                prev.map((r, i) =>
-                                  i === idx
-                                    ? { ...r, geoLat: e.target.value }
-                                    : r,
-                                ),
-                              )
-                            }
-                            className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                          />
-
-                          <input
-                            placeholder="Lng"
-                            value={row.geoLng ?? ""}
-                            onChange={(e) =>
-                              setSampleListUpdate((prev) =>
-                                prev.map((r, i) =>
-                                  i === idx
-                                    ? { ...r, geoLng: e.target.value }
-                                    : r,
-                                ),
-                              )
-                            }
-                            className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                          />
-
-                          {/* Hapus baris dari UI */}
-                          <button
-                            type="button"
-                            disabled={patchSampleLoading}
-                            onClick={async () => {
-                              const row: any = sampleListUpdate[idx];
-
-                              if (!row?.id) {
+                            <input
+                              placeholder="Identitas"
+                              value={row.identity}
+                              onChange={(e) =>
                                 setSampleListUpdate((prev) =>
-                                  sortByNusAsc(
-                                    prev.filter((_, i) => i !== idx),
+                                  prev.map((r, i) =>
+                                    i === idx
+                                      ? { ...r, identity: e.target.value }
+                                      : r,
                                   ),
-                                );
-
-                                return;
-                              }
-
-                              const userProgressId =
-                                updateUserProgressForm.userProgressId;
-                              if (!userProgressId) {
-                                toast.error("User Progress belum dipilih.");
-                                return;
-                              }
-
-                              if (
-                                !window.confirm(
-                                  "Hapus sample ini beserta fotonya?",
                                 )
-                              )
-                                return;
-
-                              try {
-                                await patchUserSamples({
-                                  variables: {
-                                    input: {
-                                      userProgressId,
-                                      deleteSampleIds: [row.id],
-                                    },
-                                  },
-                                });
-
-                                setSampleListUpdate((prev) =>
-                                  prev.filter((_, i) => i !== idx),
-                                );
-                              } catch (err) {
-                                console.error(err);
-                                toast.error("Gagal menghapus sample.");
                               }
-                            }}
-                            className="px-3 py-2 border rounded-md text-sm bg-red-500 text-white hover:bg-red-600 transition-colors font-semibold disabled:opacity-60"
-                          >
-                            Hapus
-                          </button>
-                        </div>
-                      ))}
+                              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                            />
+
+                            <select
+                              value={row.cacahStatus}
+                              onChange={(e) =>
+                                setSampleListUpdate((prev) =>
+                                  prev.map((r, i) =>
+                                    i === idx
+                                      ? { ...r, cacahStatus: e.target.value }
+                                      : r,
+                                  ),
+                                )
+                              }
+                              className="w-full px-3 py-2 border rounded-md bg-white text-sm"
+                            >
+                              <option value="Belum_Cacah">Belum Dicacah</option>
+                              <option value="Selesai">Selesai</option>
+                              {/* <option value="Drop_Out">Drop Out</option> */}
+                            </select>
+
+                            <select
+                              value={row.approvalStatus}
+                              onChange={(e) =>
+                                setSampleListUpdate((prev) =>
+                                  prev.map((r, i) =>
+                                    i === idx
+                                      ? { ...r, approvalStatus: e.target.value }
+                                      : r,
+                                  ),
+                                )
+                              }
+                              className="w-full px-3 py-2 border rounded-md bg-white text-sm"
+                            >
+                              <option value="Menunggu">Menunggu</option>
+                              <option value="Disetujui">Disetujui</option>
+                              <option value="Ditolak">Ditolak</option>
+                            </select>
+
+                            <input
+                              placeholder="Lat"
+                              value={row.geoLat ?? ""}
+                              onChange={(e) =>
+                                setSampleListUpdate((prev) =>
+                                  prev.map((r, i) =>
+                                    i === idx
+                                      ? { ...r, geoLat: e.target.value }
+                                      : r,
+                                  ),
+                                )
+                              }
+                              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                            />
+
+                            <input
+                              placeholder="Lng"
+                              value={row.geoLng ?? ""}
+                              onChange={(e) =>
+                                setSampleListUpdate((prev) =>
+                                  prev.map((r, i) =>
+                                    i === idx
+                                      ? { ...r, geoLng: e.target.value }
+                                      : r,
+                                  ),
+                                )
+                              }
+                              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                            />
+
+                            {/* Hapus baris dari UI */}
+                            <button
+                              type="button"
+                              disabled={patchSampleLoading}
+                              onClick={async () => {
+                                const row: any = sampleListUpdate[idx];
+
+                                if (!row?.id) {
+                                  setSampleListUpdate((prev) =>
+                                    sortByNusAsc(
+                                      prev.filter((_, i) => i !== idx),
+                                    ),
+                                  );
+
+                                  return;
+                                }
+
+                                const userProgressId =
+                                  updateUserProgressForm.userProgressId;
+                                if (!userProgressId) {
+                                  toast.error("User Progress belum dipilih.");
+                                  return;
+                                }
+
+                                if (
+                                  !window.confirm(
+                                    "Hapus sample ini beserta fotonya?",
+                                  )
+                                )
+                                  return;
+
+                                try {
+                                  await patchUserSamples({
+                                    variables: {
+                                      input: {
+                                        userProgressId,
+                                        deleteSampleIds: [row.id],
+                                      },
+                                    },
+                                  });
+
+                                  setSampleListUpdate((prev) =>
+                                    prev.filter((_, i) => i !== idx),
+                                  );
+                                } catch (err) {
+                                  console.error(err);
+                                  toast.error("Gagal menghapus sample.");
+                                }
+                              }}
+                              className="px-3 py-2 border rounded-md text-sm bg-red-500 text-white hover:bg-red-600 transition-colors font-semibold disabled:opacity-60"
+                            >
+                              Hapus
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
 
             <div className="md:col-span-2 flex gap-2">
               {deleteMode ? (

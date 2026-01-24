@@ -4,6 +4,7 @@ import {
   ID,
   registerEnumType,
   GraphQLISODateTime,
+  ObjectType,
 } from '@nestjs/graphql';
 import { AgreeState, CacahStatus, IssueStatus, StatusST } from '@prisma/client';
 import {
@@ -387,4 +388,19 @@ export class updateIssueCommentDto {
   @Field()
   @IsString()
   message: string;
+}
+
+@InputType()
+export class ExportSamplePhotosDTO {
+  @Field()
+  subSurveyActivityId: string;
+}
+
+@ObjectType()
+export class ExportSamplePhotosResult {
+  @Field()
+  zipUrl: string;
+
+  @Field()
+  totalPhotos: number;
 }
