@@ -12,6 +12,7 @@ import toast from "react-hot-toast";
 import exifr from "exifr";
 import dynamic from "next/dynamic";
 import { getRoles } from "@/src/utils/roles";
+import { EXPORT_USER_SAMPLE_PHOTOS } from "@/src/graphql/actions/export-user-sample-photos.action";
 
 type ViewMode = "list" | "detail";
 
@@ -62,6 +63,9 @@ export default function UserPage() {
   }, [user?.id, fetchUserProgress]);
   const [patchUserSamples] = useMutation(PATCH_USER_SAMPLES);
   const [uploadSurveySamplePhoto] = useMutation(UPLOAD_SURVEY_SAMPLE_PHOTO);
+  const [exportUserSamplePhotos, { loading: exportingPhotos }] = useMutation(
+    EXPORT_USER_SAMPLE_PHOTOS,
+  );
   const [editableSamples, setEditableSamples] = useState<any[]>([]);
   const [locatingId, setLocatingId] = useState<string | null>(null);
   const [resettingId, setResettingId] = useState<string | null>(null);
@@ -72,7 +76,7 @@ export default function UserPage() {
   const [draftLng, setDraftLng] = useState<number | null>(null);
   const [draftPhotoFile, setDraftPhotoFile] = useState<File | null>(null);
   const [draftPhotoPreview, setDraftPhotoPreview] = useState<string | null>(
-    null
+    null,
   );
   const [savingModal, setSavingModal] = useState(false);
   const [qIdentity, setQIdentity] = useState("");
@@ -110,7 +114,7 @@ export default function UserPage() {
     const startDay = new Date(
       start.getFullYear(),
       start.getMonth(),
-      start.getDate()
+      start.getDate(),
     );
     const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
 
@@ -187,7 +191,7 @@ export default function UserPage() {
 
   const LocationPickerMap = dynamic(
     () => import("@/src/components/LocationPickerMap"),
-    { ssr: false }
+    { ssr: false },
   );
 
   const filteredSamples = useMemo(() => {
@@ -207,7 +211,7 @@ export default function UserPage() {
     if (!actId) return [];
 
     const filtered = rows.filter(
-      (r: any) => r?.subSurveyActivity?.id === actId
+      (r: any) => r?.subSurveyActivity?.id === actId,
     );
 
     const map = new Map<string, any>();
@@ -232,14 +236,14 @@ export default function UserPage() {
     if (!actId) return undefined;
 
     const filtered = rows.filter(
-      (up: any) => up?.subSurveyActivity?.id === actId
+      (up: any) => up?.subSurveyActivity?.id === actId,
     );
     if (filtered.length === 0) return undefined;
 
     const blk = (selectedBlock ?? "").toString().trim();
     if (blk) {
       const byBlock = filtered.find(
-        (up: any) => String(up?.blockCount ?? "").trim() === blk
+        (up: any) => String(up?.blockCount ?? "").trim() === blk,
       );
       return byBlock ?? filtered[0];
     }
@@ -257,7 +261,7 @@ export default function UserPage() {
   useEffect(() => {
     if (!currentUP?.samples) return setEditableSamples([]);
     const sorted = [...currentUP.samples].sort(
-      (a: any, b: any) => Number(a.nus) - Number(b.nus)
+      (a: any, b: any) => Number(a.nus) - Number(b.nus),
     );
     setEditableSamples(sorted.map((s: any) => ({ ...s })));
   }, [
@@ -278,7 +282,7 @@ export default function UserPage() {
       if (activityId) {
         const rows: any[] = userProgressData?.userProgressSurveyByUserId ?? [];
         const up = rows.find(
-          (r: any) => r?.subSurveyActivity?.id === activityId
+          (r: any) => r?.subSurveyActivity?.id === activityId,
         );
 
         setUpdateUserProgressForm((p) => ({
@@ -425,7 +429,7 @@ export default function UserPage() {
         (pos) =>
           resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
         (err) => reject(new Error(err.message)),
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
       );
     });
   }
@@ -505,7 +509,7 @@ export default function UserPage() {
       canvas.toBlob(
         (b) => (b ? resolve(b) : reject(new Error("Gagal kompres"))),
         "image/jpeg",
-        quality
+        quality,
       );
     });
 
@@ -517,7 +521,7 @@ export default function UserPage() {
   }
 
   function extractLatLngFromTextOrUrl(
-    input: string
+    input: string,
   ): { lat: number; lng: number } | null {
     if (!input) return null;
     const s = input.trim();
@@ -577,7 +581,7 @@ export default function UserPage() {
 
     if (!exifDate) {
       throw new Error(
-        "Tanggal foto tidak bisa diverifikasi. Ambil foto baru dari kamera ya."
+        "Tanggal foto tidak bisa diverifikasi. Ambil foto baru dari kamera ya.",
       );
     }
 
@@ -586,7 +590,7 @@ export default function UserPage() {
 
     if (!isSameLocalDay(photoDate, today)) {
       throw new Error(
-        "Foto bukan dari hari ini. Tolong ambil foto baru hari ini ya."
+        "Foto bukan dari hari ini. Tolong ambil foto baru hari ini ya.",
       );
     }
   }
@@ -688,7 +692,7 @@ export default function UserPage() {
 
         const createdSamples = createRes?.data?.patchUserSamples?.samples ?? [];
         const createdSample = createdSamples.find(
-          (s: any) => Number(s.nus) === Number(nus)
+          (s: any) => Number(s.nus) === Number(nus),
         );
 
         const createdSampleId = createdSample?.id;
@@ -701,10 +705,10 @@ export default function UserPage() {
           const refreshedRows: any[] =
             userProgressData?.userProgressSurveyByUserId ?? [];
           const refreshedUP = refreshedRows.find(
-            (x: any) => x?.id === userProgressId
+            (x: any) => x?.id === userProgressId,
           );
           const refreshedSample = refreshedUP?.samples?.find(
-            (s: any) => Number(s.nus) === Number(nus)
+            (s: any) => Number(s.nus) === Number(nus),
           );
           if (!refreshedSample?.id)
             throw new Error("Sample berhasil dibuat, tapi ID tidak ditemukan.");
@@ -801,8 +805,8 @@ export default function UserPage() {
               photoCapturedAt: null,
               photoSignedUrl: null,
             }
-          : s
-      )
+          : s,
+      ),
     );
 
     try {
@@ -833,6 +837,35 @@ export default function UserPage() {
       await fetchUserProgress({ variables: { userId: user!.id } });
     } finally {
       setResettingId(null);
+    }
+  }
+
+  async function handleExportPhotos() {
+    const userProgressId =
+      currentUP?.id || updateUserProgressForm.userProgressId;
+
+    if (!userProgressId) {
+      toast.error("Progress belum dipilih.");
+      return;
+    }
+
+    try {
+      const res = await exportUserSamplePhotos({
+        variables: { userProgressId },
+      });
+
+      const result = res.data?.exportUserSamplePhotos;
+      const url = result?.zipUrl;
+      const total = result?.totalPhotos ?? 0;
+
+      if (!url || total === 0) {
+        toast.error("Tidak ada foto sampel yang bisa diekspor.");
+        return;
+      }
+
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e: any) {
+      showApolloError(e);
     }
   }
 
@@ -1094,96 +1127,111 @@ export default function UserPage() {
               {editableSamples.length === 0 ? (
                 <div className="text-sm opacity-70">Belum ada sampel.</div>
               ) : (
-                <div className="bg-white rounded-md border overflow-x-auto">
-                  <table className="min-w-full text-sm">
-                    <thead className="bg-gray-50 text-gray-700">
-                      <tr>
-                        <th className="text-left px-3 py-2">NUS</th>
-                        <th className="text-left px-3 py-2">Responden</th>
-                        <th className="text-left px-3 py-2">Status Cacah</th>
-                        <th className="text-left px-3 py-2">
-                          Status Persetujuan
-                        </th>
-                        <th className="text-right px-3 py-2">Aksi</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredSamples.map((s) => {
-                        const isDone = s.cacahStatus === "Selesai";
-                        const isApproved = s.approvalStatus === "Disetujui";
-                        return (
-                          <tr key={s.id} className="border-t">
-                            <td className="px-3 py-2 font-semibold">{s.nus}</td>
-                            <td className="px-3 py-2">{s.identity}</td>
-                            <td className="px-3 py-2">
-                              <span
-                                className={`inline-flex px-2 py-1 rounded text-xs font-semibold ${
-                                  isDone
-                                    ? "bg-green-50 text-green-700"
-                                    : "bg-red-50 text-red-700"
-                                }`}
-                              >
-                                {isDone ? "Selesai Dicacah" : "Belum Dicacah"}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2">
-                              <span
-                                className={`inline-flex px-2 py-1 rounded text-xs font-semibold ${
-                                  s.approvalStatus === "Disetujui"
-                                    ? "bg-green-50 text-green-700"
-                                    : s.approvalStatus === "Ditolak"
-                                      ? "bg-red-50 text-red-700"
-                                      : "bg-yellow-50 text-yellow-700"
-                                }`}
-                              >
-                                {s.approvalStatus ?? "Menunggu"}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2">
-                              <div className="flex gap-2 justify-end">
-                                <button
-                                  type="button"
-                                  onClick={() =>
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <div className="text-sm font-medium">Daftar Sampel</div>
+                    <button
+                      type="button"
+                      onClick={handleExportPhotos}
+                      disabled={exportingPhotos}
+                      className="px-3 py-1.5 rounded-md border text-xs bg-white hover:bg-gray-50 disabled:opacity-60"
+                    >
+                      {exportingPhotos ? "Sedang Ekspor..." : "Ekspor Foto"}
+                    </button>
+                  </div>
+                  <div className="bg-white rounded-md border overflow-x-auto">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-gray-50 text-gray-700">
+                        <tr>
+                          <th className="text-left px-3 py-2">NUS</th>
+                          <th className="text-left px-3 py-2">Responden</th>
+                          <th className="text-left px-3 py-2">Status Cacah</th>
+                          <th className="text-left px-3 py-2">
+                            Status Persetujuan
+                          </th>
+                          <th className="text-right px-3 py-2">Aksi</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredSamples.map((s) => {
+                          const isDone = s.cacahStatus === "Selesai";
+                          const isApproved = s.approvalStatus === "Disetujui";
+                          return (
+                            <tr key={s.id} className="border-t">
+                              <td className="px-3 py-2 font-semibold">
+                                {s.nus}
+                              </td>
+                              <td className="px-3 py-2">{s.identity}</td>
+                              <td className="px-3 py-2">
+                                <span
+                                  className={`inline-flex px-2 py-1 rounded text-xs font-semibold ${
                                     isDone
-                                      ? openViewModal(s.id)
-                                      : openStartModal(s.id)
-                                  }
-                                  disabled={
-                                    locatingId === s.id ||
-                                    resettingId === s.id ||
-                                    (isDone ? false : isApproved)
-                                  }
-                                  className={`px-3 py-1.5 rounded-md ${isDone ? " bg-gray-200 text-black" : " bg-blue-600 text-white"} text-xs font-semibold disabled:opacity-70`}
+                                      ? "bg-green-50 text-green-700"
+                                      : "bg-red-50 text-red-700"
+                                  }`}
                                 >
-                                  {locatingId === s.id
-                                    ? "Mengambil Lokasi..."
-                                    : isDone
-                                      ? "Lihat Keterangan"
-                                      : "Mulai Pencacahan"}
-                                </button>
+                                  {isDone ? "Selesai Dicacah" : "Belum Dicacah"}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2">
+                                <span
+                                  className={`inline-flex px-2 py-1 rounded text-xs font-semibold ${
+                                    s.approvalStatus === "Disetujui"
+                                      ? "bg-green-50 text-green-700"
+                                      : s.approvalStatus === "Ditolak"
+                                        ? "bg-red-50 text-red-700"
+                                        : "bg-yellow-50 text-yellow-700"
+                                  }`}
+                                >
+                                  {s.approvalStatus ?? "Menunggu"}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2">
+                                <div className="flex gap-2 justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      isDone
+                                        ? openViewModal(s.id)
+                                        : openStartModal(s.id)
+                                    }
+                                    disabled={
+                                      locatingId === s.id ||
+                                      resettingId === s.id ||
+                                      (isDone ? false : isApproved)
+                                    }
+                                    className={`px-3 py-1.5 rounded-md ${isDone ? " bg-gray-200 text-black" : " bg-blue-600 text-white"} text-xs font-semibold disabled:opacity-70`}
+                                  >
+                                    {locatingId === s.id
+                                      ? "Mengambil Lokasi..."
+                                      : isDone
+                                        ? "Lihat Keterangan"
+                                        : "Mulai Pencacahan"}
+                                  </button>
 
-                                <button
-                                  type="button"
-                                  onClick={() => resetCacah(s.id)}
-                                  disabled={
-                                    resettingId === s.id ||
-                                    locatingId === s.id ||
-                                    !isDone ||
-                                    isApproved
-                                  }
-                                  className="px-3 py-1.5 rounded-md bg-red-600 text-white text-xs font-semibold disabled:opacity-70"
-                                >
-                                  {resettingId === s.id
-                                    ? "Mereset..."
-                                    : "Reset"}
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                                  <button
+                                    type="button"
+                                    onClick={() => resetCacah(s.id)}
+                                    disabled={
+                                      resettingId === s.id ||
+                                      locatingId === s.id ||
+                                      !isDone ||
+                                      isApproved
+                                    }
+                                    className="px-3 py-1.5 rounded-md bg-red-600 text-white text-xs font-semibold disabled:opacity-70"
+                                  >
+                                    {resettingId === s.id
+                                      ? "Mereset..."
+                                      : "Reset"}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </div>
@@ -1266,7 +1314,7 @@ export default function UserPage() {
                                   onClick={async () => {
                                     setLocatingId(activeSampleId ?? "__add__");
                                     const tId = toast.loading(
-                                      "Mengambil lokasi..."
+                                      "Mengambil lokasi...",
                                     );
                                     try {
                                       const { lat, lng } =
@@ -1280,7 +1328,7 @@ export default function UserPage() {
                                       toast.error(
                                         "Gagal ambil lokasi: " +
                                           (e?.message || "Unknown"),
-                                        { id: tId }
+                                        { id: tId },
                                       );
                                     } finally {
                                       setLocatingId(null);
@@ -1345,52 +1393,52 @@ export default function UserPage() {
                                       setDraftLat(direct.lat);
                                       setDraftLng(direct.lng);
                                       toast.success(
-                                        "Koordinat berhasil diterapkan"
+                                        "Koordinat berhasil diterapkan",
                                       );
                                       return;
                                     }
 
                                     if (isMapsShortLink(raw)) {
                                       const t = toast.loading(
-                                        "Membuka link Google Maps..."
+                                        "Membuka link Google Maps...",
                                       );
                                       try {
                                         const r = await fetch(
-                                          `/api/expand-maps?url=${encodeURIComponent(raw)}`
+                                          `/api/expand-maps?url=${encodeURIComponent(raw)}`,
                                         );
                                         const j = await r.json();
                                         if (!r.ok)
                                           throw new Error(
-                                            j?.error || "Gagal expand link"
+                                            j?.error || "Gagal expand link",
                                           );
 
                                         const parsed =
                                           extractLatLngFromTextOrUrl(
-                                            j.finalUrl
+                                            j.finalUrl,
                                           );
                                         if (!parsed)
                                           throw new Error(
-                                            "Koordinat tidak ditemukan dari link"
+                                            "Koordinat tidak ditemukan dari link",
                                           );
 
                                         setDraftLat(parsed.lat);
                                         setDraftLng(parsed.lng);
                                         toast.success(
                                           "Koordinat berhasil diterapkan",
-                                          { id: t }
+                                          { id: t },
                                         );
                                         return;
                                       } catch (e: any) {
                                         toast.error(
                                           e?.message || "Gagal membaca link",
-                                          { id: t }
+                                          { id: t },
                                         );
                                         return;
                                       }
                                     }
 
                                     toast.error(
-                                      "Format tidak dikenali. Paste koordinat atau link Google Maps."
+                                      "Format tidak dikenali. Paste koordinat atau link Google Maps.",
                                     );
                                   }}
                                   className="px-2 py-1 rounded-md bg-gray-100 text-gray-800 text-xs font-semibold"

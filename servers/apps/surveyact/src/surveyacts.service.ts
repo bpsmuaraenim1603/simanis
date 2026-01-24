@@ -45,6 +45,7 @@ import { createClient } from '@supabase/supabase-js';
 import { DeleteByIdInput } from './dto/delete.input';
 import { StorageService } from './storage.service';
 import * as XLSX from 'xlsx';
+import * as JSZip from 'jszip';
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -423,7 +424,7 @@ export class SurveyActivityService {
 
   async getUserProgressBySubSurveyActivityId(subSurveyActivityId: string) {
     return this.prisma.userProgress.findMany({
-      where: { subSurveyActivityId, superVisorId: { not: null } },
+      where: { subSurveyActivityId },
       include: {
         user: true,
         subSurveyActivity: true,
@@ -1851,4 +1852,111 @@ export class SurveyActivityService {
       errors,
     };
   }
+
+  async exportUserSamplePhotos(
+  userProgressId: string,
+  actorId?: string,
+): Promise<{ zipUrl: string; totalPhotos: number }> {
+  // 1. Cek userProgress dan pemiliknya
+  const up = await this.prisma.userProgress.findUnique({
+    where: { id: userProgressId },
+    select: {
+      id: true,
+      userId: true,
+      subSurveyActivityId: true,
+    },
+  });
+
+  if (!up) {
+    throw new NotFoundException('UserProgress tidak ditemukan');
+  }
+
+  // Hanya pemilik yang boleh export
+  if (actorId && actorId !== up.userId) {
+    throw new BadRequestException('Anda tidak berhak mengekspor sampel ini');
+  }
+
+  // 2. Ambil semua UserSample yang punya foto
+  const samples = await this.prisma.userSample.findMany({
+    where: {
+      userProgressId,
+      photoPath: { not: null },
+    },
+    select: {
+      id: true,
+      nus: true,
+      identity: true,
+      photoPath: true,
+    },
+  });
+
+  if (!samples.length) {
+    throw new NotFoundException('Tidak ada foto sampel yang bisa diekspor');
+  }
+
+  const bucket = process.env.SUPABASE_SAMPLE_BUCKET || 'sample-photos';
+
+  // 3. Pastikan bucket ada
+  const { data: b, error: bucketErr } = await supabase.storage.getBucket(bucket);
+  if (!b || bucketErr) {
+    throw new BadRequestException('Bucket belum tersedia: ' + bucket);
+  }
+
+  const zip = new JSZip();
+
+  for (const s of samples) {
+    if (!s.photoPath) continue;
+
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .download(s.photoPath);
+
+    if (error || !data) {
+      // bisa di-skip, tidak perlu gagal semua
+      continue;
+    }
+
+    const arrayBuf = await data.arrayBuffer();
+    const buf = Buffer.from(arrayBuf);
+
+    const safeNus = (s.nus || '').replace(/[^a-zA-Z0-9_-]/g, '');
+    const safeName = (s.identity || '').replace(/[^a-zA-Z0-9_-]/g, '');
+    const base = safeNus || s.id;
+    const ext = getExtLower(s.photoPath) || '.jpg';
+
+    const fileName =
+      (safeName ? `${base}_${safeName}` : base) + ext;
+
+    zip.file(fileName, buf);
+  }
+
+  const zipContent = await zip.generateAsync({ type: 'nodebuffer' });
+
+  const exportKey = `exports/${up.subSurveyActivityId}/${up.userId}/photos_${Date.now()}.zip`;
+
+  const { error: uploadErr } = await supabase.storage
+    .from(bucket)
+    .upload(exportKey, zipContent, {
+      contentType: 'application/zip',
+      upsert: true,
+    });
+
+  if (uploadErr) {
+    throw new BadRequestException('Gagal upload file export: ' + uploadErr.message);
+  }
+
+  const { data: signed, error: signedErr } = await supabase.storage
+    .from(bucket)
+    .createSignedUrl(exportKey, 60 * 60); // 1 jam
+
+  if (signedErr || !signed?.signedUrl) {
+    throw new BadRequestException('Gagal membuat signed URL export');
+  }
+
+  return {
+    zipUrl: signed.signedUrl,
+    totalPhotos: samples.length,
+  };
+}
+
 }

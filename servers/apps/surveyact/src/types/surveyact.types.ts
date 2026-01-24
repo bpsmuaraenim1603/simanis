@@ -485,3 +485,12 @@ export class StaffYearlyExportRowType {
   @Field(() => Float, { nullable: true })
   travelBill?: number | null;
 }
+
+@ObjectType()
+export class ExportUserSamplePhotosResult {
+  @Field()
+  zipUrl: string;
+
+  @Field(() => Int)
+  totalPhotos: number;
+}

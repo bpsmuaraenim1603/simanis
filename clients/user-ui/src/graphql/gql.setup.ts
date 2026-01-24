@@ -42,7 +42,8 @@ const splitLink = split(
         definition.name.value.toLowerCase().includes("issue") ||
         definition.name.value.toLowerCase().includes("patchuser") ||
         definition.name.value.toLowerCase().includes("monthly") ||
-        definition.name.value.toLowerCase().includes("yearly")
+        definition.name.value.toLowerCase().includes("yearly") ||
+        definition.name.value.toLowerCase().includes("usersamplephotos")
       );
     }
     return false;

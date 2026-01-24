@@ -390,17 +390,17 @@ export class updateIssueCommentDto {
   message: string;
 }
 
-@InputType()
-export class ExportSamplePhotosDTO {
-  @Field()
-  subSurveyActivityId: string;
-}
+// @InputType()
+// export class ExportSamplePhotosDTO {
+//   @Field()
+//   subSurveyActivityId: string;
+// }
 
-@ObjectType()
-export class ExportSamplePhotosResult {
-  @Field()
-  zipUrl: string;
+// @ObjectType()
+// export class ExportSamplePhotosResult {
+//   @Field()
+//   zipUrl: string;
 
-  @Field()
-  totalPhotos: number;
-}
+//   @Field()
+//   totalPhotos: number;
+// }

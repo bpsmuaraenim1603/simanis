@@ -51,6 +51,7 @@ const ProgressTemplate = () => {
   const [selectedSubSurvey, setSelectedSubSurvey] = useState<string | null>(
     null,
   );
+  const [progressRole, setProgressRole] = useState<string | null>("PETUGAS");
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [selectedCity, setSelectedCity] = useState<string>("");
 
@@ -143,7 +144,13 @@ const ProgressTemplate = () => {
       if (distName) agg.districts.add(distName);
       if (cityName) agg.cities.add(cityName);
     }
-    return Array.from(map.values()).sort(
+
+    const onlyPetugas = Array.from(map.values()).filter((row) => {
+      const role = (row.progressRole ?? "").toUpperCase();
+      return role === "PETUGAS";
+    });
+
+    return onlyPetugas.sort(
       (a, b) => (b.approvedCount ?? 0) - (a.approvedCount ?? 0),
     );
   }, [userProgress, selectedCity]);
@@ -177,7 +184,7 @@ const ProgressTemplate = () => {
           supervisorName: supName,
           supervisorEmail: supEmail,
           members: [],
-        } as Group);
+        });
       }
 
       groups.get(id)!.members.push(row);

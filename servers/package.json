@@ -48,6 +48,7 @@
     "ejs": "^3.1.10",
     "googleapis": "^155.0.1",
     "graphql-upload-ts": "^2.1.2",
+    "jszip": "^3.10.1",
     "multer": "^2.0.2",
     "nodemailer": "^6.10.1",
     "prisma": "^6.6.0",

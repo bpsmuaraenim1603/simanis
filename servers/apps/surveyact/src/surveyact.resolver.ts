@@ -24,6 +24,7 @@ import {
   SurveyActivityType,
   UserProgressType,
   UserSampleType,
+  ExportUserSamplePhotosResult,
 } from './types/surveyact.types';
 import {
   CreateContentIssueDto,
@@ -210,6 +211,15 @@ export class SurveyActivityResolver {
   ) {
     const actorId = ctx?.req?.user?.id;
     return this.service.patchUserSamples(input, actorId);
+  }
+
+  @Mutation(() => ExportUserSamplePhotosResult)
+  async exportUserSamplePhotos(
+    @Args('userProgressId') userProgressId: string,
+    @Context() ctx: any,
+  ) {
+    const actorId = ctx?.req?.user?.id as string | undefined;
+    return this.service.exportUserSamplePhotos(userProgressId, actorId);
   }
 
   @Mutation(() => String)
