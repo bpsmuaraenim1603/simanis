@@ -956,63 +956,84 @@ function Admin() {
 
     const uploadSheetRows = [
       {
-        subSurveyActivityId: "",
-        userId: "",
-        superVisorId: "",
-        districtId: "",
-        villageId: "",
-        blockCount: "",
-        travelBillPetugas: "",
-        travelBillPengawas: "",
+        "Nomor Petugas": 1,
+        "Id Kegiatan": "Copy dari MASTER_KEGIATAN",
+        "Id Petugas": "Copy dari MASTER_PENGGUNA",
+        "Id Pengawas": "Copy dari MASTER_PENGGUNA",
+        "Id Kecamatan": "Copy dari MASTER_KECAMATAN",
+        "Id Desa": "Copy dari MASTER_DESA",
+        "Nama Blok": "",
+        "Honor Petugas": "",
+        "Honor Pengawas": "",
       },
     ];
 
     const masterUsers = users.map((u, i) => ({
       No: i + 1,
-      name: u.name,
-      email: u.email,
-      role: u.primaryRole ?? u.roles ?? "",
-      id: u.id,
-      
+      "Nama Pengguna": u.name,
+      "Email Pengguna": u.email,
+      "Peran Pengguna": u.primaryRole ?? u.roles ?? "",
+      "Id Pengguna": u.id,
+      "Masukkan Daftar Nama Pengguna": "Sesuaikan dengan nama asli yang tertera (gunakan proper)",
+      "Formula Ambil Id Pengguna": `=VLOOKUP(F${i + 2};$B:$E;4;FALSE)`,
     }));
 
     const masterSubs = subs.map((s, i) => ({
       No: i + 1,
-      subSurveyName: s.name,
-      surveyActivityId: s.surveyActivityId,
-      startDate: s.startDate ? new Date(s.startDate).toISOString() : "",
-      endDate: s.endDate ? new Date(s.endDate).toISOString() : "",
-      targetSample: s.targetSample ?? "",
-      sampleType: s.sampleType ?? "",
-      activityType: s.activityType ?? "",
-      subSurveyActivityId: s.id,
+      "Nama Kegiatan": s.name,
+      "Tanggal Mulai": s.startDate ? new Date(s.startDate).toISOString() : "",
+      "Tanggal Selesai": s.endDate ? new Date(s.endDate).toISOString() : "",
+      "Target Sample": s.targetSample ?? "",
+      "Jenis Sample": s.sampleType ?? "",
+      "Jenis Kegiatan": s.activityType ?? "",
+      "Id Kegiatan": s.id,
+      "": "Ambil Id Kegiatan dari sini",
     }));
 
     const masterDistrict = districts.map((s, i) => ({
       No: i + 1,
-      cityName: s.city,
-      districtName: s.name,
-      coderegion: s.coderegion,
-      districtId: s.id,
+      "Nama Kota": s.city,
+      "Nama Kecamatan": s.name,
+      "Kode Wilayah": s.coderegion,
+      "Id Kecamatan": s.id,
+      "Masukkan Daftar Nama Kecamatan": "Pastikan nama sesuai (gunakan proper)",
+      "Formula Ambil Id Kecamatan": `=VLOOKUP(F${i + 2};$C:$E;3;FALSE)`,
     }));
 
     const masterVillage = villages.map((s, i) => ({
       No: i + 1,
-      districtId: s.districtId,
-      villageName: s.name,
-      coderegion: s.coderegion,
-      villageId: s.id,
+      "Id Kecamatan": s.districtId,
+      "Nama Desa": s.name,
+      "Kode Wilayah": s.coderegion,
+      "Kode Kecamatan-Desa": `${s.districtId}-${s.name}`,
+      "Id Desa": s.id,
+      "Id Kecamatan Terpilih": "Ambil Id kecamatan terpilih (G) dari MASTER_KECAMATAN",
+      "Masukkan Daftar Nama Desa": "Pastikan nama sesuai (gunakan proper)",
+      "Kode Kecamatan-Desa Terpilih": `=G${i + 2}&"-"&H${i + 2}`,
+      "Formula Ambil Id Desa": `=VLOOKUP(I${i + 2};$E:$F;2;FALSE)`,
     }));
-    console.log(masterVillage)
+
+    const sampleRows = [
+      {
+        "Nomor Petugas": "Hubungkan sampel dengan menambahkan nomor petugas dari sheet UPLOAD_PETUGAS",
+        nus: "",
+        identity: "",
+        cacahStatus: "",
+        approvalStatus: "",
+        geoLat: "",
+        geoLng: "",
+      },
+    ];
 
     const wb = XLSX.utils.book_new();
 
     const wsUpload = XLSX.utils.json_to_sheet(uploadSheetRows);
     wsUpload["!cols"] = [
+      { wch: 5 }, // nomor petugas
       { wch: 36 }, // subSurveyActivityId
       { wch: 28 }, // userId
       { wch: 28 }, // superVisorId
-      { wch: 18 }, // districtId
+      { wch: 30 }, // districtId
       { wch: 24 }, // villageId
       { wch: 12 }, // blockCount
       { wch: 18 }, // travelBillPetugas
@@ -1025,39 +1046,42 @@ function Admin() {
       { wch: 36 },
       { wch: 28 },
       { wch: 28 },
-      { wch: 14 },
+      { wch: 36 },
+      { wch: 40 },
+      { wch: 30 },
     ];
 
     const wsSubs = XLSX.utils.json_to_sheet(masterSubs);
     wsSubs["!cols"] = [
       { wch: 5 },
-      { wch: 36 },
       { wch: 32 },
       { wch: 36 },
       { wch: 24 },
       { wch: 24 },
       { wch: 12 },
       { wch: 14 },
-      { wch: 14 },
+      { wch: 36 },
     ];
+
+    const wsSamples = XLSX.utils.json_to_sheet(sampleRows);
+wsSamples["!cols"] = [
+  { wch: 10 }, // NoPetugas
+  { wch: 8 },  // nus
+  { wch: 30 }, // identity
+  { wch: 16 }, // cacahStatus
+  { wch: 16 }, // approvalStatus
+  { wch: 14 }, // geoLat
+  { wch: 14 }, // geoLng
+];
 
     const wsDistrict = XLSX.utils.json_to_sheet(masterDistrict);
-    wsDistrict["!cols"] = [
-      { wch: 5 },
-      { wch: 36 },
-      { wch: 36 },
-      { wch: 14 },
-    ];
+    wsDistrict["!cols"] = [{ wch: 5 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 36 }, { wch: 36 }];
 
     const wsVillage = XLSX.utils.json_to_sheet(masterVillage);
-    wsVillage["!cols"] = [
-      { wch: 5 },
-      { wch: 36 },
-      { wch: 36 },
-      { wch: 14 },
-    ];
+    wsVillage["!cols"] = [{ wch: 5 }, { wch: 36 }, { wch: 20 }, { wch: 20 }, { wch: 36 }, { wch: 36 }, { wch: 36 }, { wch: 30 }, { wch: 36 }];
 
     XLSX.utils.book_append_sheet(wb, wsUpload, "UPLOAD_PETUGAS");
+    XLSX.utils.book_append_sheet(wb, wsSamples, "UPLOAD_SAMPEL");
     XLSX.utils.book_append_sheet(wb, wsUsers, "MASTER_PENGGUNA");
     XLSX.utils.book_append_sheet(wb, wsSubs, "MASTER_KEGIATAN");
     XLSX.utils.book_append_sheet(wb, wsDistrict, "MASTER_KECAMATAN");
@@ -1179,7 +1203,9 @@ function Admin() {
   useEffect(() => {
     if (!updateUserProgressForm.districtId) return;
 
-    fetchVillages({ variables: { districtId: updateUserProgressForm.districtId } });
+    fetchVillages({
+      variables: { districtId: updateUserProgressForm.districtId },
+    });
 
     setUpdateUserProgressForm((prev) => ({ ...prev, villageId: "" }));
   }, [updateUserProgressForm.districtId, fetchVillages]);
@@ -2086,7 +2112,7 @@ function Admin() {
                 <label
                   className={`px-3 py-2 rounded-md text-white cursor-pointer ${importingExcel ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"}`}
                 >
-                  {importingExcel ? "Importing..." : "Upload Excel"}
+                  {importingExcel ? "Sedang Upload" : "Upload Excel"}
                   <input
                     type="file"
                     accept=".xlsx,.xls"
@@ -2230,12 +2256,10 @@ function Admin() {
                     setVillages([]);
                   }
                 }}
-                options={districtData?.allDistricts?.map(
-                  (d: District) => ({
-                    value: d.id,
-                    label: d.name ?? "-",
-                  }),
-                )}
+                options={districtData?.allDistricts?.map((d: District) => ({
+                  value: d.id,
+                  label: d.name ?? "-",
+                }))}
                 placeholder="-- Pilih Kecamatan --"
               />
             </div>
@@ -2584,12 +2608,10 @@ function Admin() {
                     setVillages([]);
                   }
                 }}
-                options={districtData?.allDistricts?.map(
-                  (d: District) => ({
-                    value: d.id,
-                    label: d.name,
-                  }),
-                )}
+                options={districtData?.allDistricts?.map((d: District) => ({
+                  value: d.id,
+                  label: d.name,
+                }))}
                 placeholder="-- Pilih Kecamatan --"
               />
             </div>

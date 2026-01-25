@@ -1714,12 +1714,69 @@ export class SurveyActivityService {
   }> {
     const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
 
-    const sheetName =
-      workbook.SheetNames.find((n) => n === 'UPLOAD_USERPROGRESS') ??
+    // ============ BACA SHEET PETUGAS ============
+    const petugasSheetName =
+      workbook.SheetNames.find((n) => n === 'UPLOAD_PETUGAS') ??
       workbook.SheetNames[0];
 
-    const sheet = workbook.Sheets[sheetName];
-    const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    const sheetPetugas = workbook.Sheets[petugasSheetName];
+    const petugasRows: any[] = XLSX.utils.sheet_to_json(sheetPetugas, {
+      defval: '',
+    });
+
+    // ============ BACA SHEET SAMPEL (JIKA ADA) ============
+    const sampleSheetName = workbook.SheetNames.find(
+      (n) => n === 'UPLOAD_SAMPEL',
+    );
+
+    let sampleRows: any[] = [];
+    if (sampleSheetName) {
+      const sheetSamples = workbook.Sheets[sampleSheetName];
+      sampleRows = XLSX.utils.sheet_to_json(sheetSamples, { defval: '' });
+    }
+
+    // Kelompokkan sampel per "No Petugas"
+    const samplesByNoPetugas = new Map<
+      string,
+      {
+        nus: string;
+        identity: string;
+        cacahStatus?: string;
+        approvalStatus?: string;
+        geoLat?: number | null;
+        geoLng?: number | null;
+      }[]
+    >();
+
+    for (const r of sampleRows) {
+      const noPetugas = String(r['No Petugas'] || '').trim();
+      if (!noPetugas) continue;
+
+      const nus = String(r['NUS'] || '').trim();
+      const identity = String(r['Identitas Sampel'] || '').trim();
+      const cacahStatus = String(r['Status Cacah'] || '').trim();
+      const approvalStatus = String(r['Status Approval'] || '').trim();
+      const geoLatRaw = String(r['GeoLat'] ?? '').trim();
+      const geoLngRaw = String(r['GeoLng'] ?? '').trim();
+
+      const geoLat = geoLatRaw ? Number(geoLatRaw) : null;
+      const geoLng = geoLngRaw ? Number(geoLngRaw) : null;
+
+      if (!samplesByNoPetugas.has(noPetugas)) {
+        samplesByNoPetugas.set(noPetugas, []);
+      }
+
+      samplesByNoPetugas.get(noPetugas)!.push({
+        nus,
+        identity,
+        cacahStatus,
+        approvalStatus,
+        geoLat: isNaN(geoLat as any) ? null : geoLat,
+        geoLng: isNaN(geoLng as any) ? null : geoLng,
+      });
+    }
+
+    // ============ COUNTER DAN ERROR ============
 
     let insertedPetugas = 0;
     let updatedPetugas = 0;
@@ -1727,67 +1784,126 @@ export class SurveyActivityService {
     let updatedPengawas = 0;
     const errors: { rowIndex: number; message: string }[] = [];
 
-    await this.prisma.$transaction(async (tx) => {
-      for (let i = 0; i < rows.length; i++) {
-        const r = rows[i];
-        const rowIndex = i + 2;
+    const looksLikeFormula = (v: any) =>
+      typeof v === 'string' && v.trim().startsWith('=');
 
-        try {
-          const subSurveyActivityId = String(
-            r.subSurveyActivityId || '',
-          ).trim();
-          const userId = String(r.userId || '').trim();
-          const superVisorId = String(r.superVisorId || '').trim() || null;
+    // ============ LOOP PER BARIS PETUGAS ============
 
-          if (!subSurveyActivityId)
-            throw new Error('subSurveyActivityId wajib.');
-          if (!userId) throw new Error('userId (petugas) wajib.');
+    for (let i = 0; i < petugasRows.length; i++) {
+      const r = petugasRows[i];
+      const rowIndex = i + 2; // baris di Excel (header di baris 1)
 
+      try {
+        const noPetugas = String(r['Nomor Petugas'] || '').trim();
+        const subSurveyActivityId = String(r['Id Kegiatan'] || '').trim();
+        const userId = String(r['Id Petugas'] || '').trim();
+        const superVisorId = String(r['Id Pengawas'] || '').trim() || null;
+
+        if (!noPetugas) throw new Error('Nomor Petugas wajib.');
+        if (!subSurveyActivityId) throw new Error('subSurveyActivityId wajib.');
+        if (!userId) throw new Error('userId (petugas) wajib.');
+
+        const districtId = String(r['Id Kecamatan'] || '').trim() || null;
+        const villageId = String(r['Id Desa'] || '').trim() || null;
+        const blockCount = String(r['Nama Blok'] || '').trim() || null;
+
+        const travelBillPetugas =
+          String(r['Honor Petugas'] || r.travelBill || '').trim() || '0';
+        const travelBillPengawas =
+          String(r['Honor Pengawas'] || '').trim() || '0';
+
+        if (
+          looksLikeFormula(subSurveyActivityId) ||
+          looksLikeFormula(userId) ||
+          looksLikeFormula(superVisorId) ||
+          looksLikeFormula(districtId) ||
+          looksLikeFormula(villageId)
+        ) {
+          throw new Error(
+            'Ada kolom berisi formula Excel (=VLOOKUP...). Ubah jadi values dulu (copy → paste values) sebelum upload.',
+          );
+        }
+
+        // Ambil daftar sampel untuk No Petugas ini (boleh kosong)
+        const samplesForThisPetugas = samplesByNoPetugas.get(noPetugas) ?? [];
+
+        // ============ TRANSAKSI PER PETUGAS ============
+
+        const rowResult = await this.prisma.$transaction(async (tx) => {
+          // Validasi referensi
           const subs = await tx.subSurveyActivity.findUnique({
             where: { id: subSurveyActivityId },
             select: { id: true },
           });
-          if (!subs)
+          if (!subs) {
             throw new Error(
               `subSurveyActivityId tidak ditemukan: ${subSurveyActivityId}`,
             );
+          }
 
           const petugas = await tx.user.findUnique({
             where: { id: userId },
             select: { id: true },
           });
-          if (!petugas)
+          if (!petugas) {
             throw new Error(`userId petugas tidak ditemukan: ${userId}`);
+          }
 
           if (superVisorId) {
             const sup = await tx.user.findUnique({
               where: { id: superVisorId },
               select: { id: true },
             });
-            if (!sup)
+            if (!sup) {
               throw new Error(`superVisorId tidak ditemukan: ${superVisorId}`);
+            }
           }
 
-          const districtId = String(r.districtId || '').trim() || null;
-          const villageId = String(r.villageId || '').trim() || null;
-          const blockCount = String(r.blockCount || '').trim() || null;
-          const travelBillPetugas =
-            String(r.travelBillPetugas || r.travelBill || '').trim() || '0';
-          const travelBillPengawas =
-            String(r.travelBillPengawas || '').trim() || '0';
+          if (districtId) {
+            const d = await tx.district.findUnique({
+              where: { id: districtId },
+              select: { id: true },
+            });
+            if (!d) {
+              throw new Error(`districtId tidak ditemukan: ${districtId}`);
+            }
+          }
 
-          // ====== UPSERT PETUGAS (by userId + subsurvey + role PETUGAS) ======
+          if (villageId) {
+            const v = await tx.village.findUnique({
+              where: { id: villageId },
+              select: { id: true, districtId: true },
+            });
+            if (!v) {
+              throw new Error(`villageId tidak ditemukan: ${villageId}`);
+            }
+            if (districtId && v.districtId !== districtId) {
+              throw new Error(
+                'villageId tidak sesuai districtId (desa bukan turunan kecamatan).',
+              );
+            }
+          }
+
+          let petugasInserted = 0;
+          let petugasUpdated = 0;
+          let pengawasInserted = 0;
+          let pengawasUpdated = 0;
+
+          // Cek apakah sudah ada userProgress untuk PETUGAS ini
           const existingPetugas = await tx.userProgress.findFirst({
             where: {
               userId,
               subSurveyActivityId,
               progressRole: 'PETUGAS',
+              blockCount,
             },
             select: { id: true },
           });
 
+          let userProgressId: string;
+
           if (!existingPetugas) {
-            await tx.userProgress.create({
+            const created = await tx.userProgress.create({
               data: {
                 userId,
                 subSurveyActivityId,
@@ -1801,12 +1917,35 @@ export class SurveyActivityService {
                 submitCount: 0,
                 approvedCount: 0,
                 rejectedCount: 0,
+                samples:
+                  samplesForThisPetugas.length > 0
+                    ? {
+                        create: samplesForThisPetugas.map((s, idx) => ({
+                          nus:
+                            s.nus && s.nus.trim()
+                              ? s.nus.trim()
+                              : String(idx + 1).padStart(3, '0'),
+                          identity: s.identity ?? '',
+                          cacahStatus: (s.cacahStatus ||
+                            'Belum_Cacah') as CacahStatus,
+                          approvalStatus: (s.approvalStatus ||
+                            'Menunggu') as AgreeState,
+                          geoLat: s.geoLat ?? null,
+                          geoLng: s.geoLng ?? null,
+                        })),
+                      }
+                    : undefined,
               },
+              select: { id: true },
             });
-            insertedPetugas++;
+
+            userProgressId = created.id;
+            petugasInserted++;
           } else {
+            userProgressId = existingPetugas.id;
+
             await tx.userProgress.update({
-              where: { id: existingPetugas.id },
+              where: { id: userProgressId },
               data: {
                 superVisorId,
                 districtId,
@@ -1815,16 +1954,40 @@ export class SurveyActivityService {
                 travelBill: travelBillPetugas,
               },
             });
-            updatedPetugas++;
+
+            await tx.userSample.deleteMany({
+              where: { userProgressId },
+            });
+
+            if (samplesForThisPetugas.length > 0) {
+              await tx.userSample.createMany({
+                data: samplesForThisPetugas.map((s, idx) => ({
+                  userProgressId,
+                  nus:
+                    s.nus && s.nus.trim()
+                      ? s.nus.trim()
+                      : String(idx + 1).padStart(3, '0'),
+                  identity: s.identity ?? '',
+                  cacahStatus: (s.cacahStatus || 'Belum_Cacah') as CacahStatus,
+                  approvalStatus: (s.approvalStatus ||
+                    'Menunggu') as AgreeState,
+                  geoLat: s.geoLat ?? null,
+                  geoLng: s.geoLng ?? null,
+                })),
+              });
+            }
+
+            petugasUpdated++;
           }
 
-          // ====== ENSURE & UPDATE PENGAWAS ======
+          // ====== PENGAWAS (tanpa sampel) ======
           if (superVisorId) {
             const existingSup = await tx.userProgress.findFirst({
               where: {
                 userId: superVisorId,
                 subSurveyActivityId,
                 progressRole: 'PENGAWAS',
+                blockCount,
               },
               select: { id: true },
             });
@@ -1836,9 +1999,9 @@ export class SurveyActivityService {
                   subSurveyActivityId,
                   progressRole: 'PENGAWAS',
                   superVisorId: null,
-                  districtId: districtId,
-                  villageId: villageId,
-                  blockCount: blockCount,
+                  districtId,
+                  villageId,
+                  blockCount,
                   travelBill: travelBillPengawas,
                   totalAssigned: 0,
                   submitCount: 0,
@@ -1846,20 +2009,32 @@ export class SurveyActivityService {
                   rejectedCount: 0,
                 },
               });
-              insertedPengawas++;
+              pengawasInserted++;
             } else {
               await tx.userProgress.update({
                 where: { id: existingSup.id },
                 data: { travelBill: travelBillPengawas },
               });
-              updatedPengawas++;
+              pengawasUpdated++;
             }
           }
-        } catch (e: any) {
-          errors.push({ rowIndex, message: e?.message ?? 'Row error' });
-        }
+
+          return {
+            petugasInserted,
+            petugasUpdated,
+            pengawasInserted,
+            pengawasUpdated,
+          };
+        });
+
+        insertedPetugas += rowResult.petugasInserted;
+        updatedPetugas += rowResult.petugasUpdated;
+        insertedPengawas += rowResult.pengawasInserted;
+        updatedPengawas += rowResult.pengawasUpdated;
+      } catch (e: any) {
+        errors.push({ rowIndex, message: e?.message ?? 'Row error' });
       }
-    });
+    }
 
     return {
       insertedPetugas,
