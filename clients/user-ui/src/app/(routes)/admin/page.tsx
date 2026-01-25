@@ -23,7 +23,6 @@ import { GET_ALL_OF_SUB_SURVEY_ACTIVITIES } from "@/src/graphql/actions/find-rea
 import { BULK_IMPORT_USERPROGRESS_EXCEL } from "@/src/graphql/actions/bulk-import-userprogress.action";
 import { GET_USER_PROGRESS_BY_SUBSURVEY_ID } from "@/src/graphql/actions/find-usersurveyprogress.action";
 import { GET_USER_PROGRESS_BY_USER_ID } from "@/src/graphql/actions/find-usersurveyprogressbyuser.action";
-import { GET_ALL_DISTRICT } from "@/src/graphql/actions/find-alldistrict.action";
 import {
   DELETE_SURVEY_ACTIVITY,
   DELETE_SUBSURVEY_ACTIVITY,
@@ -35,9 +34,10 @@ import HUSelect from "@/src/components/HUSelect";
 import useUser from "@/src/hooks/useUser";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { PATCH_USER_SAMPLES } from "@/src/graphql/actions/patch-usersamples.action";
-import { format } from "path";
 import { getRoles } from "@/src/utils/roles";
 import { GET_VILLAGES_BY_DISTRICT } from "@/src/graphql/actions/find-villages-by-district.action";
+import { GET_ALL_OF_DISTRICT } from "@/src/graphql/actions/find-alldistrict.action";
+import { GET_ALL_OF_VILLAGE } from "@/src/graphql/actions/find-allvillages.action";
 
 /* ====== (type definitions sama persis dengan punyamu) ====== */
 type SurveyActivity = { id: string; name: string; slug: string };
@@ -181,7 +181,7 @@ function Admin() {
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (userLoading) return;
 
     const roles = getRoles(currentUser);
@@ -337,11 +337,19 @@ function Admin() {
     GET_ALL_OF_SUB_SURVEY_ACTIVITIES,
     { fetchPolicy: "cache-and-network" },
   );
+  const { data: allDistrict, refetch: refetchAllDistrict } = useQuery(
+    GET_ALL_OF_DISTRICT,
+    { fetchPolicy: "cache-and-network" },
+  );
+  const { data: allVillage, refetch: refetchAllVillage } = useQuery(
+    GET_ALL_OF_VILLAGE,
+    { fetchPolicy: "cache-and-network" },
+  );
   const [bulkImportExcel, { loading: importingExcel }] = useMutation(
     BULK_IMPORT_USERPROGRESS_EXCEL,
   );
   const { data: districtData, refetch: refetchDistricts } =
-    useQuery(GET_ALL_DISTRICT);
+    useQuery(GET_ALL_OF_DISTRICT);
   const [fetchVillages, { data: villageData }] = useLazyQuery(
     GET_VILLAGES_BY_DISTRICT,
   );
@@ -943,6 +951,8 @@ function Admin() {
   const handleDownloadTemplateUserProgress = () => {
     const users = (userData?.getUsers ?? []) as any[];
     const subs = (allSubsData?.allSubSurveyActivities ?? []) as any[];
+    const districts = (allDistrict?.allDistricts ?? []) as any[];
+    const villages = (allVillage?.allVillages ?? []) as any[];
 
     const uploadSheetRows = [
       {
@@ -959,15 +969,15 @@ function Admin() {
 
     const masterUsers = users.map((u, i) => ({
       No: i + 1,
-      id: u.id,
       name: u.name,
       email: u.email,
       role: u.primaryRole ?? u.roles ?? "",
+      id: u.id,
+      
     }));
 
     const masterSubs = subs.map((s, i) => ({
       No: i + 1,
-      subSurveyActivityId: s.id,
       subSurveyName: s.name,
       surveyActivityId: s.surveyActivityId,
       startDate: s.startDate ? new Date(s.startDate).toISOString() : "",
@@ -975,7 +985,25 @@ function Admin() {
       targetSample: s.targetSample ?? "",
       sampleType: s.sampleType ?? "",
       activityType: s.activityType ?? "",
+      subSurveyActivityId: s.id,
     }));
+
+    const masterDistrict = districts.map((s, i) => ({
+      No: i + 1,
+      cityName: s.city,
+      districtName: s.name,
+      coderegion: s.coderegion,
+      districtId: s.id,
+    }));
+
+    const masterVillage = villages.map((s, i) => ({
+      No: i + 1,
+      districtId: s.districtId,
+      villageName: s.name,
+      coderegion: s.coderegion,
+      villageId: s.id,
+    }));
+    console.log(masterVillage)
 
     const wb = XLSX.utils.book_new();
 
@@ -1013,11 +1041,29 @@ function Admin() {
       { wch: 14 },
     ];
 
-    XLSX.utils.book_append_sheet(wb, wsUpload, "UPLOAD_USERPROGRESS");
-    XLSX.utils.book_append_sheet(wb, wsUsers, "MASTER_USERS");
-    XLSX.utils.book_append_sheet(wb, wsSubs, "MASTER_SUBSURVEY");
+    const wsDistrict = XLSX.utils.json_to_sheet(masterDistrict);
+    wsDistrict["!cols"] = [
+      { wch: 5 },
+      { wch: 36 },
+      { wch: 36 },
+      { wch: 14 },
+    ];
 
-    XLSX.writeFile(wb, "Template_Upload_UserProgress.xlsx");
+    const wsVillage = XLSX.utils.json_to_sheet(masterVillage);
+    wsVillage["!cols"] = [
+      { wch: 5 },
+      { wch: 36 },
+      { wch: 36 },
+      { wch: 14 },
+    ];
+
+    XLSX.utils.book_append_sheet(wb, wsUpload, "UPLOAD_PETUGAS");
+    XLSX.utils.book_append_sheet(wb, wsUsers, "MASTER_PENGGUNA");
+    XLSX.utils.book_append_sheet(wb, wsSubs, "MASTER_KEGIATAN");
+    XLSX.utils.book_append_sheet(wb, wsDistrict, "MASTER_KECAMATAN");
+    XLSX.utils.book_append_sheet(wb, wsVillage, "MASTER_DESA");
+
+    XLSX.writeFile(wb, "Template_Upload_Petugas.xlsx");
   };
 
   const handleUploadExcelUserProgress = async (file: File) => {
@@ -1103,6 +1149,14 @@ function Admin() {
   }, [userProgressForm.surveyActivityId, fetchSubForSubmitUP]);
 
   useEffect(() => {
+    if (!userProgressForm.districtId) return;
+
+    fetchVillages({ variables: { districtId: userProgressForm.districtId } });
+
+    setUserProgressForm((prev) => ({ ...prev, villageId: "" }));
+  }, [userProgressForm.districtId, fetchVillages]);
+
+  useEffect(() => {
     if (updateUserProgressForm.surveyActivityId) {
       fetchSubForUpdateUP({
         variables: {
@@ -1121,6 +1175,14 @@ function Admin() {
       });
     }
   }, [updateUserProgressForm.subSurveyActivityId, fetchUserProgress]);
+
+  useEffect(() => {
+    if (!updateUserProgressForm.districtId) return;
+
+    fetchVillages({ variables: { districtId: updateUserProgressForm.districtId } });
+
+    setUpdateUserProgressForm((prev) => ({ ...prev, villageId: "" }));
+  }, [updateUserProgressForm.districtId, fetchVillages]);
 
   useEffect(() => {
     const s = surveyMap[updateStateF1.surveyActivityId];
@@ -2168,7 +2230,7 @@ function Admin() {
                     setVillages([]);
                   }
                 }}
-                options={districtData?.getAllSurveyDistrict?.map(
+                options={districtData?.allDistricts?.map(
                   (d: District) => ({
                     value: d.id,
                     label: d.name ?? "-",
@@ -2522,7 +2584,7 @@ function Admin() {
                     setVillages([]);
                   }
                 }}
-                options={districtData?.getAllSurveyDistrict?.map(
+                options={districtData?.allDistricts?.map(
                   (d: District) => ({
                     value: d.id,
                     label: d.name,

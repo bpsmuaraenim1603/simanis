@@ -256,6 +256,11 @@ export class SurveyActivityResolver {
     return this.service.getVillagesByDistrict(districtId);
   }
 
+  @Query(() => [VillageType], { name: 'allVillages' })
+  async allVillages() {
+    return this.service.getAllVillages();
+  }
+
   @Mutation(() => SubmitSPJType)
   async createSPJ(
     @Args('input') input: CreateSPJDTO,
@@ -327,11 +332,6 @@ export class SurveyActivityResolver {
   @Query(() => [StaffYearlyExportRowType])
   getStaffYearlyExport(@Args('year', { type: () => Int }) year: number) {
     return this.service.getStaffYearlyExport(year);
-  }
-
-  @Query(() => [DistrictType])
-  async getAllSurveyDistrict() {
-    return this.service.allDistricts();
   }
 
   @Mutation(() => ContentIssueType)

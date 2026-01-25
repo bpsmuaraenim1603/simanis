@@ -2,13 +2,13 @@
 
 import { DocumentNode, gql } from "@apollo/client";
 
-export const GET_ALL_OF_DISTRICT: DocumentNode = gql`
-  query AllDistricts {
-    allDistricts {
+export const GET_ALL_OF_VILLAGE: DocumentNode = gql`
+  query AllVillages {
+    allVillages {
       id
-      city
       name
       coderegion
+      districtId
     }
   }
 `;

@@ -774,6 +774,10 @@ export class SurveyActivityService {
     });
   }
 
+  async getAllVillages() {
+    return this.prisma.village.findMany();
+  }
+
   async createSPJ(input: CreateSPJDTO, file?: FileUpload): Promise<SubmitSPJ> {
     let eviDocumentPath: string | null = null;
     let eviOriginalName: string | null = null;
@@ -1710,7 +1714,6 @@ export class SurveyActivityService {
   }> {
     const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
 
-    // Prioritas sheet UPLOAD_USERPROGRESS, kalau tidak ada pakai sheet pertama
     const sheetName =
       workbook.SheetNames.find((n) => n === 'UPLOAD_USERPROGRESS') ??
       workbook.SheetNames[0];
@@ -1727,7 +1730,7 @@ export class SurveyActivityService {
     await this.prisma.$transaction(async (tx) => {
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i];
-        const rowIndex = i + 2; // karena header baris 1
+        const rowIndex = i + 2;
 
         try {
           const subSurveyActivityId = String(
@@ -1740,7 +1743,6 @@ export class SurveyActivityService {
             throw new Error('subSurveyActivityId wajib.');
           if (!userId) throw new Error('userId (petugas) wajib.');
 
-          // Validasi subsurvey exist
           const subs = await tx.subSurveyActivity.findUnique({
             where: { id: subSurveyActivityId },
             select: { id: true },
@@ -1750,7 +1752,6 @@ export class SurveyActivityService {
               `subSurveyActivityId tidak ditemukan: ${subSurveyActivityId}`,
             );
 
-          // Validasi petugas user exist
           const petugas = await tx.user.findUnique({
             where: { id: userId },
             select: { id: true },
@@ -1887,12 +1888,10 @@ export class SurveyActivityService {
       throw new NotFoundException('UserProgress tidak ditemukan');
     }
 
-    // Hanya pemilik yang boleh export
     if (actorId && actorId !== up.userId) {
       throw new BadRequestException('Anda tidak berhak mengekspor sampel ini');
     }
 
-    // 2. Ambil semua UserSample yang punya foto
     const samples = await this.prisma.userSample.findMany({
       where: {
         userProgressId,
@@ -1912,7 +1911,6 @@ export class SurveyActivityService {
 
     const bucket = process.env.SUPABASE_SAMPLE_BUCKET || 'sample-photos';
 
-    // 3. Pastikan bucket ada
     const { data: b, error: bucketErr } =
       await supabase.storage.getBucket(bucket);
     if (!b || bucketErr) {
@@ -1929,7 +1927,6 @@ export class SurveyActivityService {
         .download(s.photoPath);
 
       if (error || !data) {
-        // bisa di-skip, tidak perlu gagal semua
         continue;
       }
 

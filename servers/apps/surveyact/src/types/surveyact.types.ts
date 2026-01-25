@@ -69,7 +69,7 @@ export class VillageType {
   @Field()
   coderegion: string;
 
-  @Field()
+  @Field(() => ID)
   districtId: string;
 }
 
