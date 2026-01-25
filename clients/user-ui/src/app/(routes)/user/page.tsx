@@ -41,6 +41,13 @@ export default function UserPage() {
     up?.subSurveyActivity?.district?.id ??
     "";
 
+  const getVillageId = (up: any) =>
+    up?.villageId ??
+    up?.village?.id ??
+    up?.subSurveyActivity?.villageId ??
+    up?.subSurveyActivity?.village?.id ??
+    "";
+
   // ===== State utama =====
   const [updateUserProgressForm, setUpdateUserProgressForm] = useState({
     userProgressId: "",
@@ -52,6 +59,7 @@ export default function UserPage() {
     blockCount: "",
     lastUpdated: "",
     districtId: "",
+    villageId: "",
   });
   const [selectedBlock, setSelectedBlock] = useState<string>("");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -289,6 +297,7 @@ export default function UserPage() {
           ...p,
           subSurveyActivityId: activityId,
           districtId: getDistrictId(up),
+          villageId: getVillageId(up),
         }));
       } else {
         setUpdateUserProgressForm((p) => ({ ...p, subSurveyActivityId: "" }));
@@ -325,6 +334,7 @@ export default function UserPage() {
       ...prev,
       subSurveyActivityId: activityId,
       districtId: getDistrictId(up),
+      villageId: getVillageId(up),
     }));
 
     setSelectedBlock("");
@@ -1056,7 +1066,7 @@ export default function UserPage() {
                             </span>
                             Desa
                             <span className="font-medium">
-                              : {row?.villageName ?? "-"}
+                              : {row?.village?.name ?? "-"}
                             </span>
                           </div>
 

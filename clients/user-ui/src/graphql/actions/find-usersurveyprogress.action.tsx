@@ -10,6 +10,7 @@ export const GET_USER_PROGRESS_BY_SUBSURVEY_ID = gql`
       progressRole
       subSurveyActivityId
       districtId
+      villageId
       totalAssigned
       submitCount
       approvedCount
@@ -17,7 +18,6 @@ export const GET_USER_PROGRESS_BY_SUBSURVEY_ID = gql`
       lastUpdated
       superVisorId
       blockCount
-      villageName
       travelBill
       superVisor {
         id
@@ -38,6 +38,13 @@ export const GET_USER_PROGRESS_BY_SUBSURVEY_ID = gql`
         id
         name
         city
+        coderegion
+      }
+      village {
+        id
+        name
+        coderegion
+        districtId
       }
       samples {
         id

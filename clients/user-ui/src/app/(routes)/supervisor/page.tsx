@@ -35,6 +35,7 @@ type UserProgressRow = {
   userId: string;
   subSurveyActivityId: string;
   districtId?: string | null;
+  villageId?: string | null;
   totalAssigned: number;
   submitCount: number;
   approvedCount: number;
@@ -42,7 +43,7 @@ type UserProgressRow = {
   lastUpdated?: string | null;
   superVisorId?: string | null;
   blockCount: string;
-  villageName?: string | null;
+  
 
   user?: UserLite | null;
   subSurveyActivity?: {
@@ -662,7 +663,7 @@ export default function SupervisorManagePage() {
                     </span>
                     Desa
                     <span className="font-medium">
-                      : {r.villageName ?? "-"}
+                      : {r.village?.name ?? "-"}
                     </span>
                   </div>
 
@@ -756,7 +757,7 @@ export default function SupervisorManagePage() {
                 </span>
                 Desa{" "}
                 <span className="font-medium">
-                  : {currentUP?.villageName ?? "-"}
+                  : {currentUP?.village?.name ?? "-"}
                 </span>
               </div>
             </div>

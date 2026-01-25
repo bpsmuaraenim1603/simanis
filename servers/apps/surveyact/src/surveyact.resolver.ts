@@ -25,6 +25,7 @@ import {
   UserProgressType,
   UserSampleType,
   ExportUserSamplePhotosResult,
+  VillageType,
 } from './types/surveyact.types';
 import {
   CreateContentIssueDto,
@@ -35,6 +36,7 @@ import {
   CreateSubSurveyActivityDTO,
   CreateSurveyActivityDTO,
   CreateUserProgressDTO,
+  CreateVillageDTO,
   PatchUserSamplesDTO,
   UpdateContentIssueDto,
   updateIssueCommentDto,
@@ -240,6 +242,18 @@ export class SurveyActivityResolver {
   @Query(() => [DistrictType], { name: 'allDistricts' })
   async allDistricts() {
     return this.service.getAllDistricts();
+  }
+
+  @Mutation(() => VillageType)
+  async createVillage(@Args('input') input: CreateVillageDTO) {
+    return this.service.createVillage(input);
+  }
+
+  @Query(() => [VillageType])
+  async villagesByDistrict(
+    @Args('districtId', { type: () => ID }) districtId: string,
+  ) {
+    return this.service.getVillagesByDistrict(districtId);
   }
 
   @Mutation(() => SubmitSPJType)

@@ -37,10 +37,12 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { PATCH_USER_SAMPLES } from "@/src/graphql/actions/patch-usersamples.action";
 import { format } from "path";
 import { getRoles } from "@/src/utils/roles";
+import { GET_VILLAGES_BY_DISTRICT } from "@/src/graphql/actions/find-villages-by-district.action";
 
 /* ====== (type definitions sama persis dengan punyamu) ====== */
 type SurveyActivity = { id: string; name: string; slug: string };
 type District = { id: string; city: string; name: string };
+type Village = { id: string; name: string; districtId: string };
 type SubSurveyActivity = {
   id: string;
   name: string;
@@ -74,7 +76,7 @@ type UserProgress = {
   blockCount: string;
   lastUpdated: string;
   districtId: string;
-  villageName: string;
+  villageId: string;
   travelBill: string;
   progressRole: string;
 };
@@ -253,7 +255,7 @@ function Admin() {
     blockCount: "",
     lastUpdated: "",
     districtId: "",
-    villageName: "",
+    villageId: "",
     travelBill: "",
   });
   const [updateUserProgressForm, setUpdateUserProgressForm] = useState({
@@ -267,7 +269,7 @@ function Admin() {
     rejectedCount: 0,
     lastUpdated: "",
     districtId: "",
-    villageName: "",
+    villageId: "",
     travelBill: "",
     progressRole: "",
   });
@@ -287,6 +289,10 @@ function Admin() {
   const [qEnumerator, setQEnumerator] = useState("");
   const [qUPUser, setQUPUser] = useState("");
   const qSupervisorDeb = useDebounced(qSupervisor);
+  const [selectedDistrictId, setSelectedDistrictId] = useState<string | null>(
+    null,
+  );
+  const [villages, setVillages] = useState<Village[]>([]);
 
   function matchesSearch(u: Partial<User>, q: string) {
     const s = q.trim().toLowerCase();
@@ -336,6 +342,9 @@ function Admin() {
   );
   const { data: districtData, refetch: refetchDistricts } =
     useQuery(GET_ALL_DISTRICT);
+  const [fetchVillages, { data: villageData }] = useLazyQuery(
+    GET_VILLAGES_BY_DISTRICT,
+  );
   const [fetchUserProgress, { data: userProgressData }] = useLazyQuery(
     GET_USER_PROGRESS_BY_SUBSURVEY_ID,
   );
@@ -630,7 +639,7 @@ function Admin() {
             superVisorId: userProgressForm.superVisorId,
             subSurveyActivityId: userProgressForm.subSurveyActivityId,
             districtId: userProgressForm.districtId,
-            villageName: userProgressForm.villageName,
+            villageId: userProgressForm.villageId,
             travelBill: userProgressForm.travelBill,
             blockCount: userProgressForm.blockCount,
             totalAssigned: 0,
@@ -662,7 +671,7 @@ function Admin() {
         blockCount: "",
         lastUpdated: "",
         districtId: "",
-        villageName: "",
+        villageId: "",
         travelBill: "",
         superVisorId: userProgressForm.superVisorId,
       });
@@ -728,7 +737,7 @@ function Admin() {
               approvedCount: Number(updateUserProgressForm.approvedCount),
               rejectedCount: Number(updateUserProgressForm.rejectedCount),
               districtId: updateUserProgressForm.districtId,
-              villageName: updateUserProgressForm.villageName,
+              villageId: updateUserProgressForm.villageId,
               travelBill: updateUserProgressForm.travelBill,
               samples: sampleListUpdate.map((s, idx) => ({
                 ...(s.id ? { id: s.id } : {}),
@@ -760,7 +769,7 @@ function Admin() {
         rejectedCount: 0,
         lastUpdated: "",
         districtId: "",
-        villageName: "",
+        villageId: "",
         travelBill: "",
         progressRole: "",
       });
@@ -851,7 +860,7 @@ function Admin() {
           rejectedCount: 0,
           lastUpdated: "",
           districtId: "",
-          villageName: "",
+          villageId: "",
           travelBill: "",
         }));
         setSampleListUpdate([emptySampleRow]);
@@ -941,7 +950,7 @@ function Admin() {
         userId: "",
         superVisorId: "",
         districtId: "",
-        villageName: "",
+        villageId: "",
         blockCount: "",
         travelBillPetugas: "",
         travelBillPengawas: "",
@@ -976,7 +985,7 @@ function Admin() {
       { wch: 28 }, // userId
       { wch: 28 }, // superVisorId
       { wch: 18 }, // districtId
-      { wch: 24 }, // villageName
+      { wch: 24 }, // villageId
       { wch: 12 }, // blockCount
       { wch: 18 }, // travelBillPetugas
       { wch: 18 }, // travelBillPengawas
@@ -1146,7 +1155,7 @@ function Admin() {
       superVisorId: "",
       userId: "",
       districtId: "",
-      villageName: "",
+      villageId: "",
       blockCount: "",
       travelBill: "",
     }));
@@ -1164,7 +1173,7 @@ function Admin() {
         rejectedCount: Number(up.rejectedCount ?? 0),
         lastUpdated: toDateInput(up.lastUpdated),
         districtId: up.districtId ?? "",
-        villageName: up.villageName ?? "",
+        villageId: up.villageId ?? "",
         travelBill: up.travelBill ?? "",
         progressRole: up.progressRole ?? "",
       }));
@@ -1177,7 +1186,7 @@ function Admin() {
         rejectedCount: 0,
         lastUpdated: "",
         districtId: "",
-        villageName: "",
+        villageId: "",
         travelBill: "",
         progressRole: "",
       }));
@@ -2145,9 +2154,20 @@ function Admin() {
 
               <HUComboBox
                 value={userProgressForm.districtId || null}
-                onValueChange={(v) =>
-                  setUPField("districtId", (v ?? "") as string)
-                }
+                onValueChange={async (v) => {
+                  const districtId = (v ?? "") as string;
+                  setUPField("districtId", districtId);
+                  setSelectedDistrictId(districtId);
+
+                  if (districtId) {
+                    const res = await fetchVillages({
+                      variables: { districtId },
+                    });
+                    setVillages(res.data?.villagesByDistrict ?? []);
+                  } else {
+                    setVillages([]);
+                  }
+                }}
                 options={districtData?.getAllSurveyDistrict?.map(
                   (d: District) => ({
                     value: d.id,
@@ -2160,18 +2180,25 @@ function Admin() {
 
             <div>
               <label
-                htmlFor="villageName"
+                htmlFor="villageId"
                 className="block text-sm font-bold mb-2"
               >
                 Desa
               </label>
-              <input
-                id="villageName"
-                type="text"
-                value={userProgressForm.villageName}
-                onChange={handleChangeUserProgress}
-                placeholder="Tuliskan Nama Desa"
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              <HUSelect
+                value={userProgressForm.villageId || null}
+                onValueChange={(v) =>
+                  setUPField("villageId", (v ?? "") as string)
+                }
+                options={villages.map((v: Village) => ({
+                  value: v.id,
+                  label: v.name,
+                }))}
+                placeholder={
+                  selectedDistrictId
+                    ? "-- Pilih Desa --"
+                    : "Pilih kecamatan dulu"
+                }
               />
             </div>
 
@@ -2481,9 +2508,20 @@ function Admin() {
 
               <HUComboBox
                 value={updateUserProgressForm.districtId || null}
-                onValueChange={(v) =>
-                  setUpdateUPField("districtId", (v ?? "") as string)
-                }
+                onValueChange={async (v) => {
+                  const districtId = (v ?? "") as string;
+                  setUpdateUPField("districtId", districtId);
+                  setSelectedDistrictId(districtId);
+
+                  if (districtId) {
+                    const res = await fetchVillages({
+                      variables: { districtId },
+                    });
+                    setVillages(res.data?.villagesByDistrict ?? []);
+                  } else {
+                    setVillages([]);
+                  }
+                }}
                 options={districtData?.getAllSurveyDistrict?.map(
                   (d: District) => ({
                     value: d.id,
@@ -2496,18 +2534,25 @@ function Admin() {
 
             <div>
               <label
-                htmlFor="villageName"
+                htmlFor="villageId"
                 className="block text-sm font-bold mb-2"
               >
                 Desa
               </label>
-              <input
-                id="villageName"
-                type="text"
-                value={updateUserProgressForm.villageName}
-                onChange={handleChangeUpdateUserProgress}
-                placeholder="Tuliskan Nama Desa"
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              <HUSelect
+                value={updateUserProgressForm.villageId || null}
+                onValueChange={(v) =>
+                  setUpdateUPField("villageId", (v ?? "") as string)
+                }
+                options={villages.map((v: Village) => ({
+                  value: v.id,
+                  label: v.name,
+                }))}
+                placeholder={
+                  selectedDistrictId
+                    ? "-- Pilih Desa --"
+                    : "Pilih kecamatan dulu"
+                }
               />
             </div>
 

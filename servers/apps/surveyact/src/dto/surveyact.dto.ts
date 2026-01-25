@@ -181,7 +181,7 @@ export class CreateUserProgressDTO {
   districtId?: string;
 
   @Field({ nullable: true })
-  villageName?: string;
+  villageId?: string;
 
   @Field({ nullable: true })
   travelBill?: string;
@@ -226,7 +226,7 @@ export class UpdateUserProgressDTO {
   districtId?: string;
 
   @Field({ nullable: true })
-  villageName?: string;
+  villageId?: string;
 
   @Field({ nullable: true })
   travelBill?: string;
@@ -257,6 +257,21 @@ export class CreateDistrictDTO {
 
   @Field()
   name: string;
+
+  @Field()
+  coderegion: string;
+}
+
+@InputType()
+export class CreateVillageDTO {
+  @Field()
+  name: string;
+
+  @Field()
+  coderegion: string;
+
+  @Field(() => ID)
+  districtId: string;
 }
 
 @InputType()
@@ -389,18 +404,3 @@ export class updateIssueCommentDto {
   @IsString()
   message: string;
 }
-
-// @InputType()
-// export class ExportSamplePhotosDTO {
-//   @Field()
-//   subSurveyActivityId: string;
-// }
-
-// @ObjectType()
-// export class ExportSamplePhotosResult {
-//   @Field()
-//   zipUrl: string;
-
-//   @Field()
-//   totalPhotos: number;
-// }

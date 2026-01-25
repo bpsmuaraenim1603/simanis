@@ -1676,7 +1676,7 @@ export default function SuperAdminManagePage() {
                                       {r.subSurveyActivity?.activityType ?? "-"}
                                     </td>
                                     <td className="px-3 py-2">
-                                      {r.district?.name ?? r.villageName ?? "-"}
+                                      {r.district?.name ?? r.village?.name ?? "-"}
                                     </td>
                                     <td className="px-3 py-2 text-right">
                                       Rp{" "}

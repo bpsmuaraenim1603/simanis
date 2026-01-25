@@ -53,6 +53,24 @@ export class DistrictType {
 
   @Field()
   name: string;
+
+  @Field()
+  coderegion: string;
+}
+
+@ObjectType()
+export class VillageType {
+  @Field(() => ID)
+  id: string;
+
+  @Field()
+  name: string;
+
+  @Field()
+  coderegion: string;
+
+  @Field()
+  districtId: string;
 }
 
 @ObjectType()
@@ -129,8 +147,11 @@ export class UserProgressType {
   @Field({ nullable: true })
   blockCount?: string;
 
-  @Field({ nullable: true })
-  villageName?: string;
+  @Field(() => String, { nullable: true })
+  villageId?: string;
+
+  @Field(() => VillageType, { nullable: true })
+  village?: VillageType;
 
   @Field({ nullable: true })
   travelBill?: string;

@@ -13,6 +13,7 @@ import {
   CreateSubSurveyActivityDTO,
   CreateSurveyActivityDTO,
   CreateUserProgressDTO,
+  CreateVillageDTO,
   PatchUserSamplesDTO,
   UpdateContentIssueDto,
   updateIssueCommentDto,
@@ -214,13 +215,13 @@ export class SurveyActivityService {
     superVisorId?: string | null;
     districtId?: string | null;
     blockCount?: string | null;
-    villageName?: string | null;
+    villageId?: string | null;
   }) {
     const subSurveyActivityId = params.subSurveyActivityId ?? null;
     const superVisorId = params.superVisorId ?? null;
     const districtId = params.districtId ?? null;
     const blockCount = params.blockCount ?? null;
-    const villageName = params.villageName ?? null;
+    const villageId = params.villageId ?? null;
     if (!subSurveyActivityId || !superVisorId) return;
 
     const exists = await this.prisma.userProgress.findFirst({
@@ -244,7 +245,7 @@ export class SurveyActivityService {
         rejectedCount: 0,
         blockCount: blockCount ?? null,
         districtId: districtId ?? null,
-        villageName: villageName ?? null,
+        villageId: villageId ?? null,
         travelBill: '0',
         superVisorId: null,
       },
@@ -298,7 +299,7 @@ export class SurveyActivityService {
       subSurveyActivityId: created.subSurveyActivityId,
       districtId: created.districtId,
       blockCount: created.blockCount,
-      villageName: created.villageName,
+      villageId: created.villageId,
     });
 
     const [sub, user, supervisor] = await Promise.all([
@@ -429,6 +430,7 @@ export class SurveyActivityService {
         user: true,
         subSurveyActivity: true,
         district: true,
+        village: true,
         supervisor: true,
         samples: true,
       },
@@ -442,6 +444,7 @@ export class SurveyActivityService {
         user: true,
         subSurveyActivity: true,
         district: true,
+        village: true,
         supervisor: true,
         samples: true,
       },
@@ -455,6 +458,7 @@ export class SurveyActivityService {
         user: true,
         subSurveyActivity: true,
         district: true,
+        village: true,
         supervisor: true,
       },
     });
@@ -467,6 +471,7 @@ export class SurveyActivityService {
         user: true,
         subSurveyActivity: true,
         district: true,
+        village: true,
         supervisor: true,
       },
     });
@@ -756,6 +761,17 @@ export class SurveyActivityService {
 
   async getAllDistricts() {
     return this.prisma.district.findMany();
+  }
+
+  async createVillage(input: CreateVillageDTO) {
+    return this.prisma.village.create({ data: input });
+  }
+
+  async getVillagesByDistrict(districtId: string) {
+    return this.prisma.village.findMany({
+      where: { districtId },
+      orderBy: { name: 'asc' },
+    });
   }
 
   async createSPJ(input: CreateSPJDTO, file?: FileUpload): Promise<SubmitSPJ> {
@@ -1752,7 +1768,7 @@ export class SurveyActivityService {
           }
 
           const districtId = String(r.districtId || '').trim() || null;
-          const villageName = String(r.villageName || '').trim() || null;
+          const villageId = String(r.villageId || '').trim() || null;
           const blockCount = String(r.blockCount || '').trim() || null;
           const travelBillPetugas =
             String(r.travelBillPetugas || r.travelBill || '').trim() || '0';
@@ -1777,7 +1793,7 @@ export class SurveyActivityService {
                 progressRole: 'PETUGAS',
                 superVisorId,
                 districtId,
-                villageName,
+                villageId,
                 blockCount,
                 travelBill: travelBillPetugas,
                 totalAssigned: 0,
@@ -1793,7 +1809,7 @@ export class SurveyActivityService {
               data: {
                 superVisorId,
                 districtId,
-                villageName,
+                villageId,
                 blockCount,
                 travelBill: travelBillPetugas,
               },
@@ -1820,7 +1836,7 @@ export class SurveyActivityService {
                   progressRole: 'PENGAWAS',
                   superVisorId: null,
                   districtId: districtId,
-                  villageName: villageName,
+                  villageId: villageId,
                   blockCount: blockCount,
                   travelBill: travelBillPengawas,
                   totalAssigned: 0,
@@ -1854,109 +1870,110 @@ export class SurveyActivityService {
   }
 
   async exportUserSamplePhotos(
-  userProgressId: string,
-  actorId?: string,
-): Promise<{ zipUrl: string; totalPhotos: number }> {
-  // 1. Cek userProgress dan pemiliknya
-  const up = await this.prisma.userProgress.findUnique({
-    where: { id: userProgressId },
-    select: {
-      id: true,
-      userId: true,
-      subSurveyActivityId: true,
-    },
-  });
-
-  if (!up) {
-    throw new NotFoundException('UserProgress tidak ditemukan');
-  }
-
-  // Hanya pemilik yang boleh export
-  if (actorId && actorId !== up.userId) {
-    throw new BadRequestException('Anda tidak berhak mengekspor sampel ini');
-  }
-
-  // 2. Ambil semua UserSample yang punya foto
-  const samples = await this.prisma.userSample.findMany({
-    where: {
-      userProgressId,
-      photoPath: { not: null },
-    },
-    select: {
-      id: true,
-      nus: true,
-      identity: true,
-      photoPath: true,
-    },
-  });
-
-  if (!samples.length) {
-    throw new NotFoundException('Tidak ada foto sampel yang bisa diekspor');
-  }
-
-  const bucket = process.env.SUPABASE_SAMPLE_BUCKET || 'sample-photos';
-
-  // 3. Pastikan bucket ada
-  const { data: b, error: bucketErr } = await supabase.storage.getBucket(bucket);
-  if (!b || bucketErr) {
-    throw new BadRequestException('Bucket belum tersedia: ' + bucket);
-  }
-
-  const zip = new JSZip();
-
-  for (const s of samples) {
-    if (!s.photoPath) continue;
-
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .download(s.photoPath);
-
-    if (error || !data) {
-      // bisa di-skip, tidak perlu gagal semua
-      continue;
-    }
-
-    const arrayBuf = await data.arrayBuffer();
-    const buf = Buffer.from(arrayBuf);
-
-    const safeNus = (s.nus || '').replace(/[^a-zA-Z0-9_-]/g, '');
-    const safeName = (s.identity || '').replace(/[^a-zA-Z0-9_-]/g, '');
-    const base = safeNus || s.id;
-    const ext = getExtLower(s.photoPath) || '.jpg';
-
-    const fileName =
-      (safeName ? `${base}_${safeName}` : base) + ext;
-
-    zip.file(fileName, buf);
-  }
-
-  const zipContent = await zip.generateAsync({ type: 'nodebuffer' });
-
-  const exportKey = `exports/${up.subSurveyActivityId}/${up.userId}/photos_${Date.now()}.zip`;
-
-  const { error: uploadErr } = await supabase.storage
-    .from(bucket)
-    .upload(exportKey, zipContent, {
-      contentType: 'application/zip',
-      upsert: true,
+    userProgressId: string,
+    actorId?: string,
+  ): Promise<{ zipUrl: string; totalPhotos: number }> {
+    // 1. Cek userProgress dan pemiliknya
+    const up = await this.prisma.userProgress.findUnique({
+      where: { id: userProgressId },
+      select: {
+        id: true,
+        userId: true,
+        subSurveyActivityId: true,
+      },
     });
 
-  if (uploadErr) {
-    throw new BadRequestException('Gagal upload file export: ' + uploadErr.message);
+    if (!up) {
+      throw new NotFoundException('UserProgress tidak ditemukan');
+    }
+
+    // Hanya pemilik yang boleh export
+    if (actorId && actorId !== up.userId) {
+      throw new BadRequestException('Anda tidak berhak mengekspor sampel ini');
+    }
+
+    // 2. Ambil semua UserSample yang punya foto
+    const samples = await this.prisma.userSample.findMany({
+      where: {
+        userProgressId,
+        photoPath: { not: null },
+      },
+      select: {
+        id: true,
+        nus: true,
+        identity: true,
+        photoPath: true,
+      },
+    });
+
+    if (!samples.length) {
+      throw new NotFoundException('Tidak ada foto sampel yang bisa diekspor');
+    }
+
+    const bucket = process.env.SUPABASE_SAMPLE_BUCKET || 'sample-photos';
+
+    // 3. Pastikan bucket ada
+    const { data: b, error: bucketErr } =
+      await supabase.storage.getBucket(bucket);
+    if (!b || bucketErr) {
+      throw new BadRequestException('Bucket belum tersedia: ' + bucket);
+    }
+
+    const zip = new JSZip();
+
+    for (const s of samples) {
+      if (!s.photoPath) continue;
+
+      const { data, error } = await supabase.storage
+        .from(bucket)
+        .download(s.photoPath);
+
+      if (error || !data) {
+        // bisa di-skip, tidak perlu gagal semua
+        continue;
+      }
+
+      const arrayBuf = await data.arrayBuffer();
+      const buf = Buffer.from(arrayBuf);
+
+      const safeNus = (s.nus || '').replace(/[^a-zA-Z0-9_-]/g, '');
+      const safeName = (s.identity || '').replace(/[^a-zA-Z0-9_-]/g, '');
+      const base = safeNus || s.id;
+      const ext = getExtLower(s.photoPath) || '.jpg';
+
+      const fileName = (safeName ? `${base}_${safeName}` : base) + ext;
+
+      zip.file(fileName, buf);
+    }
+
+    const zipContent = await zip.generateAsync({ type: 'nodebuffer' });
+
+    const exportKey = `exports/${up.subSurveyActivityId}/${up.userId}/photos_${Date.now()}.zip`;
+
+    const { error: uploadErr } = await supabase.storage
+      .from(bucket)
+      .upload(exportKey, zipContent, {
+        contentType: 'application/zip',
+        upsert: true,
+      });
+
+    if (uploadErr) {
+      throw new BadRequestException(
+        'Gagal upload file export: ' + uploadErr.message,
+      );
+    }
+
+    const { data: signed, error: signedErr } = await supabase.storage
+      .from(bucket)
+      .createSignedUrl(exportKey, 60 * 60); // 1 jam
+
+    if (signedErr || !signed?.signedUrl) {
+      throw new BadRequestException('Gagal membuat signed URL export');
+    }
+
+    return {
+      zipUrl: signed.signedUrl,
+      totalPhotos: samples.length,
+    };
   }
-
-  const { data: signed, error: signedErr } = await supabase.storage
-    .from(bucket)
-    .createSignedUrl(exportKey, 60 * 60); // 1 jam
-
-  if (signedErr || !signed?.signedUrl) {
-    throw new BadRequestException('Gagal membuat signed URL export');
-  }
-
-  return {
-    zipUrl: signed.signedUrl,
-    totalPhotos: samples.length,
-  };
-}
-
 }

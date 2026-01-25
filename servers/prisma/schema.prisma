@@ -188,7 +188,8 @@ model UserProgress {
   lastUpdated         DateTime           @updatedAt
   districtId          String?
   district            District?          @relation(fields: [districtId], references: [id])
-  villageName         String?
+  villageId           String?
+  village             Village?           @relation(fields: [villageId], references: [id])
   travelBill          String?
 
   samples UserSample[]
@@ -214,9 +215,21 @@ model UserSample {
 }
 
 model District {
-  id   String @id @default(uuid())
-  city String
-  name String
+  id         String @id @default(uuid())
+  city       String
+  name       String
+  coderegion String
+
+  UserProgress UserProgress[]
+  villages     Village[]
+}
+
+model Village {
+  id         String   @id @default(uuid())
+  name       String
+  coderegion String
+  districtId String
+  district   District @relation(fields: [districtId], references: [id])
 
   UserProgress UserProgress[]
 }

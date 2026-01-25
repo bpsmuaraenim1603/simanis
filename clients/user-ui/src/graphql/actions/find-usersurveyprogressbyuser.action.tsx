@@ -11,7 +11,6 @@ export const GET_USER_PROGRESS_BY_USER_ID = gql`
       approvedCount
       rejectedCount
       blockCount
-      villageName
       travelBill
       lastUpdated
       user {
@@ -19,7 +18,7 @@ export const GET_USER_PROGRESS_BY_USER_ID = gql`
         name
         limit_bill
       }
-        superVisorId
+      superVisorId
       superVisor {
         id
         name
@@ -36,6 +35,13 @@ export const GET_USER_PROGRESS_BY_USER_ID = gql`
         id
         name
         city
+        coderegion
+      }
+      village {
+        id
+        name
+        coderegion
+        districtId
       }
       samples {
         id

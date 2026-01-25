@@ -13,6 +13,7 @@ export const GET_USER_PROGRESS_BY_SUPERVISOR: DocumentNode = gql`
       rejectedCount
       lastUpdated
       districtId
+      villageId
       user {
         id
         name
