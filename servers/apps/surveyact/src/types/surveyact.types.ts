@@ -41,6 +41,9 @@ export class SurveyActivityType {
 
   @Field()
   slug: string;
+
+  @Field(() => ID)
+  chiefId: string;
 }
 
 @ObjectType()

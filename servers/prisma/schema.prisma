@@ -87,9 +87,11 @@ model Avatar {
 }
 
 model SurveyActivity {
-  id   String @id @default(uuid())
-  name String
-  slug String @unique
+  id      String @id @default(uuid())
+  name    String
+  slug    String @unique
+  chiefId String
+  chief   User   @relation(fields: [chiefId], references: [id])
 
   SubSurveyActivity SubSurveyActivity[]
 }
@@ -142,7 +144,8 @@ model User {
 
   NotificationR Notification[] @relation("Notification_Recipient")
 
-  NotificationA Notification[] @relation("Notification_Actor")
+  NotificationA    Notification[]   @relation("Notification_Actor")
+  surveyActivities SurveyActivity[]
 }
 
 model ContentIssue {

@@ -13,6 +13,8 @@ import exifr from "exifr";
 import dynamic from "next/dynamic";
 import { getRoles } from "@/src/utils/roles";
 import { EXPORT_USER_SAMPLE_PHOTOS } from "@/src/graphql/actions/export-user-sample-photos.action";
+import { useSampleDrafts } from "@/src/hooks/useSampleDrafts";
+import { DraftSample } from "@/src/utils/sampleDraftStorage";
 
 type ViewMode = "list" | "detail";
 
@@ -266,6 +268,17 @@ export default function UserPage() {
     String(currentUP?.subSurveyActivity?.activityType ?? "").toLowerCase() ===
     "listing";
 
+  const currentUserProgressId =
+    currentUP?.id || updateUserProgressForm.userProgressId || "";
+
+  const {
+    drafts,
+    loading: draftsLoading,
+    upsertDraft,
+    removeDraft,
+    clearAllDrafts,
+  } = useSampleDrafts(currentUserProgressId);
+
   useEffect(() => {
     if (!currentUP?.samples) return setEditableSamples([]);
     const sorted = [...currentUP.samples].sort(
@@ -420,6 +433,11 @@ export default function UserPage() {
     return editableSamples.find((s) => s.id === sampleId);
   }
 
+  function getDraftForSample(sampleId: string | null) {
+    if (!sampleId) return null;
+    return drafts.find((d: DraftSample) => d.tempId === sampleId) ?? null;
+  }
+
   function resetModalDraft() {
     setDraftIdentity("");
     setDraftLat(null);
@@ -450,7 +468,15 @@ export default function UserPage() {
 
     resetModalDraft();
     setActiveSampleId(sampleId);
-    setDraftIdentity(String(s.identity ?? "").trim());
+
+    const draft = getDraftForSample(sampleId);
+    if (draft) {
+      setDraftIdentity(draft.identity ?? String(s.identity ?? "").trim());
+      setDraftLat(draft.geoLat ?? null);
+      setDraftLng(draft.geoLng ?? null);
+    } else {
+      setDraftIdentity(String(s.identity ?? "").trim());
+    }
 
     setLocatingId(sampleId);
     const toastId = toast.loading("Mengambil lokasi...");
@@ -610,9 +636,18 @@ export default function UserPage() {
     if (!s) return toast.error("Sample tidak ditemukan.");
     resetModalDraft();
     setActiveSampleId(sampleId);
-    setDraftIdentity(String(s.identity ?? "").trim());
-    setDraftLat(s.geoLat ?? null);
-    setDraftLng(s.geoLng ?? null);
+
+    const draft = getDraftForSample(sampleId);
+    if (draft) {
+      setDraftIdentity(draft.identity ?? String(s.identity ?? "").trim());
+      setDraftLat(draft.geoLat ?? null);
+      setDraftLng(draft.geoLng ?? null);
+    } else {
+      setDraftIdentity(String(s.identity ?? "").trim());
+      setDraftLat(s.geoLat ?? null);
+      setDraftLng(s.geoLng ?? null);
+    }
+
     window.history.pushState({ cacahModal: true }, "");
     setShowCacahModal(true);
   }
@@ -661,6 +696,21 @@ export default function UserPage() {
     // }
     if (!isLocationConfirmed)
       return toast.error("Centang konfirmasi lokasi dulu ya.");
+
+    try {
+      await upsertDraft({
+        tempId: activeSampleId ?? undefined,
+        nus: isAddMode
+          ? ""
+          : String(activeSample?.nus ?? ""),
+        identity: nextIdentity,
+        geoLat: draftLat ?? null,
+        geoLng: draftLng ?? null,
+        photoBlob: draftPhotoFile ?? null,
+      });
+    } catch {
+    
+    }
 
     setSavingModal(true);
 
@@ -749,6 +799,9 @@ export default function UserPage() {
           });
         }
 
+        if (activeSampleId) {
+          await removeDraft(activeSampleId);
+        }
         toast.success("Sampel berhasil ditambahkan");
       } else {
         if (!activeSampleId) throw new Error("Sample ID tidak ada.");

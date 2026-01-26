@@ -52,6 +52,7 @@ type UserProgressRow = {
     activityType?: string | null;
   } | null;
   district?: { id: string; name?: string | null; city?: string | null } | null;
+  village?: { id: string; name?: string | null } | null;
 
   samples?: {
     id: string;

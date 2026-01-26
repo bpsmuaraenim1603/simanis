@@ -79,6 +79,11 @@ export class CreateSurveyActivityDTO {
   @IsNotEmpty({ message: 'Slug wajib diisi' })
   @IsString()
   slug: string;
+
+  @Field()
+  @IsNotEmpty({ message: 'Ketua Tim wajib diisi' })
+  @IsString()
+  chiefId: string;
 }
 
 @InputType()
@@ -92,6 +97,11 @@ export class UpdateSurveyActivityDTO {
   @IsNotEmpty({ message: 'Slug wajib diisi' })
   @IsString()
   slug: string;
+
+  @Field()
+  @IsNotEmpty({ message: 'Ketua Tim wajib diisi' })
+  @IsString()
+  chiefId: string;
 }
 
 @InputType()

@@ -425,7 +425,7 @@ export class SurveyActivityService {
 
   async getUserProgressBySubSurveyActivityId(subSurveyActivityId: string) {
     return this.prisma.userProgress.findMany({
-      where: { subSurveyActivityId },
+      where: { subSurveyActivityId, superVisorId: { not: null } },
       include: {
         user: true,
         subSurveyActivity: true,
@@ -439,7 +439,7 @@ export class SurveyActivityService {
 
   async getUserProgressSurveyByUserId(userId: string) {
     return this.prisma.userProgress.findMany({
-      where: { userId },
+      where: { userId, superVisorId: { not: null } },
       include: {
         user: true,
         subSurveyActivity: true,
@@ -1749,7 +1749,7 @@ export class SurveyActivityService {
     >();
 
     for (const r of sampleRows) {
-      const noPetugas = String(r['No Petugas'] || '').trim();
+      const noPetugas = String(r['Nomor Petugas'] || '').trim();
       if (!noPetugas) continue;
 
       const nus = String(r['NUS'] || '').trim();
