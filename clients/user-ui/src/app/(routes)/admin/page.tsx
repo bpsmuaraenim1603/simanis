@@ -975,7 +975,9 @@ function Admin() {
       "Peran Pengguna": u.primaryRole ?? u.roles ?? "",
       "Id Pengguna": u.id,
       "Masukkan Daftar Nama Pengguna": "Sesuaikan dengan nama asli yang tertera (gunakan proper)",
+      "Masukkan Daftar Nama Pengawas": "Sesuaikan dengan nama asli yang tertera (gunakan proper)",
       "Formula Ambil Id Pengguna": `=VLOOKUP(F${i + 2};$B:$E;4;FALSE)`,
+      "Formula Ambil Id Pengawas": `=VLOOKUP(G${i + 2};$B:$E;4;FALSE)`,
     }));
 
     const masterSubs = subs.map((s, i) => ({
@@ -1048,6 +1050,8 @@ function Admin() {
       { wch: 28 },
       { wch: 36 },
       { wch: 40 },
+      { wch: 30 },
+      { wch: 30 },
       { wch: 30 },
     ];
 

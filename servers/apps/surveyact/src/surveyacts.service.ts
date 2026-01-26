@@ -47,6 +47,7 @@ import { DeleteByIdInput } from './dto/delete.input';
 import { StorageService } from './storage.service';
 import * as XLSX from 'xlsx';
 import * as JSZip from 'jszip';
+import { console } from 'node:inspector';
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -90,6 +91,26 @@ export class SurveyActivityService {
     private readonly httpService: HttpService,
     private readonly storage: StorageService,
   ) {}
+
+  private canAccessAll(actor: any) {
+    const role = actor?.primaryRole;
+    return role === 'Superadmin' || role === 'Keuangan';
+  }
+
+  private async enrichActor(actor: any) {
+    const actorId = actor?.id;
+    if (!actorId) return null;
+
+    const dbUser = await this.prisma.user.findUnique({
+      where: { id: actorId },
+      select: { id: true, primaryRole: true },
+    });
+
+    return {
+      ...actor,
+      ...dbUser,
+    };
+  }
 
   private async createInAppNotification(input: {
     recipientId: string;
@@ -160,8 +181,31 @@ export class SurveyActivityService {
     return survey;
   }
 
-  async findAll() {
-    return this.prisma.surveyActivity.findMany();
+  async findAll(actor: any) {
+    actor = await this.enrichActor(actor);
+    const actorId = actor?.id;
+    if (!actorId) return [];
+
+    if (this.canAccessAll(actor)) {
+      return this.prisma.surveyActivity.findMany();
+    }
+
+    return this.prisma.surveyActivity.findMany({
+      where: {
+        OR: [
+          { chiefId: actorId },
+          {
+            SubSurveyActivity: {
+              some: {
+                UserProgress: {
+                  some: { userId: actorId },
+                },
+              },
+            },
+          },
+        ],
+      },
+    });
   }
 
   async createSubSurveyActivity(input: CreateSubSurveyActivityDTO) {
@@ -192,9 +236,38 @@ export class SurveyActivityService {
     return subSurveyActivity;
   }
 
-  async findSubSurveyActivityTypeBySurveyActivityId(surveyActivityId: string) {
+  async findSubSurveyActivityTypeBySurveyActivityId(
+    surveyActivityId: string,
+    actor: any,
+  ) {
+    actor = await this.enrichActor(actor);
+    const actorId = actor?.id;
+    if (!actorId) return [];
+    
+    if (this.canAccessAll(actor)) {
+      return this.prisma.subSurveyActivity.findMany({
+        where: { surveyActivityId },
+      });
+    }    
+
+    const team = await this.prisma.surveyActivity.findUnique({
+      where: { id: surveyActivityId },
+      select: { chiefId: true },
+    });
+
+    const isChief = team?.chiefId === actorId;
+
+    if (isChief) {
+      return this.prisma.subSurveyActivity.findMany({
+        where: { surveyActivityId },
+      });
+    }
+
     return this.prisma.subSurveyActivity.findMany({
-      where: { surveyActivityId },
+      where: {
+        surveyActivityId,
+        UserProgress: { some: { userId: actorId } },
+      },
     });
   }
 
@@ -1116,8 +1189,22 @@ export class SurveyActivityService {
     return updated;
   }
 
-  async getAllSubSurveyProgress(): Promise<SubSurveyProgressType[]> {
+  async getAllSubSurveyProgress(actor: any): Promise<SubSurveyProgressType[]> {
+    actor = await this.enrichActor(actor);
+    const actorId = actor?.id;
+    if (!actorId) return [];
+
+    const where = this.canAccessAll(actor)
+      ? {}
+      : {
+          OR: [
+            { surveyActivity: { chiefId: actorId } },
+            { UserProgress: { some: { userId: actorId } } },
+          ],
+        };
+
     const subSurveys = await this.prisma.subSurveyActivity.findMany({
+      where,
       include: { UserProgress: true },
       orderBy: { startDate: 'asc' },
     });
@@ -1274,13 +1361,31 @@ export class SurveyActivityService {
     };
   }
 
-  async getMonthlyActivityStaffUsage(year: number) {
+  async getMonthlyActivityStaffUsage(year: number, actor: any) {
+    actor = await this.enrichActor(actor);
+    const actorId = actor?.id;
+    if (!actorId) return [];
+
     const from = new Date(year, 0, 1);
     const to = new Date(year, 11, 31);
     to.setHours(23, 59, 59, 999);
 
+    const canAccessAll = this.canAccessAll(actor);
+
+    const accessWhere = canAccessAll
+      ? {}
+      : {
+          OR: [
+            { surveyActivity: { chiefId: actorId } },
+            { UserProgress: { some: { userId: actorId } } },
+          ],
+        };
+
     const subs = await this.prisma.subSurveyActivity.findMany({
-      where: { startDate: { gte: from, lte: to } },
+      where: {
+        startDate: { gte: from, lte: to },
+        ...accessWhere,
+      },
       select: {
         id: true,
         name: true,
@@ -1288,7 +1393,7 @@ export class SurveyActivityService {
         startDate: true,
         endDate: true,
         surveyActivity: {
-          select: { slug: true },
+          select: { slug: true, chiefId: true },
         },
       },
       orderBy: { startDate: 'asc' },

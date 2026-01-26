@@ -68,8 +68,9 @@ export class SurveyActivityResolver {
   }
 
   @Query(() => [SurveyActivityType], { name: 'allSurveyActivities' })
-  async allSurveyActivities() {
-    return this.service.findAll();
+  async allSurveyActivities(@Context() ctx: any,) {
+    const actor = ctx?.req?.user;
+    return this.service.findAll(actor);
   }
 
   @Mutation(() => SurveyActivityType)
@@ -103,9 +104,12 @@ export class SurveyActivityResolver {
   @Query(() => [SubSurveyActivityType])
   async subSurveyActivityById(
     @Args('surveyActivityId') surveyActivityId: string,
+    @Context() ctx: any,
   ) {
+    const actor = ctx?.req?.user;
     return this.service.findSubSurveyActivityTypeBySurveyActivityId(
       surveyActivityId,
+      actor,
     );
   }
 
@@ -310,8 +314,9 @@ export class SurveyActivityResolver {
   }
 
   @Query(() => [SubSurveyProgressType], { name: 'getAllSubSurveyProgress' })
-  async getAllSubSurveyProgress(): Promise<SubSurveyProgressType[]> {
-    return this.service.getAllSubSurveyProgress();
+  async getAllSubSurveyProgress(@Context() ctx: any): Promise<SubSurveyProgressType[]> {
+    const actor = ctx?.req?.user;
+    return this.service.getAllSubSurveyProgress(actor);
   }
 
   @Query(() => MonthlyStatsType)
@@ -325,8 +330,10 @@ export class SurveyActivityResolver {
   @Query(() => [MonthlyActivityStaffUsageRowType])
   getMonthlyActivityStaffUsage(
     @Args('year', { type: () => Int }) year: number,
+    @Context() ctx: any,
   ) {
-    return this.service.getMonthlyActivityStaffUsage(year);
+    const actor = ctx?.req?.user;
+    return this.service.getMonthlyActivityStaffUsage(year, actor);
   }
 
   @Query(() => [StaffYearlyExportRowType])
