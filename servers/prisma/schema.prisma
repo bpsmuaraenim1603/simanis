@@ -78,6 +78,11 @@ enum Channel {
   WHATSAPP
 }
 
+enum AdminDocType {
+  SPK
+  BAST
+}
+
 model Avatar {
   id       String @id @default(uuid())
   publicId String
@@ -194,6 +199,7 @@ model UserProgress {
   villageId           String?
   village             Village?           @relation(fields: [villageId], references: [id])
   travelBill          String?
+  budgetCode          String?
 
   samples UserSample[]
 }

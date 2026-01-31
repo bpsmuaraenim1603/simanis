@@ -42,11 +42,27 @@ import {
 } from './types/surveyact.types';
 import { FileUpload } from 'graphql-upload-ts';
 import { randomUUID } from 'node:crypto';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { createClient } from '@supabase/supabase-js';
-import { DeleteByIdInput } from './dto/delete.input';
 import { StorageService } from './storage.service';
 import * as XLSX from 'xlsx';
 import * as JSZip from 'jszip';
+import PizZip from 'pizzip';
+import Docxtemplater from 'docxtemplater';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const DocxMerger = require('docx-merger');
+import {
+  Document,
+  Packer,
+  Paragraph,
+  Table,
+  TableRow,
+  TableCell,
+  TextRun,
+  WidthType,
+  PageBreak,
+} from 'docx';
 import { console } from 'node:inspector';
 
 const supabase = createClient(
@@ -95,6 +111,89 @@ export class SurveyActivityService {
   private canAccessAll(actor: any) {
     const role = actor?.primaryRole;
     return role === 'Superadmin' || role === 'Keuangan';
+  }
+
+  private monthNameId(month: number) {
+    const m = Number(month);
+    const names = [
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember',
+    ];
+    return names[m - 1] ?? '';
+  }
+
+  private dayNameId(date: Date) {
+    const d = new Date(date);
+    const names = [
+      'Minggu',
+      'Senin',
+      'Selasa',
+      'Rabu',
+      'Kamis',
+      'Jumat',
+      'Sabtu',
+    ];
+    return names[d.getDay()];
+  }
+
+  private formatDateId(date: Date) {
+    const d = new Date(date);
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    return `${dd}-${mm}-${yyyy}`;
+  }
+
+  private terbilang(n: number): string {
+    const satuan = [
+      '',
+      'satu',
+      'dua',
+      'tiga',
+      'empat',
+      'lima',
+      'enam',
+      'tujuh',
+      'delapan',
+      'sembilan',
+      'sepuluh',
+      'sebelas',
+    ];
+
+    if (n < 12) return satuan[n];
+    if (n < 20) return this.terbilang(n - 10) + ' belas';
+    if (n < 100)
+      return (
+        this.terbilang(Math.floor(n / 10)) +
+        ' puluh ' +
+        this.terbilang(n % 10)
+      ).trim();
+    if (n < 200) return 'seratus ' + this.terbilang(n - 100);
+    if (n < 1000)
+      return (
+        this.terbilang(Math.floor(n / 100)) +
+        ' ratus ' +
+        this.terbilang(n % 100)
+      ).trim();
+    if (n < 2000) return 'seribu ' + this.terbilang(n - 1000);
+    if (n < 1_000_000)
+      return (
+        this.terbilang(Math.floor(n / 1000)) +
+        ' ribu ' +
+        this.terbilang(n % 1000)
+      ).trim();
+
+    return '';
   }
 
   private async enrichActor(actor: any) {
@@ -243,12 +342,12 @@ export class SurveyActivityService {
     actor = await this.enrichActor(actor);
     const actorId = actor?.id;
     if (!actorId) return [];
-    
+
     if (this.canAccessAll(actor)) {
       return this.prisma.subSurveyActivity.findMany({
         where: { surveyActivityId },
       });
-    }    
+    }
 
     const team = await this.prisma.surveyActivity.findUnique({
       where: { id: surveyActivityId },
@@ -450,11 +549,12 @@ export class SurveyActivityService {
   }
 
   async getUser(userId: string) {
-    const response$ = this.httpService.get(
-      `https://localhost:4001/users/${userId}`,
-    );
-    const response = await lastValueFrom(response$);
-    return response.data;
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) throw new NotFoundException('User not found');
+    return user;
   }
 
   async getSubSurveyProgress(subSurveyActivityId: string) {
@@ -2252,5 +2352,424 @@ export class SurveyActivityService {
       zipUrl: signed.signedUrl,
       totalPhotos: samples.length,
     };
+  }
+
+  private monthRange(month: number, year: number) {
+    if (month < 1 || month > 12) {
+      throw new BadRequestException('month harus 1-12');
+    }
+    const from = new Date(year, month - 1, 1);
+    const to = new Date(year, month, 0);
+    to.setHours(23, 59, 59, 999);
+    return { from, to };
+  }
+
+  private parseMoney(v?: string | null): number {
+    if (!v) return 0;
+    const s = String(v)
+      .replace(/[^\d.,-]/g, '')
+      .replace(',', '.');
+    const n = Number(s);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  async getMonthlyStaffDocPreview(userId: string, month: number, year: number) {
+    const { from, to } = this.monthRange(month, year);
+
+    const progresses = await this.prisma.userProgress.findMany({
+      where: {
+        userId,
+        subSurveyActivity: {
+          startDate: { gte: from, lte: to },
+        },
+      },
+      select: {
+        subSurveyActivityId: true,
+        travelBill: true,
+        budgetCode: true,
+        subSurveyActivity: {
+          select: { id: true, name: true, startDate: true, endDate: true },
+        },
+        _count: { select: { samples: true } },
+      },
+    });
+
+    const map = new Map<
+      string,
+      {
+        subSurveyActivityId: string;
+        activityName: string;
+        startDate: Date;
+        endDate: Date;
+        totalDocs: number;
+        totalHonor: number;
+        budgetCode?: string | null;
+      }
+    >();
+
+    for (const p of progresses) {
+      const ssa = p.subSurveyActivity;
+      if (!ssa?.id) continue;
+
+      const key = ssa.id;
+      const docs = p._count?.samples ?? 0;
+      const honor = this.parseMoney(p.travelBill);
+
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, {
+          subSurveyActivityId: ssa.id,
+          activityName: ssa.name,
+          startDate: ssa.startDate,
+          endDate: ssa.endDate,
+          totalDocs: docs,
+          totalHonor: honor,
+          budgetCode: p.budgetCode ?? null,
+        });
+      } else {
+        existing.totalDocs += docs;
+        existing.totalHonor += honor;
+        // ambil endDate paling akhir (kegiatan dianggap selesai kalau blok terakhir selesai)
+        if (ssa.endDate > existing.endDate) existing.endDate = ssa.endDate;
+        // budgetCode: ambil yang pertama non-null
+        if (!existing.budgetCode && p.budgetCode)
+          existing.budgetCode = p.budgetCode;
+      }
+    }
+
+    const today = new Date();
+    const rows = Array.from(map.values()).map((x) => {
+      const eligible = x.endDate.getTime() <= today.getTime();
+      const unitCost =
+        x.totalDocs > 0 ? Number((x.totalHonor / x.totalDocs).toFixed(2)) : 0;
+
+      return {
+        ...x,
+        eligible,
+        unitCost,
+      };
+    });
+
+    // urutkan biar enak dibaca: nama kegiatan A-Z
+    rows.sort((a, b) => a.activityName.localeCompare(b.activityName));
+
+    return rows;
+  }
+
+  private resolveTemplatePath(rel: string) {
+    // dev: process.cwd() biasanya di servers/
+    const candidates = [
+      path.join(process.cwd(), 'apps', 'surveyact', 'templates', rel),
+      path.join(
+        process.cwd(),
+        'servers',
+        'apps',
+        'surveyact',
+        'templates',
+        rel,
+      ),
+      path.join(__dirname, '..', 'templates', rel),
+    ];
+    for (const p of candidates) {
+      if (fs.existsSync(p)) return p;
+    }
+    throw new NotFoundException(`Template tidak ditemukan: ${rel}`);
+  }
+
+  private renderDocxTemplate(
+    templateRelPath: string,
+    data: Record<string, any>,
+  ) {
+    const p = this.resolveTemplatePath(templateRelPath);
+    const content = fs.readFileSync(p);
+    const zip = new PizZip(content);
+    const doc = new Docxtemplater(zip, {
+      paragraphLoop: true,
+      linebreaks: true,
+    });
+    doc.render(data);
+    return doc.getZip().generate({ type: 'nodebuffer' }) as Buffer;
+  }
+
+  private async sheetToDocxBuffer(sheet: XLSX.WorkSheet, title?: string) {
+    // Paksa range hanya A:H agar kolom tidak jadi 50+
+    const startRow = 0;
+    const endRow = XLSX.utils.decode_range(sheet['!ref'] || 'A1:H1').e.r;
+
+    const startCol = 0; // A
+    const endCol = 7; // H
+
+    const rows: TableRow[] = [];
+
+    for (let r = startRow; r <= endRow; r++) {
+      const cells: TableCell[] = [];
+      let hasAny = false;
+
+      for (let c = startCol; c <= endCol; c++) {
+        const addr = XLSX.utils.encode_cell({ r, c });
+        const cell = sheet[addr];
+        const text = cell ? String(cell.v ?? '') : '';
+        if (text.trim() !== '') hasAny = true;
+
+        cells.push(
+          new TableCell({
+            children: [new Paragraph(text)],
+          }),
+        );
+      }
+
+      if (!hasAny) continue;
+      rows.push(new TableRow({ children: cells }));
+    }
+
+    const doc = new Document({
+      sections: [
+        {
+          children: [
+            ...(title ? [new Paragraph({ text: title})] : []),
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              rows,
+            }),
+          ],
+        },
+      ],
+    });
+
+    return Packer.toBuffer(doc);
+  }
+
+  private fillLampiranWorkbook(
+    templateRelPath: string,
+    rows: Array<{
+      no: number;
+      activityName: string;
+      startDate: Date;
+      endDate: Date;
+      totalDocs: number;
+      unitCost: number;
+      totalCost: number;
+      budgetCode?: string | null;
+    }>,
+    docType: 'SPK' | 'BAST',
+  ) {
+    const p = this.resolveTemplatePath(templateRelPath);
+    const wb = XLSX.readFile(p);
+
+    const sheetName = wb.SheetNames[0];
+    const ws = wb.Sheets[sheetName];
+
+    // asumsi: data mulai dari baris 10 (bisa kamu sesuaikan sesuai template asli)
+    // lebih aman: kamu bisa cari baris header tertentu lalu mulai setelahnya.
+    const startRow = 10;
+
+    for (let i = 0; i < rows.length; i++) {
+      const r = startRow + i;
+      const item = rows[i];
+
+      // Kolom disesuaikan template Excel kamu.
+      // Default mapping:
+      // A: No
+      // B: Uraian
+      // C: Jangka waktu / Tanggal selesai
+      // D: Volume
+      // E: Satuan
+      // F: Harga satuan (SPK)
+      // G: Nilai (SPK)
+      // H: Beban anggaran
+      XLSX.utils.sheet_add_aoa(
+        ws,
+        [
+          [
+            item.no,
+            item.activityName,
+            docType === 'BAST'
+              ? item.endDate.toISOString().slice(0, 10)
+              : `${item.startDate.toISOString().slice(0, 10)} s.d. ${item.endDate.toISOString().slice(0, 10)}`,
+            item.totalDocs,
+            'Dokumen',
+            docType === 'SPK' ? item.unitCost : '',
+            docType === 'SPK' ? item.totalCost : '',
+            item.budgetCode ?? '',
+          ],
+        ],
+        { origin: { r, c: 0 } },
+      );
+    }
+
+    return { wb, ws };
+  }
+
+  private async mergeDocxBuffers(buffers: Buffer[]) {
+    return new Promise<Buffer>((resolve, reject) => {
+      const merger = new DocxMerger({}, buffers);
+      merger.save('nodebuffer', (data: Buffer) => resolve(data));
+      merger.on('error', (err: any) => reject(err));
+    });
+  }
+
+  private async uploadAdminDoc(buffer: Buffer, filename: string) {
+    const bucket = process.env.SUPABASE_ADMIN_DOC_BUCKET || 'admin-docs';
+    const objectPath = `${new Date().getFullYear()}/${randomUUID()}-${filename}`;
+
+    const { error } = await supabase.storage
+      .from(bucket)
+      .upload(objectPath, buffer, {
+        upsert: true,
+        contentType:
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      });
+
+    if (error) throw new BadRequestException(error.message);
+
+    const signed = await supabase.storage
+      .from(bucket)
+      .createSignedUrl(objectPath, 60 * 60 * 24);
+    if (!signed?.data?.signedUrl)
+      throw new BadRequestException('Gagal membuat signed url');
+    return signed.data.signedUrl;
+  }
+
+  async generateMonthlyStaffDoc(input: {
+    userId: string;
+    month: number;
+    year: number;
+    docType: string;
+    ppkName: string;
+    nomorUrutX: string;
+    docDate: Date;
+    rows: Array<{
+      subSurveyActivityId: string;
+      totalDocs: number;
+      unitCost: number;
+      totalCost: number;
+      budgetCode?: string;
+    }>;
+  }) {
+    const docType = String(input.docType || '').toUpperCase();
+    if (docType !== 'SPK' && docType !== 'BAST') {
+      throw new BadRequestException("docType harus 'SPK' atau 'BAST'");
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: input.userId },
+    });
+    const petugasName = user?.name || 'Petugas';
+
+    // ambil preview server-side agar eligibility tetap aman
+    const preview = await this.getMonthlyStaffDocPreview(
+      input.userId,
+      input.month,
+      input.year,
+    );
+    const previewMap = new Map(
+      preview.map((r: any) => [r.subSurveyActivityId, r]),
+    );
+
+    const eligibleRows = (input.rows || [])
+      .map((r) => {
+        const base = previewMap.get(r.subSurveyActivityId);
+        if (!base) return null;
+        if (!base.eligible) return null;
+        return {
+          subSurveyActivityId: base.subSurveyActivityId,
+          activityName: base.activityName,
+          startDate: base.startDate,
+          endDate: base.endDate,
+          totalDocs: Number(r.totalDocs ?? base.totalDocs),
+          unitCost: Number(r.unitCost ?? base.unitCost),
+          totalCost: Number(
+            r.totalCost ??
+              Number(r.unitCost ?? base.unitCost) *
+                Number(r.totalDocs ?? base.totalDocs),
+          ),
+          budgetCode: (r.budgetCode ?? base.budgetCode ?? '') as string,
+        };
+      })
+      .filter(Boolean) as any[];
+
+    if (eligibleRows.length === 0) {
+      throw new BadRequestException(
+        'Tidak ada kegiatan selesai pada periode ini.',
+      );
+    }
+
+    const startDates = eligibleRows
+      .map((r) => new Date(r.startDate))
+      .filter((d) => !isNaN(d.getTime()));
+
+    const endDates = eligibleRows
+      .map((r) => new Date(r.endDate))
+      .filter((d) => !isNaN(d.getTime()));
+
+    const minStart = startDates.length
+      ? new Date(Math.min(...startDates.map((d) => d.getTime())))
+      : null;
+
+    const maxEnd = endDates.length
+      ? new Date(Math.max(...endDates.map((d) => d.getTime())))
+      : null;
+
+    // nomor lampiran: X/BPS1603/PPK/SPK|BAST/BB/YYYY
+    const mm = String(input.month).padStart(2, '0');
+    const nomorLampiran = `${input.nomorUrutX}/BPS1603/PPK/${docType}/${mm}/${input.year}`;
+    const hari = this.dayNameId(input.docDate);
+    const namaBulan = this.monthNameId(input.month);
+    const tanggalFormat = this.formatDateId(input.docDate);
+    const tanggal = input.docDate.getDate();
+    const tanggalTerbilang = this.terbilang(input.docDate.getDate());
+    const tanggalMulai = minStart ? minStart.getDate() : null;
+    const tanggalSelesai = maxEnd ? maxEnd.getDate() : null;
+    const tahunTerbilang = this.terbilang(input.year);
+
+    // 1) render word utama
+    const mainTemplateRel =
+      docType === 'SPK'
+        ? path.join('bast-spk', 'template-spk.docx')
+        : path.join('bast-spk', 'template-bast.docx');
+
+    const mainDoc = this.renderDocxTemplate(mainTemplateRel, {
+      namaPPK: input.ppkName,
+      namaPetugas: petugasName,
+      nomorLampiran,
+      hariDokumen: hari,
+      tanggal,
+      tanggalTerbilang,
+      tanggalMulai,
+      tanggalSelesai,
+      tanggalDokumen: tanggalFormat,
+      bulan: namaBulan,
+      tahun: String(input.year),
+      tahunTerbilang,
+    });
+
+    // 2) isi lampiran excel, lalu konversi sheet → docx (tabel)
+    const lampiranXlsxRel =
+      docType === 'SPK'
+        ? path.join('bast-spk', 'lampiran-spk.xlsx')
+        : path.join('bast-spk', 'lampiran-bast.xlsx');
+
+    const { wb, ws } = this.fillLampiranWorkbook(
+      lampiranXlsxRel,
+      eligibleRows.map((x, i) => ({ ...x, no: i + 1 })),
+      docType as 'SPK' | 'BAST',
+    );
+
+    // sheet-to-docx pakai worksheet yang sudah diisi
+    const lampiranDoc = await this.sheetToDocxBuffer(
+      ws,
+      docType === 'SPK' ? 'LAMPIRAN SPK' : 'LAMPIRAN BAST',
+    );
+
+    // 3) merge
+    const merged = await this.mergeDocxBuffers([mainDoc, lampiranDoc]);
+
+    // 4) upload & return url
+    const fileName =
+      `${docType}-${petugasName}-${mm}-${input.year}.docx`.replace(
+        /[^\w.\-]+/g,
+        '_',
+      );
+    return this.uploadAdminDoc(merged, fileName);
   }
 }

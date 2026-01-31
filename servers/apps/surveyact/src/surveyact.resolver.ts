@@ -16,6 +16,7 @@ import {
   IssueCommentType,
   JobLetterType,
   MonthlyActivityStaffUsageRowType,
+  MonthlyStaffDocPreviewRowType,
   MonthlyStatsType,
   StaffYearlyExportRowType,
   SubmitSPJType,
@@ -45,8 +46,8 @@ import {
   UpdateSubSurveyActivityDTO,
   UpdateSurveyActivityDTO,
   UpdateUserProgressDTO,
+  GenerateMonthlyStaffDocInput,
 } from './dto/surveyact.dto';
-import { User } from 'apps/users/src/entities/users.entity';
 import {
   IssueStatus,
   JobLetter,
@@ -335,6 +336,20 @@ export class SurveyActivityResolver {
     const actor = ctx?.req?.user;
     return this.service.getMonthlyActivityStaffUsage(year, actor);
   }
+  @Query(() => [MonthlyStaffDocPreviewRowType])
+  getMonthlyStaffDocPreview(
+    @Args('userId', { type: () => ID }) userId: string,
+    @Args('month', { type: () => Int }) month: number,
+    @Args('year', { type: () => Int }) year: number,
+  ) {
+    return this.service.getMonthlyStaffDocPreview(userId, month, year);
+  }
+
+  @Mutation(() => String)
+  generateMonthlyStaffDoc(@Args('input') input: GenerateMonthlyStaffDocInput) {
+    return this.service.generateMonthlyStaffDoc(input);
+  }
+
 
   @Query(() => [StaffYearlyExportRowType])
   getStaffYearlyExport(@Args('year', { type: () => Int }) year: number) {

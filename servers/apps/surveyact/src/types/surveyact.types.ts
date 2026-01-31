@@ -159,6 +159,9 @@ export class UserProgressType {
   @Field({ nullable: true })
   travelBill?: string;
 
+  @Field({ nullable: true })
+  budgetCode?: string;
+
   @Field(() => ProgressRole)
   progressRole: ProgressRole;
 
@@ -518,3 +521,42 @@ export class ExportUserSamplePhotosResult {
   @Field(() => Int)
   totalPhotos: number;
 }
+
+
+
+export enum AdminDocType {
+  SPK = 'SPK',
+  BAST = 'BAST',
+}
+registerEnumType(AdminDocType, { name: 'AdminDocType' });
+
+@ObjectType()
+export class MonthlyStaffDocPreviewRowType {
+  @Field(() => ID)
+  subSurveyActivityId: string;
+
+  @Field()
+  activityName: string;
+
+  @Field(() => GraphQLISODateTime)
+  startDate: Date;
+
+  @Field(() => GraphQLISODateTime)
+  endDate: Date;
+
+  @Field()
+  eligible: boolean;
+
+  @Field(() => Int)
+  totalDocs: number;
+
+  @Field(() => Float)
+  totalHonor: number;
+
+  @Field(() => Float)
+  unitCost: number;
+
+  @Field(() => String, { nullable: true })
+  budgetCode?: string | null;
+}
+

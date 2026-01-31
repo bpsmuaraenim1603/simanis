@@ -41,6 +41,7 @@ const NavItems = ({ isMinimized = false }: { isMinimized?: boolean }) => {
     { title: "Kendala", url: "/issue", hovertitle: "Kendala", style: "border-b-2 border-white pb-2", logo: TriangleAlert,
       dataprogress: [{ title: "Pelaporan", url: "/issue/pelaporan" }, { title: "Feedback", url: "/issue/feedback" }], },
     { title: "ADMINISTRASI", url: "#administrasi", unhover: true },
+    ... (hasAnyRole(user, ["Superadmin", "Admin", "Keuangan"]) ? [{ title: "BAST & SPK", url: "/bast-spk", hovertitle: "BAST & SPK", logo: FileText }] : []),
     { title: "ST Petugas", url: "/partners", hovertitle: "ST Petugas", logo: Users },
     { title: "Pengajuan Honor", url: "/spj", hovertitle: "Pengajuan Honor", logo: FileText },
     { title: "Tentang Kami", url: "/about", hovertitle: "Tentang Kami", logo: Contact },

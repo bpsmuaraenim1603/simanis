@@ -5,6 +5,8 @@ import {
   registerEnumType,
   GraphQLISODateTime,
   ObjectType,
+  Int,
+  Float,
 } from '@nestjs/graphql';
 import { AgreeState, CacahStatus, IssueStatus, StatusST } from '@prisma/client';
 import {
@@ -196,6 +198,9 @@ export class CreateUserProgressDTO {
   @Field({ nullable: true })
   travelBill?: string;
 
+  @Field({ nullable: true })
+  budgetCode?: string;
+
   @Field(() => [UserSampleInput], { nullable: true })
   samples?: UserSampleInput[];
 }
@@ -240,6 +245,9 @@ export class UpdateUserProgressDTO {
 
   @Field({ nullable: true })
   travelBill?: string;
+
+  @Field({ nullable: true })
+  budgetCode?: string;
 
   @Field({ nullable: true })
   totalAssigned?: number;
@@ -414,3 +422,52 @@ export class updateIssueCommentDto {
   @IsString()
   message: string;
 }
+
+
+
+@InputType()
+export class MonthlyStaffDocRowInput {
+  @Field(() => ID)
+  subSurveyActivityId: string;
+
+  @Field(() => Int)
+  totalDocs: number;
+
+  @Field(() => Float)
+  unitCost: number;
+
+  @Field(() => Float)
+  totalCost: number;
+
+  @Field({ nullable: true })
+  budgetCode?: string;
+}
+
+@InputType()
+export class GenerateMonthlyStaffDocInput {
+  @Field(() => ID)
+  userId: string;
+
+  @Field(() => Int)
+  month: number;
+
+  @Field(() => Int)
+  year: number;
+
+  // 'SPK' | 'BAST'
+  @Field()
+  docType: string;
+
+  @Field()
+  ppkName: string;
+
+  @Field()
+  nomorUrutX: string;
+
+  @Field(() => GraphQLISODateTime)
+  docDate: Date;
+
+  @Field(() => [MonthlyStaffDocRowInput])
+  rows: MonthlyStaffDocRowInput[];
+}
+
