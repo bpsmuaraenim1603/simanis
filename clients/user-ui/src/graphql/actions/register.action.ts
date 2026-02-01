@@ -13,7 +13,7 @@ mutation RegisterUser(
     $village_name: String!
     $signupCode: String!
 ) {
-    (registerDto: {
+    register(registerDto: {
         name: $name,
         email: $email,
         password: $password,

@@ -461,8 +461,46 @@ export class GenerateMonthlyStaffDocInput {
   @Field()
   ppkName: string;
 
+  @Field({ nullable: true })
+  ppkNip?: string;
+
   @Field()
-  nomorUrutX: string;
+  nomorBAST: string;
+
+  @Field()
+  nomorSPK: string;
+
+  @Field(() => GraphQLISODateTime)
+  docDate: Date;
+
+  @Field(() => [MonthlyStaffDocRowInput])
+  rows: MonthlyStaffDocRowInput[];
+}
+
+@InputType()
+export class GenerateMonthlyStaffDocsInput {
+  @Field(() => ID)
+  userId: string;
+
+  @Field(() => Int)
+  month: number;
+
+  @Field(() => Int)
+  year: number;
+
+  @Field()
+  ppkName: string;
+
+  @Field()
+  ppkNip: string;
+
+  // format full, mis. "12/BPS1603/PPK/SPK/02/2026"
+  @Field()
+  nomorSPK: string;
+
+  // format full, mis. "7/BPS1603/PPK/BAST/02/2026"
+  @Field()
+  nomorBAST: string;
 
   @Field(() => GraphQLISODateTime)
   docDate: Date;

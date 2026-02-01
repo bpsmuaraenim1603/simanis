@@ -17,6 +17,7 @@ import {
   JobLetterType,
   MonthlyActivityStaffUsageRowType,
   MonthlyStaffDocPreviewRowType,
+  MonthlyStaffDocsOutputType,
   MonthlyStatsType,
   StaffYearlyExportRowType,
   SubmitSPJType,
@@ -47,6 +48,7 @@ import {
   UpdateSurveyActivityDTO,
   UpdateUserProgressDTO,
   GenerateMonthlyStaffDocInput,
+  GenerateMonthlyStaffDocsInput,
 } from './dto/surveyact.dto';
 import {
   IssueStatus,
@@ -348,6 +350,13 @@ export class SurveyActivityResolver {
   @Mutation(() => String)
   generateMonthlyStaffDoc(@Args('input') input: GenerateMonthlyStaffDocInput) {
     return this.service.generateMonthlyStaffDoc(input);
+  }
+
+  @Mutation(() => MonthlyStaffDocsOutputType)
+  generateMonthlyStaffDocs(
+    @Args('input') input: GenerateMonthlyStaffDocsInput,
+  ) {
+    return this.service.generateMonthlyStaffDocs(input);
   }
 
 

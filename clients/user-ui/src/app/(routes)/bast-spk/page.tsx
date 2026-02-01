@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { useLazyQuery, useMutation, useQuery } from "@apollo/client";
+import { gql, useLazyQuery, useMutation, useQuery } from "@apollo/client";
 import toast from "react-hot-toast";
 import HUComboBox, { HUOption } from "@/src/components/HUCombobox";
 import useUser from "@/src/hooks/useUser";
@@ -9,7 +9,7 @@ import { hasAnyRole } from "@/src/utils/roles";
 import styles from "@/src/utils/style";
 import { GET_ALL_USERS } from "@/src/graphql/actions/find-allusers.action";
 import { GET_MONTHLY_STAFF_DOC_PREVIEW } from "@/src/graphql/actions/get-monthly-staff-doc-preview.action";
-import { GENERATE_MONTHLY_STAFF_DOC } from "@/src/graphql/actions/generate-monthly-staff-doc.action";
+import { GENERATE_MONTHLY_STAFF_DOCS } from "@/src/graphql/actions/generate-monthly-staff-docs.action";
 
 type PreviewRow = {
   subSurveyActivityId: string;
@@ -24,7 +24,6 @@ type PreviewRow = {
 };
 
 type EditableRow = PreviewRow & {
-  // editable values for eligible rows
   editTotalDocs: number;
   editUnitCost: number;
   editTotalCost: number;
@@ -38,8 +37,18 @@ function toNumber(v: any) {
 
 function monthName(id: number) {
   const names = [
-    "Januari","Februari","Maret","April","Mei","Juni",
-    "Juli","Agustus","September","Oktober","November","Desember",
+    "Januari",
+    "Februari",
+    "Maret",
+    "April",
+    "Mei",
+    "Juni",
+    "Juli",
+    "Agustus",
+    "September",
+    "Oktober",
+    "November",
+    "Desember",
   ];
   return names[id - 1] ?? String(id);
 }
@@ -66,10 +75,20 @@ export default function BastSpkPage() {
   const [month, setMonth] = useState<number>(now.getMonth() + 1);
   const [year, setYear] = useState<number>(now.getFullYear());
 
-  const [docType, setDocType] = useState<"SPK" | "BAST">("SPK");
   const [docDate, setDocDate] = useState<string>(now.toISOString().slice(0, 10));
   const [ppkName, setPpkName] = useState<string>("");
-  const [nomorUrutX, setNomorUrutX] = useState<string>("1");
+  const [ppkNip, setPpkNip] = useState<string>("");
+
+  // User hanya isi digit awal (nomor urut). Suffix otomatis mengikuti bulan & tahun.
+  const [nomorUrutSpk, setNomorUrutSpk] = useState<string>("");
+  const [nomorUrutBast, setNomorUrutBast] = useState<string>("");
+
+  const mm = String(month).padStart(2, "0");
+  const suffixSPK = `/BPS1603/PPK/SPK/${mm}/${year}`;
+  const suffixBAST = `/BPS1603/PPK/BAST/${mm}/${year}`;
+
+  const nomorSPK = nomorUrutSpk ? `${nomorUrutSpk}${suffixSPK}` : "";
+  const nomorBAST = nomorUrutBast ? `${nomorUrutBast}${suffixBAST}` : "";
 
   const [rows, setRows] = useState<EditableRow[]>([]);
 
@@ -98,14 +117,10 @@ export default function BastSpkPage() {
     }
   );
 
-  const [generateDoc, { loading: genLoading }] = useMutation(
-    GENERATE_MONTHLY_STAFF_DOC,
+  const [generateDocs, { loading: generating }] = useMutation(
+    GENERATE_MONTHLY_STAFF_DOCS,
     {
-      onCompleted: (res) => {
-        const url = res?.generateMonthlyStaffDoc;
-        if (!url) return toast.error("URL dokumen tidak ditemukan.");
-        window.open(url, "_blank");
-      },
+      fetchPolicy: "no-cache",
       onError: (e) => toast.error(e.message),
     }
   );
@@ -123,7 +138,6 @@ export default function BastSpkPage() {
       const cur = clone[idx];
       const merged = { ...cur, ...next };
 
-      // auto-calc total cost
       const td = toNumber(merged.editTotalDocs);
       const uc = toNumber(merged.editUnitCost);
       merged.editTotalCost = Number((td * uc).toFixed(2));
@@ -131,6 +145,59 @@ export default function BastSpkPage() {
       clone[idx] = merged;
       return clone;
     });
+  };
+
+  /**
+   * ✅ Generate SPK+BAST via GraphQL (storage Google Drive).
+   */
+  const handleGenerateAndOpen = async () => {
+    if (!selectedUserId) return toast.error("Petugas belum dipilih.");
+    if (!ppkName.trim()) return toast.error("Nama PPK wajib diisi.");
+    if (!ppkNip.trim()) return toast.error("NIP PPK wajib diisi.");
+    if (!nomorUrutSpk.trim()) return toast.error("Nomor urut SPK wajib diisi.");
+    if (!nomorUrutBast.trim()) return toast.error("Nomor urut BAST wajib diisi.");
+
+    const eligibleRows = rows
+      .filter((r) => r.eligible)
+      .map((r) => ({
+        subSurveyActivityId: r.subSurveyActivityId,
+        totalDocs: toNumber(r.editTotalDocs),
+        unitCost: toNumber(r.editUnitCost),
+        totalCost: toNumber(r.editTotalCost),
+        budgetCode: String(r.editBudgetCode || ""),
+      }));
+
+    if (eligibleRows.length === 0) {
+      return toast.error("Tidak ada kegiatan eligible untuk dibuat dokumen.");
+    }
+
+    const input = {
+      userId: selectedUserId,
+      month,
+      year,
+      ppkName: ppkName.trim(),
+      ppkNip: ppkNip.trim(),
+      nomorSPK,
+      nomorBAST,
+      docDate: new Date(docDate), // GraphQLISODateTime
+      rows: eligibleRows,
+    };
+
+    const res = await generateDocs({ variables: { input } });
+    const out = res.data?.generateMonthlyStaffDocs;
+
+    const spkUrl = out?.spkUrl;
+    const bastUrl = out?.bastUrl;
+
+    if (!spkUrl || !bastUrl) {
+      return toast.error("Gagal membuat dokumen. URL tidak ditemukan.");
+    }
+
+    // Buka dua dokumen (Drive link).
+    window.open(spkUrl, "_blank");
+    window.open(bastUrl, "_blank");
+
+    toast.success("Dokumen berhasil dibuat.");
   };
 
   if (!canAccess) {
@@ -190,18 +257,6 @@ export default function BastSpkPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-semibold mb-1">Jenis Dokumen</label>
-            <select
-              className="w-full rounded-md border px-3 py-2 bg-white"
-              value={docType}
-              onChange={(e) => setDocType(e.target.value as any)}
-            >
-              <option value="SPK">SPK</option>
-              <option value="BAST">BAST</option>
-            </select>
-          </div>
-
-          <div>
             <label className="block text-sm font-semibold mb-1">Tanggal Dokumen</label>
             <input
               className="w-full rounded-md border px-3 py-2 bg-white"
@@ -222,13 +277,45 @@ export default function BastSpkPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-semibold mb-1">Nomor Urut (X)</label>
+            <label className="block text-sm font-semibold mb-1">NIP PPK</label>
             <input
               className="w-full rounded-md border px-3 py-2 bg-white"
-              value={nomorUrutX}
-              onChange={(e) => setNomorUrutX(e.target.value)}
-              placeholder="Contoh: 1"
+              value={ppkNip}
+              onChange={(e) => setPpkNip(e.target.value)}
+              placeholder="Contoh: 1987xxxxxxxxxxxx"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold mb-1">Nomor SPK (format lengkap)</label>
+            <div className="flex items-center">
+              <input
+                className="w-28 rounded-r-none border px-3 py-2 bg-white font-mono"
+                value={nomorUrutSpk}
+                onChange={(e) => setNomorUrutSpk(e.target.value.replace(/\D/g, ""))}
+                placeholder="123"
+                inputMode="numeric"
+              />
+              <span className="border border-l-0 rounded-l-none rounded-md px-3 py-2 bg-gray-50 font-mono text-sm whitespace-nowrap">
+                {suffixSPK}
+              </span>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold mb-1">Nomor BAST (format lengkap)</label>
+            <div className="flex items-center">
+              <input
+                className="w-28 rounded-r-none border px-3 py-2 bg-white font-mono"
+                value={nomorUrutBast}
+                onChange={(e) => setNomorUrutBast(e.target.value.replace(/\D/g, ""))}
+                placeholder="7"
+                inputMode="numeric"
+              />
+              <span className="border border-l-0 rounded-l-none rounded-md px-3 py-2 bg-gray-50 font-mono text-sm whitespace-nowrap">
+                {suffixBAST}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -258,9 +345,7 @@ export default function BastSpkPage() {
       <div className="bg-white rounded-lg border p-4">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-bold">Preview Kegiatan</h2>
-          <span className="text-sm text-gray-600">
-            Editable hanya untuk kegiatan selesai.
-          </span>
+          <span className="text-sm text-gray-600">Editable hanya untuk kegiatan selesai.</span>
         </div>
 
         <div className="overflow-auto">
@@ -294,7 +379,11 @@ export default function BastSpkPage() {
                       <td className="border p-2 text-center">{String(r.startDate).slice(0, 10)}</td>
                       <td className="border p-2 text-center">{String(r.endDate).slice(0, 10)}</td>
                       <td className="border p-2 text-center">
-                        <span className={`px-2 py-1 rounded text-xs ${r.eligible ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-800"}`}>
+                        <span
+                          className={`px-2 py-1 rounded text-xs ${
+                            r.eligible ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-800"
+                          }`}
+                        >
                           {r.eligible ? "Selesai" : "Belum selesai"}
                         </span>
                       </td>
@@ -338,11 +427,13 @@ export default function BastSpkPage() {
                           className="w-full border rounded px-2 py-1 bg-white"
                           disabled={disabled}
                           value={r.editBudgetCode}
-                          onChange={(e) => setRows((prev) => {
-                            const clone = [...prev];
-                            clone[idx] = { ...clone[idx], editBudgetCode: e.target.value };
-                            return clone;
-                          })}
+                          onChange={(e) =>
+                            setRows((prev) => {
+                              const clone = [...prev];
+                              clone[idx] = { ...clone[idx], editBudgetCode: e.target.value };
+                              return clone;
+                            })
+                          }
                           placeholder="Kode beban anggaran"
                         />
                       </td>
@@ -357,40 +448,10 @@ export default function BastSpkPage() {
         <div className="mt-4 flex justify-end">
           <button
             className={`${styles.button} !w-auto`}
-            disabled={genLoading || !selectedUserId || eligibleCount === 0}
-            onClick={() => {
-              if (!selectedUserId) return toast.error("Pilih petugas dulu.");
-              if (!ppkName.trim()) return toast.error("Nama PPK wajib diisi.");
-              if (!docDate) return toast.error("Tanggal dokumen wajib diisi.");
-              if (!nomorUrutX.trim()) return toast.error("Nomor urut (X) wajib diisi.");
-
-              const payloadRows = rows
-                .filter((r) => r.eligible)
-                .map((r) => ({
-                  subSurveyActivityId: r.subSurveyActivityId,
-                  totalDocs: toNumber(r.editTotalDocs),
-                  unitCost: toNumber(r.editUnitCost),
-                  totalCost: toNumber(r.editTotalCost),
-                  budgetCode: r.editBudgetCode,
-                }));
-
-              generateDoc({
-                variables: {
-                  input: {
-                    userId: selectedUserId,
-                    month,
-                    year,
-                    docType,
-                    ppkName,
-                    nomorUrutX,
-                    docDate: new Date(docDate),
-                    rows: payloadRows,
-                  },
-                },
-              });
-            }}
+            disabled={generating || !selectedUserId || eligibleCount === 0}
+            onClick={handleGenerateAndOpen}
           >
-            {genLoading ? "Membuat Dokumen..." : "Download Word"}
+            {generating ? "Membuat dokumen..." : "Generate & Download (SPK+BAST)"}
           </button>
         </div>
 

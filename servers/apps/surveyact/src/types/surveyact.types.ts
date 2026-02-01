@@ -560,3 +560,18 @@ export class MonthlyStaffDocPreviewRowType {
   budgetCode?: string | null;
 }
 
+@ObjectType()
+export class MonthlyStaffDocsOutputType {
+  @Field()
+  spkUrl: string;
+
+  @Field()
+  bastUrl: string;
+
+  @Field()
+  nomorSPK: string;
+
+  @Field()
+  nomorBAST: string;
+}
+

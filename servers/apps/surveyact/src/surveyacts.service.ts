@@ -154,42 +154,51 @@ export class SurveyActivityService {
     return `${dd}-${mm}-${yyyy}`;
   }
 
+  private formatNumberID(n: number) {
+    const v = Number(n);
+    const safe = Number.isFinite(v) ? v : 0;
+    // Dokumen honor umumnya bilangan bulat.
+    return new Intl.NumberFormat('id-ID', {
+      maximumFractionDigits: 0,
+    }).format(Math.round(safe));
+  }
+
   private terbilang(n: number): string {
     const satuan = [
       '',
-      'satu',
-      'dua',
-      'tiga',
-      'empat',
-      'lima',
-      'enam',
-      'tujuh',
-      'delapan',
-      'sembilan',
-      'sepuluh',
-      'sebelas',
+      'Satu',
+      'Dua',
+      'Tiga',
+      'Empat',
+      'Lima',
+      'Enam',
+      'Tujuh',
+      'Delapan',
+      'Sembilan',
+      'Sepuluh',
+      'Sebelas',
     ];
 
     if (n < 12) return satuan[n];
-    if (n < 20) return this.terbilang(n - 10) + ' belas';
+    if (n < 20) return this.terbilang(n - 10) + ' Belas';
     if (n < 100)
       return (
         this.terbilang(Math.floor(n / 10)) +
-        ' puluh ' +
+        ' Puluh ' +
         this.terbilang(n % 10)
       ).trim();
-    if (n < 200) return 'seratus ' + this.terbilang(n - 100);
+    if (n < 200) return 'Seratus ' + this.terbilang(n - 100);
     if (n < 1000)
       return (
         this.terbilang(Math.floor(n / 100)) +
-        ' ratus ' +
+        ' Ratus ' +
         this.terbilang(n % 100)
       ).trim();
-    if (n < 2000) return 'seribu ' + this.terbilang(n - 1000);
+    if (n < 2000) return 'Seribu ' + this.terbilang(n - 1000);
     if (n < 1_000_000)
       return (
         this.terbilang(Math.floor(n / 1000)) +
-        ' ribu ' +
+        ' Ribu ' +
         this.terbilang(n % 1000)
       ).trim();
 
@@ -2443,8 +2452,9 @@ export class SurveyActivityService {
         map.set(key, {
           subSurveyActivityId: ssa.id,
           activityName: ssa.name,
-          startDate: ssa.startDate,
-          endDate: effectiveEnd,
+          // simpan yang sudah dipotong sesuai bulan yang dipilih
+          startDate: startInMonth,
+          endDate: endInMonth,
           totalDocs: docs,
           totalHonor: honor,
           budgetCode: p.budgetCode ?? null,
@@ -2584,15 +2594,12 @@ export class SurveyActivityService {
     const sheetName = wb.SheetNames[0];
     const ws = wb.Sheets[sheetName];
 
-    // asumsi: data mulai dari baris 10 (bisa kamu sesuaikan sesuai template asli)
-    // lebih aman: kamu bisa cari baris header tertentu lalu mulai setelahnya.
     const startRow = 10;
 
     for (let i = 0; i < rows.length; i++) {
       const r = startRow + i;
       const item = rows[i];
 
-      // Kolom disesuaikan template Excel kamu.
       // Default mapping:
       // A: No
       // B: Uraian
@@ -2655,15 +2662,246 @@ export class SurveyActivityService {
     return signed.data.signedUrl;
   }
 
+  private async uploadMonthlyStaffDoc(buffer: Buffer, filename: string) {
+    const bucket =
+      process.env.SUPABASE_MONTHLY_STAFF_DOC_BUCKET || 'admin-docs';
+    const objectPath = `${new Date().getFullYear()}/${randomUUID()}-${filename}`;
+
+    const { error } = await supabase.storage
+      .from(bucket)
+      .upload(objectPath, buffer, {
+        upsert: true,
+        contentType:
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      });
+
+    if (error) throw new BadRequestException(error.message);
+
+    const signed = await supabase.storage
+      .from(bucket)
+      .createSignedUrl(objectPath, 60 * 60 * 24 * 7);
+    if (!signed?.data?.signedUrl)
+      throw new BadRequestException('Gagal membuat signed url');
+    return signed.data.signedUrl;
+  }
+
+  async generateMonthlyStaffDocs(input: {
+    userId: string;
+    month: number;
+    year: number;
+    ppkName: string;
+    ppkNip: string;
+    nomorSPK: string;
+    nomorBAST: string;
+    docDate: Date;
+    rows: Array<{
+      subSurveyActivityId: string;
+      totalDocs: number;
+      unitCost: number;
+      totalCost: number;
+      budgetCode?: string;
+    }>;
+  }) {
+    const built = await this.generateMonthlyStaffDocsBuffers(input);
+
+    const [spkUrl, bastUrl] = await Promise.all([
+      this.uploadMonthlyStaffDoc(built.spkBuffer, built.spkFileName),
+      this.uploadMonthlyStaffDoc(built.bastBuffer, built.bastFileName),
+    ]);
+
+    return {
+      spkUrl,
+      bastUrl,
+      nomorSPK: built.nomorSPK,
+      nomorBAST: built.nomorBAST,
+    };
+  }
+
+  async generateMonthlyStaffDocsBuffers(input: {
+    userId: string;
+    month: number;
+    year: number;
+    ppkName: string;
+    ppkNip: string;
+    nomorSPK: string;
+    nomorBAST: string;
+    docDate: Date;
+    rows: Array<{
+      subSurveyActivityId: string;
+      totalDocs: number;
+      unitCost: number;
+      totalCost: number;
+      budgetCode?: string;
+    }>;
+  }) {
+    const user = await this.prisma.user.findUnique({ where: { id: input.userId } });
+    if (!user) throw new NotFoundException('User tidak ditemukan');
+
+    const petugasName = user?.name || 'Petugas';
+    const pekerjaanPetugas = (user as any)?.job_name || '';
+    const desaTinggalPetugas = (user as any)?.village_name || '';
+
+    // ambil preview server-side agar eligibility tetap aman
+    const preview = await this.getMonthlyStaffDocPreview(input.userId, input.month, input.year);
+    const previewMap = new Map(preview.map((r: any) => [r.subSurveyActivityId, r]));
+
+    const eligibleRows = (input.rows || [])
+      .map((r) => {
+        const base = previewMap.get(r.subSurveyActivityId);
+        if (!base) return null;
+        if (!base.eligible) return null;
+        const totalDocs = Number(r.totalDocs ?? base.totalDocs);
+        const unitCost = Number(r.unitCost ?? base.unitCost);
+        const totalCost = Number(r.totalCost ?? unitCost * totalDocs);
+        return {
+          subSurveyActivityId: base.subSurveyActivityId,
+          activityName: base.activityName,
+          startDate: new Date(base.startDate),
+          endDate: new Date(base.endDate),
+          totalDocs,
+          unitCost,
+          totalCost,
+          budgetCode: (r.budgetCode ?? base.budgetCode ?? '') as string,
+        };
+      })
+      .filter(Boolean) as any[];
+
+    if (eligibleRows.length === 0) {
+      throw new BadRequestException('Tidak ada kegiatan selesai pada periode ini.');
+    }
+
+    const minStart = new Date(Math.min(...eligibleRows.map((r) => r.startDate.getTime())));
+    const maxEnd = new Date(Math.max(...eligibleRows.map((r) => r.endDate.getTime())));
+
+    const nomorSPK = String(input.nomorSPK || '').trim();
+    const nomorBAST = String(input.nomorBAST || '').trim();
+
+    if (!nomorSPK) throw new BadRequestException('nomorSPK wajib diisi');
+    if (!nomorBAST) throw new BadRequestException('nomorBAST wajib diisi');
+
+    // validasi ringan agar mengurangi salah format
+    if (!nomorSPK.includes('/BPS1603/PPK/SPK/')) {
+      throw new BadRequestException('Format nomorSPK tidak sesuai (wajib mengandung /BPS1603/PPK/SPK/)');
+    }
+    if (!nomorBAST.includes('/BPS1603/PPK/BAST/')) {
+      throw new BadRequestException('Format nomorBAST tidak sesuai (wajib mengandung /BPS1603/PPK/BAST/)');
+    }
+
+    const hari = this.dayNameId(input.docDate);
+    const namaBulan = this.monthNameId(input.month);
+    const bulanCaps = (namaBulan || '').toUpperCase();
+    const tanggalFormat = this.formatDateId(input.docDate);
+    const tanggal = input.docDate.getDate();
+    const tanggalTerbilang = this.terbilang(tanggal);
+    const tahunTerbilang = this.terbilang(input.year);
+
+    const tanggalMulai = minStart.getDate();
+    const tanggalSelesai = maxEnd.getDate();
+
+    const grandTotal = eligibleRows.reduce(
+      (acc, r) => acc + (Number(r.totalCost) || 0),
+      0,
+    );
+
+    const honorTotalAll = this.formatNumberID(grandTotal);
+    const honorTotalAllTerbilang = this.terbilang(Math.floor(grandTotal));
+    const honorTerbilang = honorTotalAllTerbilang;
+
+    // rows untuk template (SPK & BAST beda kolom)
+    const rowsSpk = eligibleRows.map((r, i) => {
+      const tglMulai = this.formatDateId(r.startDate);
+      const tglSelesai = this.formatDateId(r.endDate);
+      const tanggalMulaiRow = String(r.startDate.getDate());
+      const tanggalSelesaiRow = String(r.endDate.getDate());
+      const honorSatuan = this.formatNumberID(r.unitCost);
+      const honorTotal = this.formatNumberID(r.totalCost);
+      return {
+        no: i + 1,
+        kegiatan: r.activityName,
+        Kegiatan: r.activityName,
+        tanggalMulai: tanggalMulaiRow,
+        tanggalSelesai: tanggalSelesaiRow,
+        tglMulai,
+        tglSelesai,
+        volume: r.totalDocs,
+        satuan: 'Dokumen',
+        honorSatuan,
+        honorTotal,
+        bebanAnggaran: r.budgetCode || '',
+      };
+    });
+
+    const rowsBast = eligibleRows.map((r, i) => ({
+      no: i + 1,
+      kegiatan: r.activityName,
+      tglSelesai: this.formatDateId(r.endDate),
+      volume: r.totalDocs,
+      satuan: 'Dokumen',
+      bebanAnggaran: r.budgetCode || '',
+    }));
+
+    const common = {
+      namaPPK: input.ppkName,
+      nipPPK: input.ppkNip,
+      namaPetugas: petugasName,
+      pekerjaanPetugas,
+      desaTinggalPetugas,
+      hariDokumen: hari,
+      tanggal,
+      tanggalTerbilang,
+      bulan: namaBulan,
+      bulanCaps,
+      tahun: String(input.year),
+      tahunTerbilang,
+      tanggalDokumen: tanggalFormat,
+      tanggalMulai,
+      tanggalSelesai,
+    };
+
+    const spkTemplateRel = path.join('bast-spk', 'template-spk.docx');
+    const bastTemplateRel = path.join('bast-spk', 'template-bast.docx');
+
+    const spkBuffer = this.renderDocxTemplate(spkTemplateRel, {
+      ...common,
+      nomorLampiran: nomorSPK,
+      nomorSPK,
+      honorTotalAll,
+      honorTotalAllTerbilang,
+      honorTerbilang,
+      rows: rowsSpk,
+    });
+
+    const bastBuffer = this.renderDocxTemplate(bastTemplateRel, {
+      ...common,
+      nomorSPK,
+      nomorBAST,
+      nomorDokBAST: nomorBAST,
+      rows: rowsBast,
+    });
+
+    const safeName = (s: string) => String(s || '').replace(/[^\w.\-]+/g, '_');
+    const spkFileName = safeName(`SPK-${petugasName}-${String(input.month).padStart(2, '0')}-${input.year}.docx`);
+    const bastFileName = safeName(`BAST-${petugasName}-${String(input.month).padStart(2, '0')}-${input.year}.docx`);
+
+    return {
+      spkBuffer,
+      bastBuffer,
+      spkFileName,
+      bastFileName,
+      nomorSPK,
+      nomorBAST,
+    };
+  }
+
   async generateMonthlyStaffDoc(input: {
     userId: string;
     month: number;
     year: number;
     docType: string;
     ppkName: string;
-    nomorUrutSPK: string;
-    nomorUrutBAST: string;
-    nomorDokBAST: string;
+    ppkNip?: string;
+    nomorSPK: string;
+    nomorBAST: string;
     docDate: Date;
     rows: Array<{
       subSurveyActivityId: string;
@@ -2674,133 +2912,30 @@ export class SurveyActivityService {
     }>;
   }) {
     const docType = String(input.docType || '').toUpperCase();
-    if (docType !== 'SPK' && docType !== 'BAST') {
-      throw new BadRequestException("docType harus 'SPK' atau 'BAST'");
-    }
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: input.userId },
-    });
-    const petugasName = user?.name || 'Petugas';
-
-    // ambil preview server-side agar eligibility tetap aman
-    const preview = await this.getMonthlyStaffDocPreview(
-      input.userId,
-      input.month,
-      input.year,
-    );
-    const previewMap = new Map(
-      preview.map((r: any) => [r.subSurveyActivityId, r]),
-    );
-
-    const eligibleRows = (input.rows || [])
-      .map((r) => {
-        const base = previewMap.get(r.subSurveyActivityId);
-        if (!base) return null;
-        if (!base.eligible) return null;
-        return {
-          subSurveyActivityId: base.subSurveyActivityId,
-          activityName: base.activityName,
-          startDate: base.startDate,
-          endDate: base.endDate,
-          totalDocs: Number(r.totalDocs ?? base.totalDocs),
-          unitCost: Number(r.unitCost ?? base.unitCost),
-          totalCost: Number(
-            r.totalCost ??
-              Number(r.unitCost ?? base.unitCost) *
-                Number(r.totalDocs ?? base.totalDocs),
-          ),
-          budgetCode: (r.budgetCode ?? base.budgetCode ?? '') as string,
-        };
-      })
-      .filter(Boolean) as any[];
-
-    if (eligibleRows.length === 0) {
-      throw new BadRequestException(
-        'Tidak ada kegiatan selesai pada periode ini.',
-      );
-    }
-
-    const startDates = eligibleRows
-      .map((r) => new Date(r.startDate))
-      .filter((d) => !isNaN(d.getTime()));
-
-    const endDates = eligibleRows
-      .map((r) => new Date(r.endDate))
-      .filter((d) => !isNaN(d.getTime()));
-
-    const minStart = startDates.length
-      ? new Date(Math.min(...startDates.map((d) => d.getTime())))
-      : null;
-
-    const maxEnd = endDates.length
-      ? new Date(Math.max(...endDates.map((d) => d.getTime())))
-      : null;
-
-    // nomor lampiran: X/BPS1603/PPK/SPK|BAST/BB/YYYY
     const mm = String(input.month).padStart(2, '0');
-    const nomorSPK  = `${input.nomorUrutSPK}/BPS1603/PPK/SPK/${mm}/${input.year}`;
-    const nomorBAST = `${input.nomorUrutBAST}/BPS1603/PPK/BAST/${mm}/${input.year}`;
-    const nomorDokBast = `B-${input.nomorDokBAST}/BPS1603/BAST/${mm}/${input.year}`;
-    const hari = this.dayNameId(input.docDate);
-    const namaBulan = this.monthNameId(input.month);
-    const tanggalFormat = this.formatDateId(input.docDate);
-    const tanggal = input.docDate.getDate();
-    const tanggalTerbilang = this.terbilang(input.docDate.getDate());
-    const tanggalMulai = minStart ? minStart.getDate() : null;
-    const tanggalSelesai = maxEnd ? maxEnd.getDate() : null;
-    const tahunTerbilang = this.terbilang(input.year);
+    const normalizeSpk = (v: string) => {
+      const s = String(v || '').trim();
+      if (!s) return s;
+      return s.includes('/BPS1603/PPK/SPK/') ? s : `${s}/BPS1603/PPK/SPK/${mm}/${input.year}`;
+    };
+    const normalizeBast = (v: string) => {
+      const s = String(v || '').trim();
+      if (!s) return s;
+      return s.includes('/BPS1603/PPK/BAST/') ? s : `${s}/BPS1603/PPK/BAST/${mm}/${input.year}`;
+    };
 
-    // 1) render word utama
-    const mainTemplateRel =
-      docType === 'SPK'
-        ? path.join('bast-spk', 'template-spk.docx')
-        : path.join('bast-spk', 'template-bast.docx');
-
-    const mainDoc = this.renderDocxTemplate(mainTemplateRel, {
-      namaPPK: input.ppkName,
-      namaPetugas: petugasName,
-      nomorSPK,
-      nomorBAST,
-      nomorDokBAST: nomorDokBast,
-      hariDokumen: hari,
-      tanggal,
-      tanggalTerbilang,
-      tanggalMulai,
-      tanggalSelesai,
-      tanggalDokumen: tanggalFormat,
-      bulan: namaBulan,
-      tahun: String(input.year),
-      tahunTerbilang,
+    const out = await this.generateMonthlyStaffDocs({
+      userId: input.userId,
+      month: input.month,
+      year: input.year,
+      ppkName: input.ppkName,
+      ppkNip: input.ppkNip || '-',
+      nomorSPK: normalizeSpk(input.nomorSPK),
+      nomorBAST: normalizeBast(input.nomorBAST),
+      docDate: input.docDate,
+      rows: input.rows,
     });
-
-    // 2) isi lampiran excel, lalu konversi sheet → docx (tabel)
-    const lampiranXlsxRel =
-      docType === 'SPK'
-        ? path.join('bast-spk', 'lampiran-spk.xlsx')
-        : path.join('bast-spk', 'lampiran-bast.xlsx');
-
-    const { wb, ws } = this.fillLampiranWorkbook(
-      lampiranXlsxRel,
-      eligibleRows.map((x, i) => ({ ...x, no: i + 1 })),
-      docType as 'SPK' | 'BAST',
-    );
-
-    // sheet-to-docx pakai worksheet yang sudah diisi
-    const lampiranDoc = await this.sheetToDocxBuffer(
-      ws,
-      docType === 'SPK' ? 'LAMPIRAN SPK' : 'LAMPIRAN BAST',
-    );
-
-    // 3) merge
-    const merged = await this.mergeDocxBuffers([mainDoc, lampiranDoc]);
-
-    // 4) upload & return url
-    const fileName =
-      `${docType}-${petugasName}-${mm}-${input.year}.docx`.replace(
-        /[^\w.\-]+/g,
-        '_',
-      );
-    return this.uploadAdminDoc(merged, fileName);
+    return docType === 'BAST' ? out.bastUrl : out.spkUrl;
   }
 }

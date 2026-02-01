@@ -28,11 +28,21 @@ export class AuthGuard implements CanActivate {
     ]);
     if (isPublic) return true;
 
-    const gqlContext = GqlExecutionContext.create(context);
-    const { req } = gqlContext.getContext();
+    // Support both GraphQL and REST.
+    let req: any;
+    try {
+      const gqlContext = GqlExecutionContext.create(context);
+      req = gqlContext.getContext()?.req;
+    } catch {
+      req = null;
+    }
 
-    const accessToken = req.headers.accesstoken as string;
-    const refreshToken = req.headers.refreshtoken as string;
+    if (!req) {
+      req = context.switchToHttp().getRequest();
+    }
+
+    const accessToken = (req.headers?.accesstoken || req.headers?.accessToken) as string;
+    const refreshToken = (req.headers?.refreshtoken || req.headers?.refreshToken) as string;
 
     if (!accessToken || !refreshToken) {
       throw new UnauthorizedException('Tolong login terlebih dahulu!');

@@ -40,6 +40,10 @@ export class User {
   limit_bill: string;
   @Field(() => String, { nullable: true })
   address?: string | null;
+  @Field(() => String, { nullable: true })
+  job_name?: string | null;
+  @Field(() => String, { nullable: true })
+  village_name?: string | null;
   @Field({ nullable: true })
   phone_number: string;
   @Field(() => Date)

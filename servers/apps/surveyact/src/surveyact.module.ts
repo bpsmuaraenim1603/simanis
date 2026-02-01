@@ -34,6 +34,8 @@ import { APP_GUARD } from '@nestjs/core/constants';
       playground: process.env.NODE_ENV !== 'production',
     }),
   ],
+  // Tidak memakai REST ZIP lagi. Dokumen dibuat via GraphQL dan disimpan di storage.
+  controllers: [],
   providers: [
     SurveyActivityService,
     SubmitSPJResolver,
@@ -46,5 +48,6 @@ import { APP_GUARD } from '@nestjs/core/constants';
     JwtService,
     { provide: APP_GUARD, useClass: AuthGuard },
   ],
+  exports: [],
 })
 export class SurveyActModule {}

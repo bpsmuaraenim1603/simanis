@@ -96,12 +96,6 @@ export class UserType {
   @Field(() => String, { nullable: true })
   phone_number?: string;
 
-  @Field(() => String, { nullable: true })
-  job_name?: string;
-
-  @Field(() => String, { nullable: true })
-  village_name?: string;
-
   @Field(() => String)
   primaryRole: string;
 
