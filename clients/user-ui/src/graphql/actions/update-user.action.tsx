@@ -8,6 +8,8 @@ export const UPDATE_PROFILE = gql`
       email
       phone_number
       address
+      job_name
+      village_name
       primaryRole
       roles
     }

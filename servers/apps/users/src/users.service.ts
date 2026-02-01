@@ -149,7 +149,7 @@ export class UsersService {
   // }
 
   async register(registerDto: RegisterDto, response: Response) {
-    const { name, email, phone_number, password, address, signupCode } =
+    const { name, email, phone_number, password, address, job_name, village_name, signupCode } =
       registerDto;
     const daily = await this.getOrCreateDailySignupCode();
     const inputCode = String(signupCode ?? '')
@@ -176,6 +176,8 @@ export class UsersService {
       phone_number,
       password: hashedPassword,
       address,
+      job_name,
+      village_name,
     };
     const activationToken = await this.createActivationToken(user);
     const activationCode = activationToken.activationCode;

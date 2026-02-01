@@ -16,6 +16,8 @@ const formSchema = z
     passwordConfirm: z.string(),
     phone: z.string().min(12, { message: "Nomor Telepon minimal 12 angka" }),
     address: z.string().min(5, { message: "Alamat minimal 5 karakter" }),
+    job_name: z.string().min(3, { message: "Nama pekerjaan minimal 3 karakter" }),
+    village_name: z.string().min(3, { message: "Nama desa minimal 3 karakter" }),
     signupCode: z.string().trim().regex(/^[A-Z0-9]{10}$/, { message: "Kode pendaftaran belum sesuai" }),
   })
   .superRefine((data, ctx) => {
@@ -57,6 +59,8 @@ const Signup = ({
           password: data.password,
           phone: data.phone,
           address: data.address,
+          job_name: data.job_name,
+          village_name: data.village_name,
           signupCode: data.signupCode.trim().toUpperCase(),
         },
       });
@@ -133,6 +137,34 @@ const Signup = ({
           {errors.address && (
             <span className="text-red-500 block mt-1">
               {`${errors.address.message}`}
+            </span>
+          )}
+        </div>
+        <div>
+          <label className="text-[16px] font-Poppins">Nama Pekerjaan</label>
+          <input
+            {...register("job_name")}
+            type="text"
+            placeholder="Pekerjaanmu"
+            className={`${styles.input} shadow-sm`}
+          />
+          {errors.job_name && (
+            <span className="text-red-500 block mt-1">
+              {`${errors.job_name.message}`}
+            </span>
+          )}
+        </div>
+        <div>
+          <label className="text-[16px] font-Poppins">Nama Desa</label>
+          <input
+            {...register("village_name")}
+            type="text"
+            placeholder="Desamu"
+            className={`${styles.input} shadow-sm`}
+          />
+          {errors.village_name && (
+            <span className="text-red-500 block mt-1">
+              {`${errors.village_name.message}`}
             </span>
           )}
         </div>

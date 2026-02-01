@@ -93,7 +93,7 @@ export class UsersResolver {
     @Args('registerDto') registerDto: RegisterDto,
     @Context() context: { res: Response },
   ): Promise<RegisterResponse> {
-    if (!registerDto.name || !registerDto.email || !registerDto.password) {
+    if (!registerDto.name || !registerDto.email || !registerDto.password || !registerDto.phone_number || !registerDto.address || !registerDto.job_name || !registerDto.village_name || !registerDto.signupCode) {
       throw new BadRequestException('Tolong isi semua kolom yang tersedia!');
     }
 

@@ -2380,10 +2380,12 @@ export class SurveyActivityService {
       where: {
         userId,
         subSurveyActivity: {
-          startDate: { gte: from, lte: to },
+          startDate: { lte: to },
+          endDate: { gte: from },
         },
       },
       select: {
+        id: true,
         subSurveyActivityId: true,
         travelBill: true,
         budgetCode: true,
@@ -2393,6 +2395,20 @@ export class SurveyActivityService {
         _count: { select: { samples: true } },
       },
     });
+
+    const upIds = progresses.map((p) => p.id);
+    const clipStart = (d: Date) => (d < from ? from : d);
+    const clipEnd = (d: Date) => (d > to ? to : d);
+
+    const lastSamples = await this.prisma.userSample.groupBy({
+      by: ['userProgressId'],
+      where: { userProgressId: { in: upIds } },
+      _max: { updatedAt: true },
+    });
+
+    const lastByUp = new Map(
+      lastSamples.map((x) => [x.userProgressId, x._max.updatedAt]),
+    );
 
     const map = new Map<
       string,
@@ -2414,6 +2430,13 @@ export class SurveyActivityService {
       const key = ssa.id;
       const docs = p._count?.samples ?? 0;
       const honor = this.parseMoney(p.travelBill);
+      const last = lastByUp.get(p.id);
+      const effectiveEnd = last && ssa.endDate < last ? last : ssa.endDate;
+
+      const startInMonth = clipStart(new Date(ssa.startDate));
+      const endInMonth = clipEnd(new Date(effectiveEnd));
+
+      if (endInMonth < from || startInMonth > to) continue;
 
       const existing = map.get(key);
       if (!existing) {
@@ -2421,7 +2444,7 @@ export class SurveyActivityService {
           subSurveyActivityId: ssa.id,
           activityName: ssa.name,
           startDate: ssa.startDate,
-          endDate: ssa.endDate,
+          endDate: effectiveEnd,
           totalDocs: docs,
           totalHonor: honor,
           budgetCode: p.budgetCode ?? null,
@@ -2429,9 +2452,11 @@ export class SurveyActivityService {
       } else {
         existing.totalDocs += docs;
         existing.totalHonor += honor;
-        // ambil endDate paling akhir (kegiatan dianggap selesai kalau blok terakhir selesai)
-        if (ssa.endDate > existing.endDate) existing.endDate = ssa.endDate;
-        // budgetCode: ambil yang pertama non-null
+        if (startInMonth < existing.startDate)
+          existing.startDate = startInMonth;
+
+        if (endInMonth > existing.endDate) existing.endDate = endInMonth;
+
         if (!existing.budgetCode && p.budgetCode)
           existing.budgetCode = p.budgetCode;
       }
@@ -2526,7 +2551,7 @@ export class SurveyActivityService {
       sections: [
         {
           children: [
-            ...(title ? [new Paragraph({ text: title})] : []),
+            ...(title ? [new Paragraph({ text: title })] : []),
             new Table({
               width: { size: 100, type: WidthType.PERCENTAGE },
               rows,
@@ -2636,7 +2661,9 @@ export class SurveyActivityService {
     year: number;
     docType: string;
     ppkName: string;
-    nomorUrutX: string;
+    nomorUrutSPK: string;
+    nomorUrutBAST: string;
+    nomorDokBAST: string;
     docDate: Date;
     rows: Array<{
       subSurveyActivityId: string;
@@ -2712,7 +2739,9 @@ export class SurveyActivityService {
 
     // nomor lampiran: X/BPS1603/PPK/SPK|BAST/BB/YYYY
     const mm = String(input.month).padStart(2, '0');
-    const nomorLampiran = `${input.nomorUrutX}/BPS1603/PPK/${docType}/${mm}/${input.year}`;
+    const nomorSPK  = `${input.nomorUrutSPK}/BPS1603/PPK/SPK/${mm}/${input.year}`;
+    const nomorBAST = `${input.nomorUrutBAST}/BPS1603/PPK/BAST/${mm}/${input.year}`;
+    const nomorDokBast = `B-${input.nomorDokBAST}/BPS1603/BAST/${mm}/${input.year}`;
     const hari = this.dayNameId(input.docDate);
     const namaBulan = this.monthNameId(input.month);
     const tanggalFormat = this.formatDateId(input.docDate);
@@ -2731,7 +2760,9 @@ export class SurveyActivityService {
     const mainDoc = this.renderDocxTemplate(mainTemplateRel, {
       namaPPK: input.ppkName,
       namaPetugas: petugasName,
-      nomorLampiran,
+      nomorSPK,
+      nomorBAST,
+      nomorDokBAST: nomorDokBast,
       hariDokumen: hari,
       tanggal,
       tanggalTerbilang,

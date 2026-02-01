@@ -20,6 +20,8 @@ function Profile() {
     email: user?.email || "",
     phone_number: user?.phone_number || "",
     address: user?.address || "",
+    job_name: user?.job_name || "",
+    village_name: user?.village_name || "",
   });
 
   useEffect(() => {
@@ -29,6 +31,8 @@ function Profile() {
         email: user.email || "",
         phone_number: user.phone_number || "",
         address: user.address || "",
+        job_name: user.job_name || "",
+        village_name: user.village_name || "",
       });
     }
   }, [user]);
@@ -79,6 +83,12 @@ function Profile() {
           </p>
           <p>
             <strong>Alamat:</strong> {user?.address || "-"}
+          </p>
+          <p>
+            <strong>Desa:</strong> {user?.village_name || "-"}
+          </p>
+          <p>
+            <strong>Pekerjaan:</strong> {user?.job_name || "-"}
           </p>
           <p>
             <strong>Role Utama:</strong> {primaryRole}
@@ -153,6 +163,34 @@ function Profile() {
               value={formState.address}
               onChange={(e) =>
                 setFormState((prev) => ({ ...prev, address: e.target.value }))
+              }
+              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-1" htmlFor="job_name">
+              Nama Pekerjaan
+            </label>
+            <input
+              id="job_name"
+              type="text"
+              value={formState.job_name}
+              onChange={(e) =>
+                setFormState((prev) => ({ ...prev, job_name: e.target.value }))
+              }
+              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-1" htmlFor="village_name">
+              Nama Desa
+            </label>
+            <input
+              id="village_name"
+              type="text"
+              value={formState.village_name}
+              onChange={(e) =>
+                setFormState((prev) => ({ ...prev, village_name: e.target.value }))
               }
               className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
             />

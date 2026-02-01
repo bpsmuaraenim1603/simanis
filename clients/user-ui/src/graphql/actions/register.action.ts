@@ -9,14 +9,18 @@ mutation RegisterUser(
     $password: String!
     $phone: String!
     $address: String!
+    $job_name: String!
+    $village_name: String!
     $signupCode: String!
 ) {
-    register(registerDto: {
+    (registerDto: {
         name: $name,
         email: $email,
         password: $password,
         phone_number: $phone,
         address: $address,
+        job_name: $job_name,
+        village_name: $village_name,
         signupCode: $signupCode
     }) {
         activation_token

@@ -129,6 +129,8 @@ model User {
   email        String   @unique
   phone_number String
   address      String?
+  job_name     String?
+  village_name String?
   password     String
   primaryRole  Role     @default(User)
   roles        Role[]   @default([User])

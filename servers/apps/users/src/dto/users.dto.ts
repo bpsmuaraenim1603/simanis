@@ -38,6 +38,14 @@ export class createUserDto {
   @Field()
   @IsNotEmpty({ message: 'Alamat belum diisi' })
   address: string;
+
+  @Field()
+  @IsNotEmpty({ message: 'Nama Pekerjaan belum diisi' })
+  job_name: string;
+
+  @Field()
+  @IsNotEmpty({ message: 'Nama Desa belum diisi' })
+  village_name: string;
 }
 
 @InputType()
@@ -65,6 +73,14 @@ export class RegisterDto {
   @Field()
   @IsNotEmpty({ message: 'Alamat belum diisi' })
   address: string;
+
+  @Field()
+  @IsNotEmpty({ message: 'Nama Pekerjaan belum diisi' })
+  job_name: string;
+
+  @Field()
+  @IsNotEmpty({ message: 'Nama Desa belum diisi' })
+  village_name: string;
 
   @Field()
   @IsNotEmpty({ message: 'Kode pendaftaran harus diisi' })
@@ -145,6 +161,12 @@ export class UpdateUserDto {
 
   @Field({ nullable: true })
   address?: string;
+
+  @Field({ nullable: true })
+  job_name?: string;
+
+  @Field({ nullable: true })
+  village_name?: string;
 
   @Field({ nullable: true })
   limit_bill?: string;
