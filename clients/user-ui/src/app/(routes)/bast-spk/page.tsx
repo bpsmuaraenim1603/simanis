@@ -85,6 +85,8 @@ export default function BastSpkPage() {
   const [ppkNip, setPpkNip] = useState<string>("");
   const [nomorSPK, setNomorSPK] = useState<string>("");
   const [nomorBAST, setNomorBAST] = useState<string>("");
+  const [spkUrl, setSpkUrl] = useState<string | null>(null);
+  const [bastUrl, setBastUrl] = useState<string | null>(null);
   const [expiresAtInfo, setExpiresAtInfo] = useState<string>("");
 
   const [rows, setRows] = useState<EditableRow[]>([]);
@@ -130,8 +132,8 @@ export default function BastSpkPage() {
         } else {
           setExpiresAtInfo("");
         }
-        window.open(out.spkUrl, "_blank");
-        window.open(out.bastUrl, "_blank");
+        setSpkUrl(out?.spkUrl ?? null);
+        setBastUrl(out?.bastUrl ?? null);
         toast.success("SPK & BAST berhasil dibuat.");
       },
       onError: (e) => toast.error(e.message),
@@ -503,7 +505,7 @@ export default function BastSpkPage() {
           </table>
         </div>
 
-        <div className="mt-4 flex justify-end">
+        <div className="mt-4 flex flex-col gap-3 items-end">
           <button
             className={`${styles.button} !w-auto`}
             disabled={genLoading || !selectedUserId || eligibleCount === 0}
@@ -531,6 +533,9 @@ export default function BastSpkPage() {
                   budgetCode: r.editBudgetCode,
                 }));
 
+              setSpkUrl(null);
+              setBastUrl(null);
+
               generateDocs({
                 variables: {
                   input: {
@@ -550,8 +555,28 @@ export default function BastSpkPage() {
               });
             }}
           >
-            {genLoading ? "Membuat Dokumen..." : "Download Word"}
+            {genLoading ? "Membuat Dokumen..." : "Buat SPK & BAST"}
           </button>
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-50"
+              disabled={!spkUrl}
+              onClick={() => window.open(spkUrl!, "_blank")}
+            >
+              Download SPK
+            </button>
+
+            <button
+              type="button"
+              className="px-4 py-2 rounded bg-green-600 text-white disabled:opacity-50"
+              disabled={!bastUrl}
+              onClick={() => window.open(bastUrl!, "_blank")}
+            >
+              Download BAST
+            </button>
+          </div>
         </div>
 
         {expiresAtInfo && (
