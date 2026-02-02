@@ -320,6 +320,7 @@ export default function BastSpkPage() {
               Nomor SPK (format lengkap)
             </label>
             <input
+              className="w-full rounded-md border px-3 py-2 bg-white"
               value={nomorSPK}
               onChange={(e) => setNomorSPK(e.target.value)}
               onBlur={() =>
@@ -334,6 +335,7 @@ export default function BastSpkPage() {
               Nomor BAST (format lengkap)
             </label>
             <input
+              className="w-full rounded-md border px-3 py-2 bg-white"
               value={nomorBAST}
               onChange={(e) => setNomorBAST(e.target.value)}
               onBlur={() =>
