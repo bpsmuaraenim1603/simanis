@@ -148,6 +148,22 @@ export default function BastSpkPage() {
     [rows],
   );
 
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+
+  const formatNomorSPK = (v: string, month: number, year: number) => {
+    const s = String(v ?? "").trim();
+    if (!s) return "";
+    if (s.includes("/BPS1603/PPK/SPK/")) return s;
+    return `${s}/BPS1603/PPK/SPK/${pad2(month)}/${year}`;
+  };
+
+  const formatNomorBAST = (v: string, month: number, year: number) => {
+    const s = String(v ?? "").trim();
+    if (!s) return "";
+    if (s.includes("/BPS1603/PPK/BAST/")) return s;
+    return `${s}/BPS1603/PPK/BAST/${pad2(month)}/${year}`;
+  };
+
   useEffect(() => {
     if (!selectedUser) {
       setPetugasJobName("");
@@ -157,6 +173,11 @@ export default function BastSpkPage() {
     setPetugasJobName(selectedUser.job_name ?? "");
     setPetugasVillageName(selectedUser.village_name ?? "");
   }, [selectedUser]);
+
+  useEffect(() => {
+    setNomorSPK((prev) => formatNomorSPK(prev, month, year));
+    setNomorBAST((prev) => formatNomorBAST(prev, month, year));
+  }, [month, year]);
 
   const onRecalcRow = (idx: number, next: Partial<EditableRow>) => {
     setRows((prev) => {
@@ -299,10 +320,12 @@ export default function BastSpkPage() {
               Nomor SPK (format lengkap)
             </label>
             <input
-              className="w-full rounded-md border px-3 py-2 bg-white"
               value={nomorSPK}
               onChange={(e) => setNomorSPK(e.target.value)}
-              placeholder={`Contoh: 12/BPS1603/PPK/SPK/${String(month).padStart(2, "0")}/${year}`}
+              onBlur={() =>
+                setNomorSPK((prev) => formatNomorSPK(prev, month, year))
+              }
+              placeholder="Contoh: 001"
             />
           </div>
 
@@ -311,10 +334,12 @@ export default function BastSpkPage() {
               Nomor BAST (format lengkap)
             </label>
             <input
-              className="w-full rounded-md border px-3 py-2 bg-white"
               value={nomorBAST}
               onChange={(e) => setNomorBAST(e.target.value)}
-              placeholder={`Contoh: 7/BPS1603/PPK/BAST/${String(month).padStart(2, "0")}/${year}`}
+              onBlur={() =>
+                setNomorBAST((prev) => formatNomorBAST(prev, month, year))
+              }
+              placeholder="Contoh: 001"
             />
           </div>
         </div>
@@ -536,7 +561,8 @@ export default function BastSpkPage() {
 
         {eligibleCount === 0 && rows.length > 0 && (
           <p className="mt-3 text-sm text-yellow-700">
-            Tidak ada kegiatan selesai pada periode ini. Dokumen belum bisa dibuat.
+            Tidak ada kegiatan selesai pada periode ini. Dokumen belum bisa
+            dibuat.
           </p>
         )}
       </div>
