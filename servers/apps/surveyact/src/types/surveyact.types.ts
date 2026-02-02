@@ -573,5 +573,9 @@ export class MonthlyStaffDocsOutputType {
 
   @Field()
   nomorBAST: string;
+
+  // Waktu kedaluwarsa file di storage (setelah ini file akan dihapus otomatis)
+  @Field(() => GraphQLISODateTime, { nullable: true })
+  expiresAt?: Date;
 }
 

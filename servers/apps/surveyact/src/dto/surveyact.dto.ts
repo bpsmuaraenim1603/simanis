@@ -209,7 +209,7 @@ export class CreateUserProgressDTO {
 export class UserSampleInput {
   @Field({ nullable: true })
   id?: string;
-  
+
   @Field()
   nus: string;
 
@@ -423,8 +423,6 @@ export class updateIssueCommentDto {
   message: string;
 }
 
-
-
 @InputType()
 export class MonthlyStaffDocRowInput {
   @Field(() => ID)
@@ -505,7 +503,12 @@ export class GenerateMonthlyStaffDocsInput {
   @Field(() => GraphQLISODateTime)
   docDate: Date;
 
+  @Field({ nullable: true })
+  pekerjaanPetugas?: string;
+
+  @Field({ nullable: true })
+  desaTinggalPetugas?: string;
+
   @Field(() => [MonthlyStaffDocRowInput])
   rows: MonthlyStaffDocRowInput[];
 }
-

@@ -2662,9 +2662,18 @@ export class SurveyActivityService {
     return signed.data.signedUrl;
   }
 
+  private getMonthlyStaffDocTtlHours() {
+    // default: 24 jam (mirip mekanisme kode registrasi yang expired)
+    const raw = process.env.MONTHLY_STAFF_DOC_TTL_HOURS;
+    const n = Number(raw);
+    if (!raw) return 24;
+    if (Number.isFinite(n) && n > 0) return n;
+    return 24;
+  }
+
   private async uploadMonthlyStaffDoc(buffer: Buffer, filename: string) {
     const bucket =
-      process.env.SUPABASE_MONTHLY_STAFF_DOC_BUCKET || 'admin-docs';
+      process.env.SUPABASE_MONTHLY_STAFF_DOC_BUCKET || 'monthly-staff-docs';
     const objectPath = `${new Date().getFullYear()}/${randomUUID()}-${filename}`;
 
     const { error } = await supabase.storage
@@ -2677,12 +2686,19 @@ export class SurveyActivityService {
 
     if (error) throw new BadRequestException(error.message);
 
+    const ttlHours = this.getMonthlyStaffDocTtlHours();
     const signed = await supabase.storage
       .from(bucket)
-      .createSignedUrl(objectPath, 60 * 60 * 24 * 7);
+      .createSignedUrl(objectPath, Math.floor(ttlHours * 60 * 60));
     if (!signed?.data?.signedUrl)
       throw new BadRequestException('Gagal membuat signed url');
-    return signed.data.signedUrl;
+
+    return {
+      signedUrl: signed.data.signedUrl,
+      bucket,
+      objectPath,
+      expiresAt: new Date(Date.now() + ttlHours * 60 * 60 * 1000),
+    };
   }
 
   async generateMonthlyStaffDocs(input: {
@@ -2694,6 +2710,8 @@ export class SurveyActivityService {
     nomorSPK: string;
     nomorBAST: string;
     docDate: Date;
+    pekerjaanPetugas?: string;
+    desaTinggalPetugas?: string;
     rows: Array<{
       subSurveyActivityId: string;
       totalDocs: number;
@@ -2704,16 +2722,53 @@ export class SurveyActivityService {
   }) {
     const built = await this.generateMonthlyStaffDocsBuffers(input);
 
-    const [spkUrl, bastUrl] = await Promise.all([
-      this.uploadMonthlyStaffDoc(built.spkBuffer, built.spkFileName),
-      this.uploadMonthlyStaffDoc(built.bastBuffer, built.bastFileName),
-    ]);
+    // Upload ke Supabase Storage, lalu simpan TTL (expiresAt) ke DB agar file bisa ikut terhapus.
+    let spk: Awaited<ReturnType<typeof this.uploadMonthlyStaffDoc>> | null =
+      null;
+    let bast: Awaited<ReturnType<typeof this.uploadMonthlyStaffDoc>> | null =
+      null;
+
+    try {
+      [spk, bast] = await Promise.all([
+        this.uploadMonthlyStaffDoc(built.spkBuffer, built.spkFileName),
+        this.uploadMonthlyStaffDoc(built.bastBuffer, built.bastFileName),
+      ]);
+
+      await this.prisma.tempDoc.createMany({
+        data: [
+          {
+            bucket: spk.bucket,
+            path: spk.objectPath,
+            kind: 'SPK',
+            userId: input.userId,
+            expiresAt: spk.expiresAt,
+          },
+          {
+            bucket: bast.bucket,
+            path: bast.objectPath,
+            kind: 'BAST',
+            userId: input.userId,
+            expiresAt: bast.expiresAt,
+          },
+        ],
+      });
+    } catch (e) {
+      // kalau salah satu upload gagal, hapus yang sempat terupload
+      const bucket =
+        process.env.SUPABASE_MONTHLY_STAFF_DOC_BUCKET || 'monthly-staff-docs';
+      await this.storage.removeMany(bucket, [
+        spk?.objectPath,
+        bast?.objectPath,
+      ]);
+      throw e;
+    }
 
     return {
-      spkUrl,
-      bastUrl,
+      spkUrl: spk.signedUrl,
+      bastUrl: bast.signedUrl,
       nomorSPK: built.nomorSPK,
       nomorBAST: built.nomorBAST,
+      expiresAt: spk.expiresAt,
     };
   }
 
@@ -2726,6 +2781,8 @@ export class SurveyActivityService {
     nomorSPK: string;
     nomorBAST: string;
     docDate: Date;
+    pekerjaanPetugas?: string;
+    desaTinggalPetugas?: string;
     rows: Array<{
       subSurveyActivityId: string;
       totalDocs: number;
@@ -2734,16 +2791,27 @@ export class SurveyActivityService {
       budgetCode?: string;
     }>;
   }) {
-    const user = await this.prisma.user.findUnique({ where: { id: input.userId } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: input.userId },
+    });
     if (!user) throw new NotFoundException('User tidak ditemukan');
 
     const petugasName = user?.name || 'Petugas';
-    const pekerjaanPetugas = (user as any)?.job_name || '';
-    const desaTinggalPetugas = (user as any)?.village_name || '';
+    const pekerjaanPetugas =
+  String(input.pekerjaanPetugas ?? (user as any)?.job_name ?? '').trim();
+
+const desaTinggalPetugas =
+  String(input.desaTinggalPetugas ?? (user as any)?.village_name ?? '').trim();
 
     // ambil preview server-side agar eligibility tetap aman
-    const preview = await this.getMonthlyStaffDocPreview(input.userId, input.month, input.year);
-    const previewMap = new Map(preview.map((r: any) => [r.subSurveyActivityId, r]));
+    const preview = await this.getMonthlyStaffDocPreview(
+      input.userId,
+      input.month,
+      input.year,
+    );
+    const previewMap = new Map(
+      preview.map((r: any) => [r.subSurveyActivityId, r]),
+    );
 
     const eligibleRows = (input.rows || [])
       .map((r) => {
@@ -2767,11 +2835,17 @@ export class SurveyActivityService {
       .filter(Boolean) as any[];
 
     if (eligibleRows.length === 0) {
-      throw new BadRequestException('Tidak ada kegiatan selesai pada periode ini.');
+      throw new BadRequestException(
+        'Tidak ada kegiatan selesai pada periode ini.',
+      );
     }
 
-    const minStart = new Date(Math.min(...eligibleRows.map((r) => r.startDate.getTime())));
-    const maxEnd = new Date(Math.max(...eligibleRows.map((r) => r.endDate.getTime())));
+    const minStart = new Date(
+      Math.min(...eligibleRows.map((r) => r.startDate.getTime())),
+    );
+    const maxEnd = new Date(
+      Math.max(...eligibleRows.map((r) => r.endDate.getTime())),
+    );
 
     const nomorSPK = String(input.nomorSPK || '').trim();
     const nomorBAST = String(input.nomorBAST || '').trim();
@@ -2781,10 +2855,14 @@ export class SurveyActivityService {
 
     // validasi ringan agar mengurangi salah format
     if (!nomorSPK.includes('/BPS1603/PPK/SPK/')) {
-      throw new BadRequestException('Format nomorSPK tidak sesuai (wajib mengandung /BPS1603/PPK/SPK/)');
+      throw new BadRequestException(
+        'Format nomorSPK tidak sesuai (wajib mengandung /BPS1603/PPK/SPK/)',
+      );
     }
     if (!nomorBAST.includes('/BPS1603/PPK/BAST/')) {
-      throw new BadRequestException('Format nomorBAST tidak sesuai (wajib mengandung /BPS1603/PPK/BAST/)');
+      throw new BadRequestException(
+        'Format nomorBAST tidak sesuai (wajib mengandung /BPS1603/PPK/BAST/)',
+      );
     }
 
     const hari = this.dayNameId(input.docDate);
@@ -2880,8 +2958,12 @@ export class SurveyActivityService {
     });
 
     const safeName = (s: string) => String(s || '').replace(/[^\w.\-]+/g, '_');
-    const spkFileName = safeName(`SPK-${petugasName}-${String(input.month).padStart(2, '0')}-${input.year}.docx`);
-    const bastFileName = safeName(`BAST-${petugasName}-${String(input.month).padStart(2, '0')}-${input.year}.docx`);
+    const spkFileName = safeName(
+      `SPK-${petugasName}-${String(input.month).padStart(2, '0')}-${input.year}.docx`,
+    );
+    const bastFileName = safeName(
+      `BAST-${petugasName}-${String(input.month).padStart(2, '0')}-${input.year}.docx`,
+    );
 
     return {
       spkBuffer,
@@ -2903,6 +2985,8 @@ export class SurveyActivityService {
     nomorSPK: string;
     nomorBAST: string;
     docDate: Date;
+    pekerjaanPetugas?: string;
+    desaTinggalPetugas?: string;
     rows: Array<{
       subSurveyActivityId: string;
       totalDocs: number;
@@ -2917,12 +3001,16 @@ export class SurveyActivityService {
     const normalizeSpk = (v: string) => {
       const s = String(v || '').trim();
       if (!s) return s;
-      return s.includes('/BPS1603/PPK/SPK/') ? s : `${s}/BPS1603/PPK/SPK/${mm}/${input.year}`;
+      return s.includes('/BPS1603/PPK/SPK/')
+        ? s
+        : `${s}/BPS1603/PPK/SPK/${mm}/${input.year}`;
     };
     const normalizeBast = (v: string) => {
       const s = String(v || '').trim();
       if (!s) return s;
-      return s.includes('/BPS1603/PPK/BAST/') ? s : `${s}/BPS1603/PPK/BAST/${mm}/${input.year}`;
+      return s.includes('/BPS1603/PPK/BAST/')
+        ? s
+        : `${s}/BPS1603/PPK/BAST/${mm}/${input.year}`;
     };
 
     const out = await this.generateMonthlyStaffDocs({
@@ -2934,6 +3022,8 @@ export class SurveyActivityService {
       nomorSPK: normalizeSpk(input.nomorSPK),
       nomorBAST: normalizeBast(input.nomorBAST),
       docDate: input.docDate,
+      pekerjaanPetugas: input.pekerjaanPetugas,
+      desaTinggalPetugas: input.desaTinggalPetugas,
       rows: input.rows,
     });
     return docType === 'BAST' ? out.bastUrl : out.spkUrl;

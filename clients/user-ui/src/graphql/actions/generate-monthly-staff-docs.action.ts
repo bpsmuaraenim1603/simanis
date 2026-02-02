@@ -7,6 +7,7 @@ export const GENERATE_MONTHLY_STAFF_DOCS = gql`
       bastUrl
       nomorSPK
       nomorBAST
+      expiresAt
     }
   }
 `;

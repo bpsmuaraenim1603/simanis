@@ -309,4 +309,17 @@ model DailySignupCode {
   createdAt DateTime @default(now())
 }
 
+model TempDoc {
+  id        String       @id @default(uuid())
+  bucket    String
+  path      String
+  kind      AdminDocType
+  userId    String?
+  createdAt DateTime     @default(now())
+  expiresAt DateTime
+
+  @@index([expiresAt])
+  @@index([userId])
+}
+
 // name,email,password,role,phone_number,address, 

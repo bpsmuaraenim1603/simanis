@@ -9,6 +9,8 @@ export const GET_ALL_USERS = gql`
       primaryRole
       roles
       address
+      village_name
+      job_name
       phone_number
       limit_bill
       updatedAt

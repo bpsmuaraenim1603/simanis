@@ -16,11 +16,14 @@ import { AuthGuard } from './guards/auth.guard';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt/dist/jwt.service';
 import { APP_GUARD } from '@nestjs/core/constants';
+import { ScheduleModule } from '@nestjs/schedule';
+import { TempDocCleanupService } from './temp-doc-cleanup.service';
 
 @Module({
   imports: [
     HttpModule,
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     GraphQLModule.forRoot<ApolloFederationDriverConfig>({
       driver: ApolloFederationDriver,
       autoSchemaFile: {
@@ -47,6 +50,7 @@ import { APP_GUARD } from '@nestjs/core/constants';
     ConfigService,
     JwtService,
     { provide: APP_GUARD, useClass: AuthGuard },
+    TempDocCleanupService,
   ],
   exports: [],
 })

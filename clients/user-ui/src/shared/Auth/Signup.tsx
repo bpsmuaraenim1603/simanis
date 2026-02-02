@@ -4,9 +4,13 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AiOutlineEye, AiOutlineEyeInvisible } from "react-icons/ai";
 import { useState } from "react";
-import { useMutation } from "@apollo/client";
+import { useLazyQuery, useMutation, useQuery } from "@apollo/client";
 import { REGISTER_USER } from "@/src/graphql/actions/register.action";
 import toast from "react-hot-toast";
+import { GET_VILLAGES_BY_DISTRICT } from "@/src/graphql/actions/find-villages-by-district.action";
+import { GET_ALL_OF_DISTRICT } from "@/src/graphql/actions/find-alldistrict.action";
+import HUSelect from "@/src/components/HUSelect";
+import HUComboBox from "@/src/components/HUCombobox";
 
 const formSchema = z
   .object({
@@ -16,9 +20,16 @@ const formSchema = z
     passwordConfirm: z.string(),
     phone: z.string().min(12, { message: "Nomor Telepon minimal 12 angka" }),
     address: z.string().min(5, { message: "Alamat minimal 5 karakter" }),
-    job_name: z.string().min(3, { message: "Nama pekerjaan minimal 3 karakter" }),
-    village_name: z.string().min(3, { message: "Nama desa minimal 3 karakter" }),
-    signupCode: z.string().trim().regex(/^[A-Z0-9]{10}$/, { message: "Kode pendaftaran belum sesuai" }),
+    job_name: z
+      .string()
+      .min(3, { message: "Nama pekerjaan minimal 3 karakter" }),
+    village_name: z
+      .string()
+      .min(3, { message: "Nama desa minimal 3 karakter" }),
+    signupCode: z
+      .string()
+      .trim()
+      .regex(/^[A-Z0-9]{10}$/, { message: "Kode pendaftaran belum sesuai" }),
   })
   .superRefine((data, ctx) => {
     if (data.password !== data.passwordConfirm) {
@@ -43,12 +54,24 @@ const Signup = ({
     handleSubmit,
     formState: { errors, isSubmitting },
     reset,
+    setValue,
+    clearErrors,
   } = useForm<SignUpSchema>({
     resolver: zodResolver(formSchema),
   });
 
   const [show, setShow] = useState(false);
   const [show2, setShow2] = useState(false);
+  type District = { id: string; name: string; city?: string };
+  type Village = { id: string; name: string; districtId: string };
+
+  const { data: districtData } = useQuery(GET_ALL_OF_DISTRICT);
+
+  const [fetchVillages] = useLazyQuery(GET_VILLAGES_BY_DISTRICT);
+
+  const [selectedDistrictId, setSelectedDistrictId] = useState<string>("");
+  const [villages, setVillages] = useState<Village[]>([]);
+  const [selectedVillageId, setSelectedVillageId] = useState<string>("");
 
   const onSubmit = async (data: SignUpSchema) => {
     try {
@@ -66,7 +89,7 @@ const Signup = ({
       });
       localStorage.setItem(
         "activation_token",
-        response.data.register.activation_token
+        response.data.register.activation_token,
       );
       toast.success("Silahkan aktivasi akun anda melalui email!");
       reset();
@@ -154,20 +177,67 @@ const Signup = ({
             </span>
           )}
         </div>
+        {/* Hidden field supaya tetap terkirim ke mutation sebagai village_name */}
+        <input type="hidden" {...register("village_name")} />
+
         <div>
-          <label className="text-[16px] font-Poppins">Nama Desa</label>
-          <input
-            {...register("village_name")}
-            type="text"
-            placeholder="Desamu"
-            className={`${styles.input} shadow-sm`}
+          <label className="text-[16px] font-Poppins">Kecamatan</label>
+          <HUComboBox
+            value={selectedDistrictId || null}
+            onValueChange={async (v) => {
+              const districtId = (v ?? "") as string;
+              setSelectedDistrictId(districtId);
+
+              setSelectedVillageId("");
+              setValue("village_name", "", { shouldValidate: true });
+              clearErrors("village_name");
+
+              if (districtId) {
+                const res = await fetchVillages({ variables: { districtId } });
+                setVillages(res.data?.villagesByDistrict ?? []);
+              } else {
+                setVillages([]);
+              }
+            }}
+            options={
+              districtData?.allDistricts?.map((d: District) => ({
+                value: d.id,
+                label: d.name ?? "-",
+              })) ?? []
+            }
+            placeholder="-- Pilih Kecamatan --"
           />
+        </div>
+
+        <div className="mt-3">
+          <label className="text-[16px] font-Poppins">Desa</label>
+          <HUSelect
+            value={selectedVillageId || null}
+            onValueChange={(v) => {
+              const villageId = (v ?? "") as string;
+              setSelectedVillageId(villageId);
+
+              const picked = villages.find((x) => x.id === villageId);
+              setValue("village_name", picked?.name ?? "", {
+                shouldValidate: true,
+              });
+            }}
+            options={villages.map((v: Village) => ({
+              value: v.id,
+              label: v.name,
+            }))}
+            placeholder={
+              selectedDistrictId ? "-- Pilih Desa --" : "Pilih kecamatan dulu"
+            }
+          />
+
           {errors.village_name && (
             <span className="text-red-500 block mt-1">
               {`${errors.village_name.message}`}
             </span>
           )}
         </div>
+
         <div className="w-full mt-5 relative mb-1">
           <label htmlFor="password" className="text-[16px] font-Poppins">
             Masukkan Passwordmu
@@ -241,7 +311,8 @@ const Signup = ({
             </span>
           )}
           <p className="text-xs text-gray-500 mt-1">
-            Kode ini berubah tiap hari, silahkan minta pada admin untuk mendapatkannya.
+            Kode ini berubah tiap hari, silahkan minta pada admin untuk
+            mendapatkannya.
           </p>
         </div>
         <div className="w-full mt-5">
