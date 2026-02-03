@@ -1328,8 +1328,8 @@ export default function UserPage() {
                 leaveFrom="opacity-100 translate-y-0 sm:scale-100"
                 leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
               >
-                <Dialog.Panel className="w-full bg-white shadow-xl overflow-hidden flex flex-col h-[calc(100dvh-56px)] sm:h-auto sm:max-h-[90vh] sm:rounded-2xl sm:max-w-lg overflow-y-auto">
-                  <div className="bg-white px-4 pb-5 pt-5 sm:pt-2 sm:px-6 sm:pb-0 rounded-lg">
+                <Dialog.Panel className="w-full bg-white shadow-xl overflow-hidden flex flex-col h-[calc(100dvh-56px)] sm:h-auto sm:max-h-[90vh] sm:rounded-2xl sm:max-w-lg">
+                  <div className="bg-white px-4 pb-5 pt-5 sm:pt-2 sm:px-6 sm:pb-0 rounded-lg flex flex-col min-h-0">
                     <div className="shrink-0 px-4 py-3 border-b flex items-center justify-between">
                       <Dialog.Title className="text-base font-semibold text-gray-900">
                         {activeSample?.cacahStatus === "Selesai"
@@ -1347,7 +1347,7 @@ export default function UserPage() {
                     </div>
 
                     <div
-                      className="flex-1 overflow-y-auto overscroll-contain px-4 py-2 sm:px-0"
+                      className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-2 sm:px-0 touch-pan-y"
                       style={{ WebkitOverflowScrolling: "touch" }}
                     >
                       <div className="mt-3 space-y-4">
