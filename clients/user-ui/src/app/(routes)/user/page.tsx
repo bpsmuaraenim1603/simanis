@@ -7,7 +7,7 @@ import useUser from "@/src/hooks/useUser";
 import { useLazyQuery, useMutation } from "@apollo/client";
 import { Dialog, Transition } from "@headlessui/react";
 import { useRouter } from "next/navigation";
-import React, { Fragment, useEffect, useMemo, useState } from "react";
+import React, { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import exifr from "exifr";
 import dynamic from "next/dynamic";
@@ -92,6 +92,8 @@ export default function UserPage() {
   const [qIdentity, setQIdentity] = useState("");
   const [isLocationConfirmed, setIsLocationConfirmed] = useState(false);
   const [coordText, setCoordText] = useState("");
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // ===== Formatter tanggal =====
   function fmtDate(d: any) {
@@ -700,17 +702,13 @@ export default function UserPage() {
     try {
       await upsertDraft({
         tempId: activeSampleId ?? undefined,
-        nus: isAddMode
-          ? ""
-          : String(activeSample?.nus ?? ""),
+        nus: isAddMode ? "" : String(activeSample?.nus ?? ""),
         identity: nextIdentity,
         geoLat: draftLat ?? null,
         geoLng: draftLng ?? null,
         photoBlob: draftPhotoFile ?? null,
       });
-    } catch {
-    
-    }
+    } catch {}
 
     setSavingModal(true);
 
@@ -1536,57 +1534,62 @@ export default function UserPage() {
                           </div>
                         )}
 
-                        <div className="rounded-md border p-3 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <div className="text-sm font-semibold">
-                              Foto di Tempat
-                            </div>
-                            {activeSample?.photoSignedUrl ? (
-                              <a
-                                href={activeSample.photoSignedUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-xs text-blue-600 hover:underline"
-                              >
-                                Buka foto tersimpan
-                              </a>
-                            ) : null}
+                        <div className="flex flex-wrap gap-2 items-center">
+                          {/* Tombol kamera */}
+                          <button
+                            type="button"
+                            onClick={() => cameraInputRef.current?.click()}
+                            className="px-3 py-2 rounded-md bg-gray-900 text-white text-xs font-semibold"
+                          >
+                            Ambil dari Kamera
+                          </button>
+
+                          {/* Tombol file/galeri */}
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="px-3 py-2 rounded-md bg-white border text-xs font-semibold"
+                          >
+                            Pilih dari File
+                          </button>
+
+                          {/* Input kamera (pakai capture) */}
+                          <input
+                            ref={cameraInputRef}
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            onChange={(e) => {
+                              const f = e.target.files?.[0] ?? null;
+                              onPickPhoto(f);
+                              e.currentTarget.value = ""; // biar bisa pilih file yang sama lagi
+                            }}
+                            className="hidden"
+                            disabled={
+                              activeSample?.approvalStatus === "Disetujui"
+                            }
+                          />
+
+                          {/* Input file/galeri (tanpa capture) */}
+                          <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const f = e.target.files?.[0] ?? null;
+                              onPickPhoto(f);
+                              e.currentTarget.value = "";
+                            }}
+                            className="hidden"
+                            disabled={
+                              activeSample?.approvalStatus === "Disetujui"
+                            }
+                          />
+
+                          <div className="text-[11px] text-gray-500">
+                            Kamera untuk foto di tempat. File untuk ambil dari
+                            galeri/penyimpanan.
                           </div>
-
-                          {activeSample?.approvalStatus !== "Disetujui" && (
-                            <div className="flex gap-2">
-                              <input
-                                type="file"
-                                accept="image/*"
-                                capture="environment"
-                                disabled={
-                                  activeSample?.approvalStatus === "Disetujui"
-                                }
-                                onChange={(e) =>
-                                  onPickPhoto(e.target.files?.[0] ?? null)
-                                }
-                                className="block w-full text-xs"
-                              />
-                            </div>
-                          )}
-
-                          {draftPhotoPreview ? (
-                            <img
-                              src={draftPhotoPreview}
-                              alt="Preview"
-                              className="mt-2 w-full max-h-64 object-contain rounded-md border"
-                            />
-                          ) : activeSample?.photoSignedUrl ? (
-                            <img
-                              src={activeSample.photoSignedUrl}
-                              alt="Foto tersimpan"
-                              className="mt-2 w-full max-h-64 object-contain rounded-md border"
-                            />
-                          ) : (
-                            <div className="text-xs opacity-70">
-                              Belum ada foto.
-                            </div>
-                          )}
                         </div>
                       </div>
                     </div>
