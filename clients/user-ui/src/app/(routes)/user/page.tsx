@@ -1591,6 +1591,58 @@ export default function UserPage() {
                             galeri/penyimpanan.
                           </div>
                         </div>
+                        {/* PREVIEW FOTO */}
+                        <div className="mt-2 space-y-2">
+                          {draftPhotoPreview ? (
+                            <div className="rounded-md border p-2">
+                              <div className="text-xs text-gray-500 mb-2">
+                                Preview foto yang akan diunggah
+                              </div>
+                              <img
+                                src={draftPhotoPreview}
+                                alt="Preview foto"
+                                className="w-full max-h-64 object-contain rounded-md"
+                              />
+                              <div className="mt-2 flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (draftPhotoPreview)
+                                      URL.revokeObjectURL(draftPhotoPreview);
+                                    setDraftPhotoPreview(null);
+                                    setDraftPhotoFile(null);
+                                  }}
+                                  className="px-3 py-1.5 rounded-md bg-white border text-xs font-semibold"
+                                >
+                                  Hapus Foto
+                                </button>
+                              </div>
+                            </div>
+                          ) : activeSample?.photoSignedUrl ? (
+                            <div className="rounded-md border p-2">
+                              <div className="text-xs text-gray-500 mb-2">
+                                Foto tersimpan
+                              </div>
+                              <img
+                                src={activeSample.photoSignedUrl}
+                                alt="Foto tersimpan"
+                                className="w-full max-h-64 object-contain rounded-md"
+                              />
+                              <a
+                                href={activeSample.photoSignedUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-xs text-blue-600 hover:underline inline-block mt-2"
+                              >
+                                Buka ukuran penuh
+                              </a>
+                            </div>
+                          ) : (
+                            <div className="text-xs opacity-70">
+                              Belum ada foto.
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
