@@ -1,0 +1,32 @@
+services:
+  user-ui:
+    build:
+      context: ./clients/user-ui
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "3000"
+
+  users:
+    build:
+      context: ./servers
+      dockerfile: Dockerfile
+      args:
+        APP_NAME: users
+    restart: unless-stopped
+    expose:
+      - "4001"
+    environment:
+      - PORT=4001
+
+  surveyact:
+    build:
+      context: ./servers
+      dockerfile: Dockerfile
+      args:
+        APP_NAME: surveyact
+    restart: unless-stopped
+    expose:
+      - "4002"
+    environment:
+      - PORT=4002
