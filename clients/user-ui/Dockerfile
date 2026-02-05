@@ -11,13 +11,10 @@ FROM node:20-alpine AS run
 WORKDIR /app
 ENV NODE_ENV=production
 
-COPY --from=build /app/package*.json ./
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/.next ./.next
+# standalone output
+COPY --from=build /app/.next/standalone ./
+COPY --from=build /app/.next/static ./.next/static
 COPY --from=build /app/public ./public
 
-# config next (ada: js & ts)
-COPY --from=build /app/next.config.js /app/next.config.ts ./
-
 EXPOSE 3000
-CMD ["sh", "-c", "node node_modules/next/dist/bin/next start -p 3000 -H 0.0.0.0"]
+CMD ["node", "server.js"]
