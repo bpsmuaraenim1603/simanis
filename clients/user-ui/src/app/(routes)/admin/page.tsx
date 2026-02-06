@@ -270,6 +270,7 @@ function Admin() {
     lastUpdated: "",
     districtId: "",
     villageId: "",
+    blockCount: "",
     travelBill: "",
     progressRole: "",
   });
@@ -289,10 +290,18 @@ function Admin() {
   const [qEnumerator, setQEnumerator] = useState("");
   const [qUPUser, setQUPUser] = useState("");
   const qSupervisorDeb = useDebounced(qSupervisor);
-  const [selectedDistrictId, setSelectedDistrictId] = useState<string | null>(
-    null,
-  );
-  const [villages, setVillages] = useState<Village[]>([]);
+  const [selectedDistrictIdAdd, setSelectedDistrictIdAdd] = useState<
+    string | null
+  >(null);
+  const [villagesAdd, setVillagesAdd] = useState<Village[]>([]);
+  const [selectedDistrictIdUpdate, setSelectedDistrictIdUpdate] = useState<
+    string | null
+  >(null);
+  const [villagesUpdate, setVillagesUpdate] = useState<Village[]>([]);
+  const [updateRoleFilter, setUpdateRoleFilter] = useState<
+    "PETUGAS" | "PENGAWAS"
+  >("PETUGAS");
+  const prevUpdateDistrictIdRef = useRef<string>("");
 
   function matchesSearch(u: Partial<User>, q: string) {
     const s = q.trim().toLowerCase();
@@ -696,6 +705,42 @@ function Admin() {
     e.preventDefault();
     try {
       if (updateUserProgressForm.subSurveyActivityId) {
+        const isPetugas =
+          (updateUserProgressForm.progressRole ?? "") === "PETUGAS";
+
+        if (!isPetugas) {
+          await updateUserSurveyProgress({
+            variables: {
+              input: {
+                id: updateUserProgressForm.userProgressId,
+                districtId: updateUserProgressForm.districtId,
+                villageId: updateUserProgressForm.villageId,
+                blockCount: updateUserProgressForm.blockCount,
+                travelBill: updateUserProgressForm.travelBill,
+              },
+            },
+          });
+          toast.success("Blok pengawas berhasil diupdate!");
+          handleRefresh();
+          setUpdateUserProgressForm({
+            userProgressId: "",
+            subSurveyActivityId: updateUserProgressForm.subSurveyActivityId,
+            surveyActivityId: updateUserProgressForm.surveyActivityId,
+            userId: "",
+            totalAssigned: 0,
+            submitCount: 0,
+            approvedCount: 0,
+            rejectedCount: 0,
+            lastUpdated: "",
+            districtId: "",
+            villageId: "",
+            blockCount: "",
+            travelBill: "",
+            progressRole: "",
+          });
+          setDeleteSampleIds([]);
+          return;
+        }
         const target = Number(selectedSubForUpdate?.targetSample ?? 0);
         const currentAssigned = Number(currentUP?.totalAssigned ?? 0);
         const others = sumAllAssignedForUpdate - currentAssigned;
@@ -729,7 +774,7 @@ function Admin() {
           if (willExceedUpdate) {
             toast.error(
               `Honor petugas melebihi limit pengguna.\n` +
-                `Limit: ${limitBillUpdate.toLocaleString("id-ID")} • Terpakai (kegiatan lain): ${usedTravelUpdateOthers.toLocaleString("id-ID")} • ` +
+                `Limit: ${limitBillUpdate.toLocaleString("id-ID")} • Terpakai : ${usedTravelUpdateOthers.toLocaleString("id-ID")} • ` +
                 `Sisa untuk baris ini: ${remainTravelUpdate.toLocaleString("id-ID")}`,
             );
             return;
@@ -740,6 +785,7 @@ function Admin() {
           variables: {
             input: {
               id: updateUserProgressForm.userProgressId,
+              blockCount: updateUserProgressForm.blockCount,
               totalAssigned: cappedTotalAssigned,
               submitCount: Number(updateUserProgressForm.submitCount),
               approvedCount: Number(updateUserProgressForm.approvedCount),
@@ -778,6 +824,7 @@ function Admin() {
         lastUpdated: "",
         districtId: "",
         villageId: "",
+        blockCount: "",
         travelBill: "",
         progressRole: "",
       });
@@ -974,8 +1021,10 @@ function Admin() {
       "Email Pengguna": u.email,
       "Peran Pengguna": u.primaryRole ?? u.roles ?? "",
       "Id Pengguna": u.id,
-      "Masukkan Daftar Nama Pengguna": "Sesuaikan dengan nama asli yang tertera (gunakan proper)",
-      "Masukkan Daftar Nama Pengawas": "Sesuaikan dengan nama asli yang tertera (gunakan proper)",
+      "Masukkan Daftar Nama Pengguna":
+        "Sesuaikan dengan nama asli yang tertera (gunakan proper)",
+      "Masukkan Daftar Nama Pengawas":
+        "Sesuaikan dengan nama asli yang tertera (gunakan proper)",
       "Formula Ambil Id Pengguna": `=VLOOKUP(F${i + 2};$B:$E;4;FALSE)`,
       "Formula Ambil Id Pengawas": `=VLOOKUP(G${i + 2};$B:$E;4;FALSE)`,
     }));
@@ -1009,7 +1058,8 @@ function Admin() {
       "Kode Wilayah": s.coderegion,
       "Kode Kecamatan-Desa": `${s.districtId}-${s.name}`,
       "Id Desa": s.id,
-      "Id Kecamatan Terpilih": "Ambil Id kecamatan terpilih (G) dari MASTER_KECAMATAN",
+      "Id Kecamatan Terpilih":
+        "Ambil Id kecamatan terpilih (G) dari MASTER_KECAMATAN",
       "Masukkan Daftar Nama Desa": "Pastikan nama sesuai (gunakan proper)",
       "Kode Kecamatan-Desa Terpilih": `=G${i + 2}&"-"&H${i + 2}`,
       "Formula Ambil Id Desa": `=VLOOKUP(I${i + 2};$E:$F;2;FALSE)`,
@@ -1017,7 +1067,8 @@ function Admin() {
 
     const sampleRows = [
       {
-        "Nomor Petugas": "Hubungkan sampel dengan menambahkan nomor petugas dari sheet UPLOAD_PETUGAS",
+        "Nomor Petugas":
+          "Hubungkan sampel dengan menambahkan nomor petugas dari sheet UPLOAD_PETUGAS",
         nus: "",
         identity: "",
         cacahStatus: "",
@@ -1068,21 +1119,38 @@ function Admin() {
     ];
 
     const wsSamples = XLSX.utils.json_to_sheet(sampleRows);
-wsSamples["!cols"] = [
-  { wch: 10 }, // NoPetugas
-  { wch: 8 },  // nus
-  { wch: 30 }, // identity
-  { wch: 16 }, // cacahStatus
-  { wch: 16 }, // approvalStatus
-  { wch: 14 }, // geoLat
-  { wch: 14 }, // geoLng
-];
+    wsSamples["!cols"] = [
+      { wch: 10 }, // NoPetugas
+      { wch: 8 }, // nus
+      { wch: 30 }, // identity
+      { wch: 16 }, // cacahStatus
+      { wch: 16 }, // approvalStatus
+      { wch: 14 }, // geoLat
+      { wch: 14 }, // geoLng
+    ];
 
     const wsDistrict = XLSX.utils.json_to_sheet(masterDistrict);
-    wsDistrict["!cols"] = [{ wch: 5 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 36 }, { wch: 36 }];
+    wsDistrict["!cols"] = [
+      { wch: 5 },
+      { wch: 20 },
+      { wch: 20 },
+      { wch: 20 },
+      { wch: 36 },
+      { wch: 36 },
+    ];
 
     const wsVillage = XLSX.utils.json_to_sheet(masterVillage);
-    wsVillage["!cols"] = [{ wch: 5 }, { wch: 36 }, { wch: 20 }, { wch: 20 }, { wch: 36 }, { wch: 36 }, { wch: 36 }, { wch: 30 }, { wch: 36 }];
+    wsVillage["!cols"] = [
+      { wch: 5 },
+      { wch: 36 },
+      { wch: 20 },
+      { wch: 20 },
+      { wch: 36 },
+      { wch: 36 },
+      { wch: 36 },
+      { wch: 30 },
+      { wch: 36 },
+    ];
 
     XLSX.utils.book_append_sheet(wb, wsUpload, "UPLOAD_PETUGAS");
     XLSX.utils.book_append_sheet(wb, wsSamples, "UPLOAD_SAMPEL");
@@ -1205,13 +1273,29 @@ wsSamples["!cols"] = [
   }, [updateUserProgressForm.subSurveyActivityId, fetchUserProgress]);
 
   useEffect(() => {
-    if (!updateUserProgressForm.districtId) return;
+    const districtId = updateUserProgressForm.districtId || "";
+    const prevDistrictId = prevUpdateDistrictIdRef.current || "";
 
-    fetchVillages({
-      variables: { districtId: updateUserProgressForm.districtId },
-    });
+    if (!districtId) {
+      setSelectedDistrictIdUpdate(null);
+      setVillagesUpdate([]);
+      if (prevDistrictId) {
+        setUpdateUserProgressForm((prev) => ({ ...prev, villageId: "" }));
+      }
+      prevUpdateDistrictIdRef.current = "";
+      return;
+    }
 
-    setUpdateUserProgressForm((prev) => ({ ...prev, villageId: "" }));
+    setSelectedDistrictIdUpdate(districtId);
+    (async () => {
+      const res = await fetchVillages({ variables: { districtId } });
+      setVillagesUpdate(res.data?.villagesByDistrict ?? []);
+
+      if (prevDistrictId && prevDistrictId !== districtId) {
+        setUpdateUserProgressForm((prev) => ({ ...prev, villageId: "" }));
+      }
+      prevUpdateDistrictIdRef.current = districtId;
+    })();
   }, [updateUserProgressForm.districtId, fetchVillages]);
 
   useEffect(() => {
@@ -1266,22 +1350,28 @@ wsSamples["!cols"] = [
         lastUpdated: toDateInput(up.lastUpdated),
         districtId: up.districtId ?? "",
         villageId: up.villageId ?? "",
+        blockCount: up.blockCount ?? "",
         travelBill: up.travelBill ?? "",
         progressRole: up.progressRole ?? "",
       }));
+      setSelectedDistrictIdUpdate(up.districtId ?? null);
     } else {
-      setUpdateUserProgressForm((prev) => ({
-        ...prev,
-        totalAssigned: 0,
-        submitCount: 0,
-        approvedCount: 0,
-        rejectedCount: 0,
-        lastUpdated: "",
-        districtId: "",
-        villageId: "",
-        travelBill: "",
-        progressRole: "",
-      }));
+      if (!updateUserProgressForm.userProgressId) {
+        setUpdateUserProgressForm((prev) => ({
+          ...prev,
+          totalAssigned: 0,
+          submitCount: 0,
+          approvedCount: 0,
+          rejectedCount: 0,
+          lastUpdated: "",
+          districtId: "",
+          villageId: "",
+          blockCount: "",
+          travelBill: "",
+          progressRole: "",
+        }));
+        setSelectedDistrictIdUpdate(null);
+      }
     }
   }, [updateUserProgressForm.userProgressId, upMap]);
 
@@ -1379,6 +1469,11 @@ wsSamples["!cols"] = [
     (selectedSubForUpdate?.activityType ?? "") === "Listing";
   const upListForUpdate: UserProgress[] =
     userProgressData?.userProgressBySubSurveyActivityId ?? [];
+  const upPetugasOnlyForQuota = useMemo(
+    () =>
+      upListForUpdate.filter((u: any) => (u.progressRole ?? "") === "PETUGAS"),
+    [upListForUpdate],
+  );
   const filteredUPsForUpdate = useMemo(
     () => upListForUpdate.filter((up) => matchesUPSearch(up as any, qUPUser)),
     [upListForUpdate, qUPUser],
@@ -1392,13 +1487,14 @@ wsSamples["!cols"] = [
   );
   const sumAllAssignedForUpdate = useMemo(
     () =>
-      upListForUpdate.reduce(
+      upPetugasOnlyForQuota.reduce(
         (acc: number, u) => acc + Number(u.totalAssigned ?? 0),
         0,
       ),
-    [upListForUpdate],
+    [upPetugasOnlyForQuota],
   );
   const allowedMaxForUpdate = useMemo(() => {
+    if ((currentUP?.progressRole ?? "") !== "PETUGAS") return 0;
     const target = Number(selectedSubForUpdate?.targetSample ?? 0);
     const currentAssigned = Number(currentUP?.totalAssigned ?? 0);
     const others = sumAllAssignedForUpdate - currentAssigned;
@@ -2249,15 +2345,15 @@ wsSamples["!cols"] = [
                 onValueChange={async (v) => {
                   const districtId = (v ?? "") as string;
                   setUPField("districtId", districtId);
-                  setSelectedDistrictId(districtId);
+                  setSelectedDistrictIdAdd(districtId);
 
                   if (districtId) {
                     const res = await fetchVillages({
                       variables: { districtId },
                     });
-                    setVillages(res.data?.villagesByDistrict ?? []);
+                    setVillagesAdd(res.data?.villagesByDistrict ?? []);
                   } else {
-                    setVillages([]);
+                    setVillagesAdd([]);
                   }
                 }}
                 options={districtData?.allDistricts?.map((d: District) => ({
@@ -2280,12 +2376,12 @@ wsSamples["!cols"] = [
                 onValueChange={(v) =>
                   setUPField("villageId", (v ?? "") as string)
                 }
-                options={villages.map((v: Village) => ({
+                options={villagesAdd.map((v: Village) => ({
                   value: v.id,
                   label: v.name,
                 }))}
                 placeholder={
-                  selectedDistrictId
+                  selectedDistrictIdAdd
                     ? "-- Pilih Desa --"
                     : "Pilih kecamatan dulu"
                 }
@@ -2491,7 +2587,6 @@ wsSamples["!cols"] = [
             <div className="md:col-span-2">
               <h3 className="text-lg font-bold">Perbarui Blok Petugas</h3>
             </div>
-
             <div>
               <label
                 htmlFor="surveyActivityId"
@@ -2512,7 +2607,6 @@ wsSamples["!cols"] = [
                 placeholder="-- Pilih Tim Penyelenggara --"
               />
             </div>
-
             <div>
               <label
                 htmlFor="subSurveyActivityId"
@@ -2548,38 +2642,112 @@ wsSamples["!cols"] = [
                   </span>
                 </div>
               )}
+            </div>{" "}
+            <div>
+              <label className="block text-sm font-bold mb-2">Role</label>
+              <HUSelect
+                value={updateRoleFilter}
+                onValueChange={(v) => {
+                  const role = (v ?? "PETUGAS") as "PETUGAS" | "PENGAWAS";
+                  setUpdateRoleFilter(role);
+                  // reset pilihan UP agar tidak nyangkut dari role sebelumnya
+                  setUpdateUPField("userProgressId", "");
+                  setUpdateUPField("progressRole", "");
+                }}
+                options={[
+                  { value: "PETUGAS", label: "PETUGAS" },
+                  { value: "PENGAWAS", label: "PENGAWAS" },
+                ]}
+                placeholder="-- Pilih Role --"
+              />
             </div>
-
             <div>
               <label
                 htmlFor="userProgressId"
                 className="block text-sm font-bold mb-2"
               >
-                Block Petugas
+                Blok Petugas
               </label>
 
               <HUComboBox
                 value={updateUserProgressForm.userProgressId || null}
-                onValueChange={(v) =>
-                  setUpdateUPField("userProgressId", (v ?? "") as string)
+                onValueChange={async (v) => {
+                  const id = (v ?? "") as string;
+                  if (!id) {
+                    setUpdateUserProgressForm((prev) => ({
+                      ...prev,
+                      userProgressId: "",
+                      totalAssigned: 0,
+                      submitCount: 0,
+                      approvedCount: 0,
+                      rejectedCount: 0,
+                      lastUpdated: "",
+                      districtId: "",
+                      villageId: "",
+                      blockCount: "",
+                      travelBill: "",
+                      progressRole: "",
+                    }));
+                    setSelectedDistrictIdUpdate(null);
+                    setVillagesUpdate([]);
+                    return;
+                  }
+
+                  const up = upMap[id];
+                  if (!up) {
+                    // fallback aman kalau map belum siap
+                    setUpdateUPField("userProgressId", id);
+                    return;
+                  }
+
+                  setUpdateUserProgressForm((prev) => ({
+                    ...prev,
+                    userProgressId: id,
+                    totalAssigned: Number(up.totalAssigned ?? 0),
+                    submitCount: Number(up.submitCount ?? 0),
+                    approvedCount: Number(up.approvedCount ?? 0),
+                    rejectedCount: Number(up.rejectedCount ?? 0),
+                    lastUpdated: toDateInput(up.lastUpdated),
+                    districtId: up.districtId ?? "",
+                    villageId: up.villageId ?? "",
+                    blockCount: up.blockCount ?? "",
+                    travelBill: up.travelBill ?? "",
+                    progressRole: up.progressRole ?? "",
+                  }));
+
+                  const districtId = up.districtId ?? "";
+                  setSelectedDistrictIdUpdate(districtId || null);
+                  if (up.districtId) {
+                    const res = await fetchVillages({
+                      variables: { districtId: up.districtId },
+                    });
+                    setVillagesUpdate(res.data?.villagesByDistrict ?? []);
+                  } else {
+                    setVillagesUpdate([]);
+                  }
+                }}
+                options={filteredUPsForUpdate
+                  .filter(
+                    (up: any) => (up.progressRole ?? "") === updateRoleFilter,
+                  )
+                  .map((up: any) => ({
+                    value: up.id,
+                    label: `${up.user?.name ?? "-"} - ${up.village?.name ?? "-"}`,
+                    subLabel: up.user?.email ?? "",
+                    onvalueChange: () => {
+                      setUpdateUPField("progressRole", up.progressRole ?? 0);
+                    },
+                  }))}
+                placeholder={
+                  updateRoleFilter === "PENGAWAS"
+                    ? "-- Pilih Blok Pengawas --"
+                    : "-- Pilih Blok Petugas --"
                 }
-                options={filteredUPsForUpdate.map((up: any) => ({
-                  value: up.id,
-                  label:
-                    up.progressRole === "PENGAWAS"
-                      ? `${up.user?.name ?? "-"} (Pengawas)`
-                      : `${up.user?.name ?? "-"} - Blok ${up.blockCount ?? "-"}`,
-                  subLabel: up.user?.email ?? "",
-                  onvalueChange: () => {
-                    setUpdateUPField("progressRole", up.progressRole ?? 0);
-                  },
-                }))}
-                placeholder="-- Pilih Blok Petugas --"
               />
               {currentUP?.userId && (
                 <p className="mt-1 text-xs">
                   Limit: <b>{limitBillUpdate.toLocaleString("id-ID")}</b> •
-                  Terpakai (kegiatan lain):{" "}
+                  Terpakai:{" "}
                   <b>{usedTravelUpdateOthers.toLocaleString("id-ID")}</b> • Sisa
                   untuk baris ini:{" "}
                   <b className={remainTravelUpdate <= 0 ? "text-red-600" : ""}>
@@ -2601,15 +2769,15 @@ wsSamples["!cols"] = [
                 onValueChange={async (v) => {
                   const districtId = (v ?? "") as string;
                   setUpdateUPField("districtId", districtId);
-                  setSelectedDistrictId(districtId);
+                  setSelectedDistrictIdUpdate(districtId);
 
                   if (districtId) {
                     const res = await fetchVillages({
                       variables: { districtId },
                     });
-                    setVillages(res.data?.villagesByDistrict ?? []);
+                    setVillagesUpdate(res.data?.villagesByDistrict ?? []);
                   } else {
-                    setVillages([]);
+                    setVillagesUpdate([]);
                   }
                 }}
                 options={districtData?.allDistricts?.map((d: District) => ({
@@ -2619,7 +2787,6 @@ wsSamples["!cols"] = [
                 placeholder="-- Pilih Kecamatan --"
               />
             </div>
-
             <div>
               <label
                 htmlFor="villageId"
@@ -2632,18 +2799,17 @@ wsSamples["!cols"] = [
                 onValueChange={(v) =>
                   setUpdateUPField("villageId", (v ?? "") as string)
                 }
-                options={villages.map((v: Village) => ({
+                options={villagesUpdate.map((v: Village) => ({
                   value: v.id,
                   label: v.name,
                 }))}
                 placeholder={
-                  selectedDistrictId
+                  selectedDistrictIdUpdate
                     ? "-- Pilih Desa --"
                     : "Pilih kecamatan dulu"
                 }
               />
             </div>
-
             <div>
               <label
                 htmlFor="travelBill"
@@ -2671,6 +2837,22 @@ wsSamples["!cols"] = [
                       )}
                 </p>
               )}
+            </div>
+            <div>
+              <label
+                htmlFor="blockCount"
+                className="block text-sm font-bold mb-2"
+              >
+                Nama Blok
+              </label>
+              <input
+                id="blockCount"
+                type="text"
+                value={updateUserProgressForm.blockCount}
+                onChange={(e) => setUpdateUPField("blockCount", e.target.value)}
+                placeholder="Contoh: A, B, 01, BLOK-1"
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              />
             </div>
             {/* === Daftar Sampel Blok Petugas (UPDATE) === */}
             {updateUserProgressForm.progressRole === "PETUGAS" && (
@@ -2862,7 +3044,6 @@ wsSamples["!cols"] = [
                 )}
               </div>
             )}
-
             <div className="md:col-span-2 flex gap-2">
               {deleteMode ? (
                 <button

@@ -607,7 +607,7 @@ export class SurveyActivityService {
 
   async getUserProgressBySubSurveyActivityId(subSurveyActivityId: string) {
     return this.prisma.userProgress.findMany({
-      where: { subSurveyActivityId, superVisorId: { not: null } },
+      where: { subSurveyActivityId },
       include: {
         user: true,
         subSurveyActivity: true,
@@ -621,7 +621,7 @@ export class SurveyActivityService {
 
   async getUserProgressSurveyByUserId(userId: string) {
     return this.prisma.userProgress.findMany({
-      where: { userId, superVisorId: { not: null } },
+      where: { userId },
       include: {
         user: true,
         subSurveyActivity: true,
@@ -2396,6 +2396,7 @@ export class SurveyActivityService {
       select: {
         id: true,
         subSurveyActivityId: true,
+        progressRole: true,
         travelBill: true,
         budgetCode: true,
         subSurveyActivity: {
@@ -2405,6 +2406,30 @@ export class SurveyActivityService {
       },
     });
 
+    const supervisedPetugas = await this.prisma.userProgress.findMany({
+      where: {
+        superVisorId: userId,
+        progressRole: 'PETUGAS',
+        subSurveyActivity: {
+          startDate: { lte: to },
+          endDate: { gte: from },
+        },
+      },
+      select: {
+        subSurveyActivityId: true,
+        _count: { select: { samples: true } },
+      },
+    });
+
+    const supervisedDocsBySSA = new Map<string, number>();
+    for (const x of supervisedPetugas) {
+      const ssaId = x.subSurveyActivityId;
+      if (!ssaId) continue;
+      supervisedDocsBySSA.set(
+        ssaId,
+        (supervisedDocsBySSA.get(ssaId) ?? 0) + (x._count?.samples ?? 0),
+      );
+    }
     const upIds = progresses.map((p) => p.id);
     const clipStart = (d: Date) => (d < from ? from : d);
     const clipEnd = (d: Date) => (d > to ? to : d);
@@ -2437,7 +2462,10 @@ export class SurveyActivityService {
       if (!ssa?.id) continue;
 
       const key = ssa.id;
-      const docs = p._count?.samples ?? 0;
+      const docs =
+        p.progressRole === 'PENGAWAS'
+          ? (supervisedDocsBySSA.get(ssa.id) ?? 0)
+          : (p._count?.samples ?? 0);
       const honor = this.parseMoney(p.travelBill);
       const last = lastByUp.get(p.id);
       const effectiveEnd = last && ssa.endDate < last ? last : ssa.endDate;
@@ -2797,11 +2825,13 @@ export class SurveyActivityService {
     if (!user) throw new NotFoundException('User tidak ditemukan');
 
     const petugasName = user?.name || 'Petugas';
-    const pekerjaanPetugas =
-  String(input.pekerjaanPetugas ?? (user as any)?.job_name ?? '').trim();
+    const pekerjaanPetugas = String(
+      input.pekerjaanPetugas ?? (user as any)?.job_name ?? '',
+    ).trim();
 
-const desaTinggalPetugas =
-  String(input.desaTinggalPetugas ?? (user as any)?.village_name ?? '').trim();
+    const desaTinggalPetugas = String(
+      input.desaTinggalPetugas ?? (user as any)?.village_name ?? '',
+    ).trim();
 
     // ambil preview server-side agar eligibility tetap aman
     const preview = await this.getMonthlyStaffDocPreview(

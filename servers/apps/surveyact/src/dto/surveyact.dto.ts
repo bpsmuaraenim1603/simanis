@@ -238,6 +238,9 @@ export class UpdateUserProgressDTO {
   id: string;
 
   @Field({ nullable: true })
+  blockCount?: string;
+
+  @Field({ nullable: true })
   districtId?: string;
 
   @Field({ nullable: true })
