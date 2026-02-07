@@ -18,7 +18,7 @@ export const GET_USER_PROGRESS_BY_SUBSURVEY_ID = gql`
       lastUpdated
       superVisorId
       blockCount
-      travelBill
+      docsBill
       superVisor {
         id
         name

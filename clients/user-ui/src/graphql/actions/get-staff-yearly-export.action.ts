@@ -17,7 +17,7 @@ export const GET_STAFF_YEARLY_EXPORT = gql`
       submitCount
       approvedCount
       rejectedCount
-      travelBill
+      docsBill
     }
   }
 `;

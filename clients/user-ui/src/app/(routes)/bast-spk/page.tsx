@@ -29,6 +29,9 @@ type EditableRow = PreviewRow & {
   editUnitCost: number;
   editTotalCost: number;
   editBudgetCode: string;
+  unitName: string;
+  editUnitName: string;
+  included: boolean;
 };
 
 function toNumber(v: any) {
@@ -109,6 +112,9 @@ export default function BastSpkPage() {
             editUnitCost,
             editTotalCost,
             editBudgetCode: String(r.budgetCode ?? ""),
+            editUnitName: "Dokumen",
+            unitName: "Dokumen",
+            included: r.eligible,
           };
         });
         setRows(mapped);
@@ -393,11 +399,13 @@ export default function BastSpkPage() {
                 <th className="border p-2">Start</th>
                 <th className="border p-2">End</th>
                 <th className="border p-2">Status</th>
-                <th className="border p-2">Jml Dokumen</th>
+                <th className="border p-2">Satuan</th>
+                <th className="border p-2">Jumlah Satuan</th>
                 <th className="border p-2">Total Honor</th>
                 <th className="border p-2">Biaya/Dok</th>
                 <th className="border p-2">Total Biaya</th>
                 <th className="border p-2">Kode Beban</th>
+                <th className="border p-2">Masukkan</th>
               </tr>
             </thead>
             <tbody>
@@ -432,7 +440,17 @@ export default function BastSpkPage() {
                           {r.eligible ? "Selesai" : "Belum selesai"}
                         </span>
                       </td>
-
+                      <td className="border p-2">
+                        <input
+                          className="w-28 border rounded px-2 py-1 bg-white"
+                          disabled={disabled}
+                          value={r.editUnitName}
+                          onChange={(e) =>
+                            onRecalcRow(idx, { editUnitName: e.target.value })
+                          }
+                          placeholder="Dokumen/Segmen/Petugas"
+                        />
+                      </td>
                       <td className="border p-2 text-center">
                         <input
                           className="w-24 border rounded px-2 py-1 bg-white text-right"
@@ -446,11 +464,9 @@ export default function BastSpkPage() {
                           }
                         />
                       </td>
-
                       <td className="border p-2 text-right">
                         {toNumber(r.totalHonor).toLocaleString("id-ID")}
                       </td>
-
                       <td className="border p-2 text-center">
                         <input
                           className="w-28 border rounded px-2 py-1 bg-white text-right"
@@ -464,7 +480,6 @@ export default function BastSpkPage() {
                           }
                         />
                       </td>
-
                       <td className="border p-2 text-center">
                         <input
                           className="w-32 border rounded px-2 py-1 bg-white text-right"
@@ -478,7 +493,6 @@ export default function BastSpkPage() {
                           }
                         />
                       </td>
-
                       <td className="border p-2">
                         <input
                           className="w-full border rounded px-2 py-1 bg-white"
@@ -495,6 +509,23 @@ export default function BastSpkPage() {
                             })
                           }
                           placeholder="Kode beban anggaran"
+                        />
+                      </td>
+                      <td className="border p-2 text-center">
+                        <input
+                          type="checkbox"
+                          disabled={!r.eligible}
+                          checked={!!r.included}
+                          onChange={(e) =>
+                            setRows((prev) => {
+                              const clone = [...prev];
+                              clone[idx] = {
+                                ...clone[idx],
+                                included: e.target.checked,
+                              };
+                              return clone;
+                            })
+                          }
                         />
                       </td>
                     </tr>
@@ -527,10 +558,12 @@ export default function BastSpkPage() {
                 .filter((r) => r.eligible)
                 .map((r) => ({
                   subSurveyActivityId: r.subSurveyActivityId,
+                  unitName: (r.editUnitName || "Dokumen").trim() || "Dokumen",
                   totalDocs: toNumber(r.editTotalDocs),
                   unitCost: toNumber(r.editUnitCost),
                   totalCost: toNumber(r.editTotalCost),
                   budgetCode: r.editBudgetCode,
+                  included: !!r.included,
                 }));
 
               setSpkUrl(null);

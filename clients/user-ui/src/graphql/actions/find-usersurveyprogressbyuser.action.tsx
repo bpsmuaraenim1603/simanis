@@ -11,7 +11,7 @@ export const GET_USER_PROGRESS_BY_USER_ID = gql`
       approvedCount
       rejectedCount
       blockCount
-      travelBill
+      docsBill
       lastUpdated
       user {
         id

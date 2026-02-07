@@ -279,7 +279,7 @@ function MonthlyStaffUsagePanel({
         Approved: r.approvedCount ?? 0,
         Rejected: r.rejectedCount ?? 0,
         StartDate: excelDate(r.startDate),
-        Honor_TravelBill: Number(r.travelBill ?? 0),
+        Honor_docsBill: Number(r.docsBill ?? 0),
       }));
 
       const byUser = new Map<string, any>();
@@ -299,7 +299,7 @@ function MonthlyStaffUsagePanel({
         const u = byUser.get(key);
         u.months.add(r.month);
         u.activities.add(r.subSurveyName);
-        u.totalHonor += Number(r.travelBill ?? 0);
+        u.totalHonor += Number(r.docsBill ?? 0);
       }
 
       const summary = Array.from(byUser.values())
@@ -1060,7 +1060,7 @@ export default function SuperAdminManagePage() {
     for (const r of honorRows) {
       const key = r.subSurveyActivityId || "unknown";
       const prev = map.get(key);
-      const add = Number(r.travelBill ?? 0);
+      const add = Number(r.docsBill ?? 0);
       const limitBill = Number(honorData?.user?.limit_bill ?? 0);
       if (prev) {
         prev.count += 1;
@@ -1680,7 +1680,7 @@ export default function SuperAdminManagePage() {
                                     </td>
                                     <td className="px-3 py-2 text-right">
                                       Rp{" "}
-                                      {fmtID.format(Number(r.travelBill ?? 0))}
+                                      {fmtID.format(Number(r.docsBill ?? 0))}
                                     </td>
                                     <td className="px-3 py-2">
                                       {r.lastUpdated

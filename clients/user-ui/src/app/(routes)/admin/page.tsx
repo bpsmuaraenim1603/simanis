@@ -77,7 +77,7 @@ type UserProgress = {
   lastUpdated: string;
   districtId: string;
   villageId: string;
-  travelBill: string;
+  docsBill: string;
   progressRole: string;
 };
 type UserProgressWithUser = UserProgress & {
@@ -256,7 +256,7 @@ function Admin() {
     lastUpdated: "",
     districtId: "",
     villageId: "",
-    travelBill: "",
+    docsBill: "",
   });
   const [updateUserProgressForm, setUpdateUserProgressForm] = useState({
     userProgressId: "",
@@ -271,7 +271,7 @@ function Admin() {
     districtId: "",
     villageId: "",
     blockCount: "",
-    travelBill: "",
+    docsBill: "",
     progressRole: "",
   });
   const emptySampleRow = {
@@ -421,8 +421,8 @@ function Admin() {
     [userProgressData],
   );
   const toMoney = (v: any) => Number(v ?? 0);
-  const sumTravel = (rows: any[]) =>
-    rows.reduce((acc, r) => acc + toMoney(r.travelBill), 0);
+  const sumDocs = (rows: any[]) =>
+    rows.reduce((acc, r) => acc + toMoney(r.docsBill), 0);
 
   const isSameMonthYear = (a: Date, b: Date) =>
     a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
@@ -642,8 +642,8 @@ function Admin() {
         if (willExceedAdd) {
           toast.error(
             `Honor petugas melebihi limit pengguna.\n` +
-              `Limit: ${limitBillAdd.toLocaleString("id-ID")} • Terpakai: ${usedTravelAdd.toLocaleString("id-ID")} • ` +
-              `Sisa: ${remainTravelAdd.toLocaleString("id-ID")}`,
+              `Limit: ${limitBillAdd.toLocaleString("id-ID")} • Terpakai: ${usedDocsAdd.toLocaleString("id-ID")} • ` +
+              `Sisa: ${remainDocsAdd.toLocaleString("id-ID")}`,
           );
           return;
         }
@@ -657,7 +657,7 @@ function Admin() {
             subSurveyActivityId: userProgressForm.subSurveyActivityId,
             districtId: userProgressForm.districtId,
             villageId: userProgressForm.villageId,
-            travelBill: userProgressForm.travelBill,
+            docsBill: userProgressForm.docsBill,
             blockCount: userProgressForm.blockCount,
             totalAssigned: 0,
             submitCount: 0,
@@ -689,7 +689,7 @@ function Admin() {
         lastUpdated: "",
         districtId: "",
         villageId: "",
-        travelBill: "",
+        docsBill: "",
         superVisorId: userProgressForm.superVisorId,
       });
       setSampleListAdd([emptySampleRow]);
@@ -716,7 +716,7 @@ function Admin() {
                 districtId: updateUserProgressForm.districtId,
                 villageId: updateUserProgressForm.villageId,
                 blockCount: updateUserProgressForm.blockCount,
-                travelBill: updateUserProgressForm.travelBill,
+                docsBill: updateUserProgressForm.docsBill,
               },
             },
           });
@@ -735,7 +735,7 @@ function Admin() {
             districtId: "",
             villageId: "",
             blockCount: "",
-            travelBill: "",
+            docsBill: "",
             progressRole: "",
           });
           setDeleteSampleIds([]);
@@ -774,8 +774,8 @@ function Admin() {
           if (willExceedUpdate) {
             toast.error(
               `Honor petugas melebihi limit pengguna.\n` +
-                `Limit: ${limitBillUpdate.toLocaleString("id-ID")} • Terpakai : ${usedTravelUpdateOthers.toLocaleString("id-ID")} • ` +
-                `Sisa untuk baris ini: ${remainTravelUpdate.toLocaleString("id-ID")}`,
+                `Limit: ${limitBillUpdate.toLocaleString("id-ID")} • Terpakai : ${usedDocsUpdateOthers.toLocaleString("id-ID")} • ` +
+                `Sisa untuk baris ini: ${remainDocsUpdate.toLocaleString("id-ID")}`,
             );
             return;
           }
@@ -792,7 +792,7 @@ function Admin() {
               rejectedCount: Number(updateUserProgressForm.rejectedCount),
               districtId: updateUserProgressForm.districtId,
               villageId: updateUserProgressForm.villageId,
-              travelBill: updateUserProgressForm.travelBill,
+              docsBill: updateUserProgressForm.docsBill,
               samples: sampleListUpdate.map((s, idx) => ({
                 ...(s.id ? { id: s.id } : {}),
                 nus: s.nus,
@@ -825,7 +825,7 @@ function Admin() {
         districtId: "",
         villageId: "",
         blockCount: "",
-        travelBill: "",
+        docsBill: "",
         progressRole: "",
       });
       setSampleListUpdate([emptySampleRow]);
@@ -916,7 +916,7 @@ function Admin() {
           lastUpdated: "",
           districtId: "",
           villageId: "",
-          travelBill: "",
+          docsBill: "",
         }));
         setSampleListUpdate([emptySampleRow]);
         await handleRefresh();
@@ -1089,8 +1089,8 @@ function Admin() {
       { wch: 30 }, // districtId
       { wch: 24 }, // villageId
       { wch: 12 }, // blockCount
-      { wch: 18 }, // travelBillPetugas
-      { wch: 18 }, // travelBillPengawas
+      { wch: 18 }, // docsBillPetugas
+      { wch: 18 }, // docsBillPengawas
     ];
 
     const wsUsers = XLSX.utils.json_to_sheet(masterUsers);
@@ -1333,7 +1333,7 @@ function Admin() {
       districtId: "",
       villageId: "",
       blockCount: "",
-      travelBill: "",
+      docsBill: "",
     }));
     setSampleListAdd([emptySampleRow]);
   }, [userProgressForm.surveyActivityId]);
@@ -1351,7 +1351,7 @@ function Admin() {
         districtId: up.districtId ?? "",
         villageId: up.villageId ?? "",
         blockCount: up.blockCount ?? "",
-        travelBill: up.travelBill ?? "",
+        docsBill: up.docsBill ?? "",
         progressRole: up.progressRole ?? "",
       }));
       setSelectedDistrictIdUpdate(up.districtId ?? null);
@@ -1367,7 +1367,7 @@ function Admin() {
           districtId: "",
           villageId: "",
           blockCount: "",
-          travelBill: "",
+          docsBill: "",
           progressRole: "",
         }));
         setSelectedDistrictIdUpdate(null);
@@ -1546,14 +1546,14 @@ function Admin() {
     [userData, userProgressForm.userId],
   );
   const limitBillAdd = toMoney(selectedUserForAdd?.limit_bill);
-  const usedTravelAdd = useMemo(() => {
+  const usedDocsAdd = useMemo(() => {
     const rows = upByUserData?.userProgressSurveyByUserId ?? [];
     const filtered = rows.filter((r: any) => includeForThisMonth(r));
-    return sumTravel(filtered);
+    return sumDocs(filtered);
   }, [upByUserData, subMap]);
-  const newTravelAdd = toMoney(userProgressForm.travelBill);
-  const remainTravelAdd = Math.max(0, limitBillAdd - usedTravelAdd);
-  const willExceedAdd = newTravelAdd > remainTravelAdd;
+  const newDocsAdd = toMoney(userProgressForm.docsBill);
+  const remainDocsAdd = Math.max(0, limitBillAdd - usedDocsAdd);
+  const willExceedAdd = newDocsAdd > remainDocsAdd;
 
   const selectedUserForUpdate = currentUP
     ? (userData?.getUsers ?? []).find((u: any) => u.id === currentUP.userId)
@@ -1561,24 +1561,24 @@ function Admin() {
 
   const limitBillUpdate = toMoney(selectedUserForUpdate?.limit_bill);
 
-  const usedTravelUpdateAll = useMemo(() => {
+  const usedDocsUpdateAll = useMemo(() => {
     const rows = upByUserUpdateData?.userProgressSurveyByUserId ?? [];
     const filtered = rows.filter((r: any) => includeForThisMonth(r));
-    return sumTravel(filtered);
+    return sumDocs(filtered);
   }, [upByUserUpdateData, subMap]);
 
   const currentRowCounted = currentUP ? includeForThisMonth(currentUP) : false;
-  const currentRowOldTravel = toMoney(currentUP?.travelBill);
-  const usedTravelUpdateOthers = Math.max(
+  const currentRowOldDocs = toMoney(currentUP?.docsBill);
+  const usedDocsUpdateOthers = Math.max(
     0,
-    usedTravelUpdateAll - (currentRowCounted ? currentRowOldTravel : 0),
+    usedDocsUpdateAll - (currentRowCounted ? currentRowOldDocs : 0),
   );
-  const newTravelUpdate = toMoney(updateUserProgressForm.travelBill);
-  const remainTravelUpdate = Math.max(
+  const newDocsUpdate = toMoney(updateUserProgressForm.docsBill);
+  const remainDocsUpdate = Math.max(
     0,
-    limitBillUpdate - usedTravelUpdateOthers,
+    limitBillUpdate - usedDocsUpdateOthers,
   );
-  const willExceedUpdate = newTravelUpdate > remainTravelUpdate;
+  const willExceedUpdate = newDocsUpdate > remainDocsUpdate;
   const nusToNumber = (nus: string) => {
     const n = Number(String(nus ?? "").trim());
     return Number.isFinite(n) ? n : 0;
@@ -2324,10 +2324,10 @@ function Admin() {
               {userProgressForm.userId && (
                 <p className="mt-1 text-xs">
                   Limit: <b>{limitBillAdd.toLocaleString("id-ID")}</b> •
-                  Terpakai: <b>{usedTravelAdd.toLocaleString("id-ID")}</b> •
+                  Terpakai: <b>{usedDocsAdd.toLocaleString("id-ID")}</b> •
                   Sisa:{" "}
-                  <b className={remainTravelAdd <= 0 ? "text-red-600" : ""}>
-                    {remainTravelAdd.toLocaleString("id-ID")}
+                  <b className={remainDocsAdd <= 0 ? "text-red-600" : ""}>
+                    {remainDocsAdd.toLocaleString("id-ID")}
                   </b>
                 </p>
               )}
@@ -2407,15 +2407,15 @@ function Admin() {
 
             <div>
               <label
-                htmlFor="travelBill"
+                htmlFor="docsBill"
                 className="block text-sm font-bold mb-2"
               >
                 Honor Petugas
               </label>
               <input
-                id="travelBill"
+                id="docsBill"
                 type="number"
-                value={userProgressForm.travelBill}
+                value={userProgressForm.docsBill}
                 onChange={handleChangeUserProgress}
                 placeholder="Sertakan Jumlah Honor"
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -2424,10 +2424,10 @@ function Admin() {
                 <p
                   className={`mt-1 text-xs ${willExceedAdd ? "text-red-600" : "text-gray-600"}`}
                 >
-                  Akan terpakai: {newTravelAdd.toLocaleString("id-ID")}{" "}
+                  Akan terpakai: {newDocsAdd.toLocaleString("id-ID")}{" "}
                   {willExceedAdd &&
                     "— Melebihi limit! Total honor sudah mencapai " +
-                      (usedTravelAdd + newTravelAdd).toLocaleString("id-ID")}
+                      (usedDocsAdd + newDocsAdd).toLocaleString("id-ID")}
                 </p>
               )}
             </div>
@@ -2685,7 +2685,7 @@ function Admin() {
                       districtId: "",
                       villageId: "",
                       blockCount: "",
-                      travelBill: "",
+                      docsBill: "",
                       progressRole: "",
                     }));
                     setSelectedDistrictIdUpdate(null);
@@ -2711,7 +2711,7 @@ function Admin() {
                     districtId: up.districtId ?? "",
                     villageId: up.villageId ?? "",
                     blockCount: up.blockCount ?? "",
-                    travelBill: up.travelBill ?? "",
+                    docsBill: up.docsBill ?? "",
                     progressRole: up.progressRole ?? "",
                   }));
 
@@ -2748,10 +2748,10 @@ function Admin() {
                 <p className="mt-1 text-xs">
                   Limit: <b>{limitBillUpdate.toLocaleString("id-ID")}</b> •
                   Terpakai:{" "}
-                  <b>{usedTravelUpdateOthers.toLocaleString("id-ID")}</b> • Sisa
+                  <b>{usedDocsUpdateOthers.toLocaleString("id-ID")}</b> • Sisa
                   untuk baris ini:{" "}
-                  <b className={remainTravelUpdate <= 0 ? "text-red-600" : ""}>
-                    {remainTravelUpdate.toLocaleString("id-ID")}
+                  <b className={remainDocsUpdate <= 0 ? "text-red-600" : ""}>
+                    {remainDocsUpdate.toLocaleString("id-ID")}
                   </b>
                 </p>
               )}
@@ -2812,15 +2812,15 @@ function Admin() {
             </div>
             <div>
               <label
-                htmlFor="travelBill"
+                htmlFor="docsBill"
                 className="block text-sm font-bold mb-2"
               >
                 Honor Petugas
               </label>
               <input
-                id="travelBill"
+                id="docsBill"
                 type="number"
-                value={updateUserProgressForm.travelBill}
+                value={updateUserProgressForm.docsBill}
                 onChange={handleChangeUpdateUserProgress}
                 placeholder="Sertakan Jumlah Honor"
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -2829,10 +2829,10 @@ function Admin() {
                 <p
                   className={`mt-1 text-xs ${willExceedUpdate ? "text-red-600" : "text-gray-600"}`}
                 >
-                  Akan terpakai: {newTravelUpdate.toLocaleString("id-ID")}{" "}
+                  Akan terpakai: {newDocsUpdate.toLocaleString("id-ID")}{" "}
                   {willExceedUpdate &&
                     "— Melebihi limit! Total honor sudah mencapai " +
-                      (usedTravelUpdateOthers + newTravelUpdate).toLocaleString(
+                      (usedDocsUpdateOthers + newDocsUpdate).toLocaleString(
                         "id-ID",
                       )}
                 </p>

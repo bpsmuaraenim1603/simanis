@@ -158,6 +158,9 @@ export class UpdateSubSurveyActivityDTO {
 
   @Field()
   activityType: string;
+
+  @Field({ nullable: true })
+  status?: 'BERJALAN' | 'SELESAI';
 }
 
 @InputType()
@@ -196,7 +199,7 @@ export class CreateUserProgressDTO {
   villageId?: string;
 
   @Field({ nullable: true })
-  travelBill?: string;
+  docsBill?: string;
 
   @Field({ nullable: true })
   budgetCode?: string;
@@ -247,7 +250,7 @@ export class UpdateUserProgressDTO {
   villageId?: string;
 
   @Field({ nullable: true })
-  travelBill?: string;
+  docsBill?: string;
 
   @Field({ nullable: true })
   budgetCode?: string;
@@ -442,6 +445,12 @@ export class MonthlyStaffDocRowInput {
 
   @Field({ nullable: true })
   budgetCode?: string;
+
+  @Field({ nullable: true })
+  unitName?: string;
+
+  @Field({ nullable: true })
+  included?: boolean;
 }
 
 @InputType()

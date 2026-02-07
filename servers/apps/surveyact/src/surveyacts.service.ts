@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -326,6 +327,18 @@ export class SurveyActivityService {
     subSurveyActivityId: string,
     updateData: UpdateSubSurveyActivityDTO,
   ) {
+    const existing = await this.prisma.subSurveyActivity.findUnique({
+      where: { id: subSurveyActivityId },
+      select: { startDate: true, endDate: true },
+    });
+    if (!existing)
+      throw new NotFoundException('SubSurveyActivity tidak ditemukan');
+
+    if (updateData.startDate != null || updateData.endDate != null) {
+      throw new BadRequestException(
+        'Tanggal kegiatan tidak bisa diubah. Jika salah, hapus lalu buat kegiatan baru.',
+      );
+    }
     const cleanedData = Object.fromEntries(
       Object.entries(updateData).filter(([_, value]) => value != null),
     );
@@ -427,7 +440,7 @@ export class SurveyActivityService {
         blockCount: blockCount ?? null,
         districtId: districtId ?? null,
         villageId: villageId ?? null,
-        travelBill: '0',
+        docsBill: '0',
         superVisorId: null,
       },
     });
@@ -454,6 +467,37 @@ export class SurveyActivityService {
       rejectedCount = samples.filter(
         (s) => s.approvalStatus === AgreeState.Ditolak,
       ).length;
+    }
+
+    const subfilter = await this.prisma.subSurveyActivity.findUnique({
+      where: { id: input.subSurveyActivityId },
+      select: { endDate: true, status: true },
+    });
+    if (!subfilter)
+      throw new NotFoundException('SubSurveyActivity tidak ditemukan');
+
+    const actor = actorId
+      ? await this.prisma.user.findUnique({
+          where: { id: actorId },
+          select: { roles: true, primaryRole: true },
+        })
+      : null;
+
+    const isKeuangan =
+      !!actor &&
+      (actor.primaryRole === 'Keuangan' ||
+        (actor.roles ?? []).includes('Keuangan'));
+
+    const now = new Date();
+    const finishedByDate =
+      now.getTime() > new Date(subfilter.endDate).getTime();
+    const finishedByStatus = subfilter.status === 'SELESAI';
+
+    // aturan: dianggap selesai kalau status selesai ATAU lewat endDate
+    if ((finishedByStatus || finishedByDate) && !isKeuangan) {
+      throw new ForbiddenException(
+        'Kegiatan sudah selesai. Hanya role Keuangan yang boleh menambah petugas.',
+      );
     }
 
     const created = await this.prisma.userProgress.create({
@@ -1563,7 +1607,7 @@ export class SurveyActivityService {
         approvedCount: true,
         rejectedCount: true,
         blockCount: true,
-        travelBill: true,
+        docsBill: true,
 
         user: {
           select: {
@@ -1614,7 +1658,7 @@ export class SurveyActivityService {
         approvedCount: r.approvedCount ?? 0,
         rejectedCount: r.rejectedCount ?? 0,
 
-        travelBill: r.travelBill ?? 0,
+        docsBill: r.docsBill ?? 0,
       };
     });
   }
@@ -2021,9 +2065,9 @@ export class SurveyActivityService {
         const villageId = String(r['Id Desa'] || '').trim() || null;
         const blockCount = String(r['Nama Blok'] || '').trim() || null;
 
-        const travelBillPetugas =
-          String(r['Honor Petugas'] || r.travelBill || '').trim() || '0';
-        const travelBillPengawas =
+        const docsBillPetugas =
+          String(r['Honor Petugas'] || r.docsBill || '').trim() || '0';
+        const docsBillPengawas =
           String(r['Honor Pengawas'] || '').trim() || '0';
 
         if (
@@ -2126,7 +2170,7 @@ export class SurveyActivityService {
                 districtId,
                 villageId,
                 blockCount,
-                travelBill: travelBillPetugas,
+                docsBill: docsBillPetugas,
                 totalAssigned: 0,
                 submitCount: 0,
                 approvedCount: 0,
@@ -2165,7 +2209,7 @@ export class SurveyActivityService {
                 districtId,
                 villageId,
                 blockCount,
-                travelBill: travelBillPetugas,
+                docsBill: docsBillPetugas,
               },
             });
 
@@ -2216,7 +2260,7 @@ export class SurveyActivityService {
                   districtId,
                   villageId,
                   blockCount,
-                  travelBill: travelBillPengawas,
+                  docsBill: docsBillPengawas,
                   totalAssigned: 0,
                   submitCount: 0,
                   approvedCount: 0,
@@ -2227,7 +2271,7 @@ export class SurveyActivityService {
             } else {
               await tx.userProgress.update({
                 where: { id: existingSup.id },
-                data: { travelBill: travelBillPengawas },
+                data: { docsBill: docsBillPengawas },
               });
               pengawasUpdated++;
             }
@@ -2397,7 +2441,7 @@ export class SurveyActivityService {
         id: true,
         subSurveyActivityId: true,
         progressRole: true,
-        travelBill: true,
+        docsBill: true,
         budgetCode: true,
         subSurveyActivity: {
           select: { id: true, name: true, startDate: true, endDate: true },
@@ -2466,7 +2510,7 @@ export class SurveyActivityService {
         p.progressRole === 'PENGAWAS'
           ? (supervisedDocsBySSA.get(ssa.id) ?? 0)
           : (p._count?.samples ?? 0);
-      const honor = this.parseMoney(p.travelBill);
+      const honor = this.parseMoney(p.docsBill);
       const last = lastByUp.get(p.id);
       const effectiveEnd = last && ssa.endDate < last ? last : ssa.endDate;
 
@@ -2846,8 +2890,12 @@ export class SurveyActivityService {
     const eligibleRows = (input.rows || [])
       .map((r) => {
         const base = previewMap.get(r.subSurveyActivityId);
+        const included = (r as any).included;
         if (!base) return null;
         if (!base.eligible) return null;
+        if (included === false) return null;
+        const unitName =
+          String((r as any).unitName ?? 'Dokumen').trim() || 'Dokumen';
         const totalDocs = Number(r.totalDocs ?? base.totalDocs);
         const unitCost = Number(r.unitCost ?? base.unitCost);
         const totalCost = Number(r.totalCost ?? unitCost * totalDocs);
@@ -2860,6 +2908,7 @@ export class SurveyActivityService {
           unitCost,
           totalCost,
           budgetCode: (r.budgetCode ?? base.budgetCode ?? '') as string,
+          unitName,
         };
       })
       .filter(Boolean) as any[];
@@ -2932,7 +2981,7 @@ export class SurveyActivityService {
         tglMulai,
         tglSelesai,
         volume: r.totalDocs,
-        satuan: 'Dokumen',
+        satuan: r.unitName,
         honorSatuan,
         honorTotal,
         bebanAnggaran: r.budgetCode || '',
@@ -2944,7 +2993,7 @@ export class SurveyActivityService {
       kegiatan: r.activityName,
       tglSelesai: this.formatDateId(r.endDate),
       volume: r.totalDocs,
-      satuan: 'Dokumen',
+      satuan: r.unitName,
       bebanAnggaran: r.budgetCode || '',
     }));
 

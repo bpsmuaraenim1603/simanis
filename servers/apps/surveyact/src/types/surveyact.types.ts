@@ -104,6 +104,9 @@ export class SubSurveyActivityType {
 
   @Field()
   activityType: string;
+
+  @Field()
+  status: string;
 }
 
 @ObjectType()
@@ -157,7 +160,7 @@ export class UserProgressType {
   village?: VillageType;
 
   @Field({ nullable: true })
-  travelBill?: string;
+  docsBill?: string;
 
   @Field({ nullable: true })
   budgetCode?: string;
@@ -510,7 +513,7 @@ export class StaffYearlyExportRowType {
   rejectedCount?: number | null;
 
   @Field(() => Float, { nullable: true })
-  travelBill?: number | null;
+  docsBill?: number | null;
 }
 
 @ObjectType()
@@ -558,6 +561,12 @@ export class MonthlyStaffDocPreviewRowType {
 
   @Field(() => String, { nullable: true })
   budgetCode?: string | null;
+
+  @Field(() => String, { nullable: true })
+  unitName?: string | null;
+
+  @Field(() => String, { nullable: true })
+  included?: boolean | null;
 }
 
 @ObjectType()

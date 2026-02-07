@@ -33,7 +33,7 @@ const NavItems = ({ isMinimized = false }: { isMinimized?: boolean }) => {
   }[] = [
     { title: "Beranda", hovertitle: "Beranda", url: "/dashboard", style: "border-b-2 border-t-2 border-white py-2", logo: House },
     ...(hasAnyRole(user, ["Superadmin", "Keuangan"]) ? [{ title: "Kontrol Pengguna", hovertitle: "Kontrol Pengguna", url: "/superadmin", logo: User, style: "border-b-2 border-white pb-2" }] : []),
-    ...(hasAnyRole(user, ["Admin", "Superadmin"]) ? [{ title: "Manajemen Tim", hovertitle: "Manajemen Tim", url: "/admin", logo: User, style: "border-b-2 border-white pb-2" }] : []),
+    ...(hasAnyRole(user, ["Admin", "Superadmin", "Keuangan"]) ? [{ title: "Manajemen Tim", hovertitle: "Manajemen Tim", url: "/admin", logo: User, style: "border-b-2 border-white pb-2" }] : []),
     ...(hasAnyRole(user, ["Supervisor", "Superadmin"]) ? [{ title: "Pengawas", hovertitle: "Pengawas", url: "/supervisor", logo: User, style: "border-b-2 border-white pb-2" }] : []),
     ...(hasRole(user, "User") ? [{ title: "Petugas", hovertitle: "Petugas", url: "/user", logo: User, style: "border-b-2 border-white pb-2" }] : []),
     { title: "KEGIATAN LAPANGAN", url: "#kegiatanlapangan", unhover: true },

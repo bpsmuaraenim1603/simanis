@@ -60,6 +60,7 @@ import { UserType } from 'apps/users/src/types/users.types';
 import { FileUpload, GraphQLUpload } from 'graphql-upload-ts';
 import { DeleteByIdInput, DeleteResult } from './dto/delete.input';
 import { BulkUserProgressResult } from './dto/bulk-userprogress.dto';
+import { Public } from './decorators/public.decorator';
 
 @Resolver(() => SurveyActivityType)
 export class SurveyActivityResolver {
@@ -246,6 +247,7 @@ export class SurveyActivityResolver {
     return this.service.createDistrict(input);
   }
 
+  @Public()
   @Query(() => [DistrictType], { name: 'allDistricts' })
   async allDistricts() {
     return this.service.getAllDistricts();
@@ -256,6 +258,7 @@ export class SurveyActivityResolver {
     return this.service.createVillage(input);
   }
 
+  @Public()
   @Query(() => [VillageType])
   async villagesByDistrict(
     @Args('districtId', { type: () => ID }) districtId: string,
@@ -263,6 +266,7 @@ export class SurveyActivityResolver {
     return this.service.getVillagesByDistrict(districtId);
   }
 
+  @Public()
   @Query(() => [VillageType], { name: 'allVillages' })
   async allVillages() {
     return this.service.getAllVillages();
