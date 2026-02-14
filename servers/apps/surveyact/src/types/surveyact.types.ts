@@ -44,6 +44,9 @@ export class SurveyActivityType {
 
   @Field(() => ID)
   chiefId: string;
+
+  @Field(() => UserType, { nullable: true })
+  chief?: UserType;
 }
 
 @ObjectType()

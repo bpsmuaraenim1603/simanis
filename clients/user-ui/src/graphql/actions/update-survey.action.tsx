@@ -6,6 +6,11 @@ export const UPDATE_SURVEY_ACTIVITY = gql`
       id
       name
       slug
+      chiefId
+      chief {
+        id
+        name
+      }
     }
   }
 `;

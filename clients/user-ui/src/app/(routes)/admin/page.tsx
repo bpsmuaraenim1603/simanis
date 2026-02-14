@@ -1,48 +1,63 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import {
-  useApolloClient,
-  useLazyQuery,
-  useMutation,
-  useQuery,
-} from "@apollo/client";
+import { useMutation, useQuery } from "@apollo/client";
 import toast from "react-hot-toast";
 import * as XLSX from "xlsx";
+
 import styles from "@/src/utils/style";
-import { ADD_SURVEY_ACTIVITY } from "@/src/graphql/actions/add-surveyact.action";
-import { ADD_SUBSURVEY_ACTIVITY } from "@/src/graphql/actions/add-subsurveyact.action";
-import { GET_ALL_SURVEY_ACTIVITIES } from "@/src/graphql/actions/find-allsurveyact.action";
-import { UPDATE_SURVEY_ACTIVITY } from "@/src/graphql/actions/update-survey.action";
-import { UPDATE_SUB_SURVEY_ACTIVITY } from "@/src/graphql/actions/update-subsurvey.action";
-import { GET_ALL_SUB_SURVEY_ACTIVITIES } from "@/src/graphql/actions/find-allsubsurveyact.action";
-import { CREATE_USER_PROGRESS } from "@/src/graphql/actions/create-userprogress.action";
-import { UPDATE_USER_PROGRESS } from "@/src/graphql/actions/update-userprogress.action";
+import HUSelect from "@/src/components/HUSelect";
+import HUComboBox from "@/src/components/HUCombobox";
+import {
+  Save,
+  X,
+  Pencil,
+  Trash2,
+  Copy,
+  Plus,
+  ChevronDown,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+
 import { GET_ALL_USERS } from "@/src/graphql/actions/find-allusers.action";
-import { GET_ALL_OF_SUB_SURVEY_ACTIVITIES } from "@/src/graphql/actions/find-realallsubsurvey.action";
-import { BULK_IMPORT_USERPROGRESS_EXCEL } from "@/src/graphql/actions/bulk-import-userprogress.action";
-import { GET_USER_PROGRESS_BY_SUBSURVEY_ID } from "@/src/graphql/actions/find-usersurveyprogress.action";
-import { GET_USER_PROGRESS_BY_USER_ID } from "@/src/graphql/actions/find-usersurveyprogressbyuser.action";
+import { GET_ALL_SURVEY_ACTIVITIES } from "@/src/graphql/actions/find-allsurveyact.action";
+import { ADD_SURVEY_ACTIVITY } from "@/src/graphql/actions/add-surveyact.action";
+import { UPDATE_SURVEY_ACTIVITY } from "@/src/graphql/actions/update-survey.action";
 import {
   DELETE_SURVEY_ACTIVITY,
   DELETE_SUBSURVEY_ACTIVITY,
   DELETE_USER_SURVEY_PROGRESS,
 } from "@/src/graphql/actions/delete";
-import { LayoutGroup, motion } from "framer-motion";
-import HUComboBox from "@/src/components/HUCombobox";
-import HUSelect from "@/src/components/HUSelect";
-import useUser from "@/src/hooks/useUser";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { PATCH_USER_SAMPLES } from "@/src/graphql/actions/patch-usersamples.action";
-import { getRoles } from "@/src/utils/roles";
-import { GET_VILLAGES_BY_DISTRICT } from "@/src/graphql/actions/find-villages-by-district.action";
+
+import { GET_ALL_SUB_SURVEY_ACTIVITIES } from "@/src/graphql/actions/find-allsubsurveyact.action";
+import { ADD_SUBSURVEY_ACTIVITY } from "@/src/graphql/actions/add-subsurveyact.action";
+import { UPDATE_SUB_SURVEY_ACTIVITY } from "@/src/graphql/actions/update-subsurvey.action";
+
+import { GET_USER_PROGRESS_BY_SUBSURVEY_ID } from "@/src/graphql/actions/find-usersurveyprogress.action";
+import { CREATE_USER_PROGRESS } from "@/src/graphql/actions/create-userprogress.action";
+import { UPDATE_USER_PROGRESS } from "@/src/graphql/actions/update-userprogress.action";
+import { BULK_IMPORT_USERPROGRESS_EXCEL } from "@/src/graphql/actions/bulk-import-userprogress.action";
 import { GET_ALL_OF_DISTRICT } from "@/src/graphql/actions/find-alldistrict.action";
 import { GET_ALL_OF_VILLAGE } from "@/src/graphql/actions/find-allvillages.action";
 
-/* ====== (type definitions sama persis dengan punyamu) ====== */
-type SurveyActivity = { id: string; name: string; slug: string };
-type District = { id: string; city: string; name: string };
-type Village = { id: string; name: string; districtId: string };
+type User = {
+  id: string;
+  name: string;
+  email: string;
+  primaryRole: string;
+  roles: string[];
+  limit_bill?: string;
+};
+type SurveyActivity = {
+  id: string;
+  name: string;
+  slug: string;
+  chiefId: string;
+  chief?: { id: string; name: string };
+};
 type SubSurveyActivity = {
   id: string;
   name: string;
@@ -54,952 +69,1000 @@ type SubSurveyActivity = {
   sampleType: string;
   activityType: string;
 };
-type User = {
+type District = { id: string; city: string; name: string; coderegion?: string };
+type Village = {
   id: string;
   name: string;
-  email: string;
-  password: string;
-  primaryRole?: string;
-  roles?: string[];
-  address: string;
-  phone_number: string;
-  updatedAt: string;
+  districtId: string;
+  coderegion?: string;
 };
+
+type UserSample = {
+  id?: string;
+  nus: string;
+  identity: string;
+  cacahStatus: string;
+  approvalStatus: string;
+  geoLat?: number | null;
+  geoLng?: number | null;
+};
+
 type UserProgress = {
   id: string;
   userId: string;
-  subSurveyActivityId: string;
-  totalAssigned: number;
-  submitCount: number;
-  approvedCount: number;
-  rejectedCount: number;
-  blockCount: string;
-  lastUpdated: string;
-  districtId: string;
-  villageId: string;
-  docsBill: string;
-  progressRole: string;
-};
-type UserProgressWithUser = UserProgress & {
-  user?: { name: string; email: string; limit_bill: number };
+  progressRole: "PETUGAS" | "PENGAWAS" | string;
+  subSurveyActivityId?: string | null;
+  districtId?: string | null;
+  villageId?: string | null;
+  superVisorId?: string | null;
+  blockCount?: string | null;
+  docsBill?: string | null;
+  user?: User;
+  superVisor?: User;
+  district?: District;
+  village?: Village;
+  samples?: UserSample[];
 };
 
-/* =============== Tabs Components (dioptimasi responsif) =============== */
-function Tabs<T extends string>({
-  tabs,
-  value,
-  onChange,
-}: {
-  tabs: { key: T; label: string }[];
-  value: T;
-  onChange: (k: T) => void;
-}) {
+function toMoney(v: any) {
+  const n = Number(String(v ?? "0").replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function uniq<T>(arr: T[]) {
+  return Array.from(new Set(arr));
+}
+
+function formatSlug(s: string) {
+  return String(s || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+type TabKey = "tim" | "kegiatan" | "petugas";
+
+type IconButtonProps = {
+  title: string;
+  onClick: () => void;
+  variant?: "primary" | "danger" | "neutral";
+  disabled?: boolean;
+  children: React.ReactNode;
+};
+
+function IconButton({
+  title,
+  onClick,
+  children,
+  variant = "neutral",
+  disabled,
+}: IconButtonProps) {
+  const base =
+    "inline-flex items-center justify-center rounded-md border px-2 py-1 transition disabled:opacity-60 disabled:cursor-not-allowed";
+  const variants: Record<string, string> = {
+    primary: "bg-gray-900 text-white border-gray-900 hover:bg-gray-800",
+    danger: "bg-red-600 text-white border-red-600 hover:bg-red-500",
+    neutral: "bg-white text-gray-700 border-gray-200 hover:bg-gray-50",
+  };
   return (
-    <div className="flex flex-wrap gap-2 border-b border-gray-200">
-      {tabs.map((t) => {
-        const active = value === t.key;
-        return (
-          <button
-            key={t.key}
-            onClick={() => onChange(t.key)}
-            className={[
-              "px-4 py-2 text-sm font-medium rounded-t-lg",
-              active
-                ? "bg-white border-x border-t border-gray-200 -mb-px"
-                : "text-gray-600 hover:text-gray-900",
-            ].join(" ")}
-          >
-            {t.label}
-          </button>
-        );
-      })}
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`${base} ${variants[variant]}`}
+      title={title}
+      aria-label={title}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Pager({
+  page,
+  pageSize,
+  total,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  page: number;
+  pageSize: number;
+  total: number;
+  onPageChange: (p: number) => void;
+  onPageSizeChange: (n: number) => void;
+}) {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const to = Math.min(total, page * pageSize);
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 text-sm text-gray-700">
+      <div className="flex items-center gap-2">
+        <span>
+          Menampilkan <b>{from}</b>–<b>{to}</b> dari <b>{total}</b>
+        </span>
+        <select
+          className="px-2 py-1 border rounded-md bg-white"
+          value={pageSize}
+          onChange={(e) => onPageSizeChange(Number(e.target.value))}
+        >
+          {[10, 20, 50, 100].map((n) => (
+            <option key={n} value={n}>
+              {n}/hal
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <IconButton
+          title="Sebelumnya"
+          onClick={() => onPageChange(Math.max(1, page - 1))}
+          disabled={page <= 1}
+        >
+          <ChevronLeft size={16} />
+        </IconButton>
+        <span>
+          Hal <b>{page}</b>/<b>{totalPages}</b>
+        </span>
+        <IconButton
+          title="Berikutnya"
+          onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+          disabled={page >= totalPages}
+        >
+          <ChevronRight size={16} />
+        </IconButton>
+      </div>
     </div>
   );
 }
 
-function SubTabs<T extends string>({
-  tabs,
-  value,
-  onChange,
-}: {
-  tabs: { key: T; label: string }[];
-  value: T;
-  onChange: (k: T) => void;
-}) {
-  return (
-    <LayoutGroup>
-      <div
-        className="inline-flex flex-wrap rounded-xl bg-gray-100 p-1 my-3"
-        role="tablist"
-        aria-label="SubTabs"
-      >
-        {tabs.map((t) => {
-          const active = value === t.key;
-          return (
-            <button
-              key={t.key}
-              role="tab"
-              aria-selected={active}
-              onClick={() => onChange(t.key)}
-              className="relative px-4 py-2 text-sm font-medium rounded-lg focus:outline-none select-none"
-            >
-              {active && (
-                <motion.span
-                  layoutId="subtab-pill"
-                  className="absolute inset-0 rounded-lg bg-white shadow"
-                  transition={{ type: "spring", stiffness: 500, damping: 40 }}
-                />
-              )}
-              <span
-                className={`relative z-10 ${active ? "text-gray-900" : "text-gray-600"}`}
-              >
-                {t.label}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </LayoutGroup>
-  );
-}
-
-/* ===================== Main ===================== */
-function Admin() {
-  const { user: currentUser, loading: userLoading } = useUser();
+export default function Admin() {
   const router = useRouter();
-  const ALLOWED = ["Superadmin", "Admin"];
-  const formatNUS = (n: number) => String(n).padStart(3, "0");
-  const pathname = usePathname();
   const searchParams = useSearchParams();
-
-  const setQuery = (patch: Record<string, string | null>) => {
-    const params = new URLSearchParams(searchParams?.toString() || "");
-    Object.entries(patch).forEach(([k, v]) => {
-      if (v == null || v === "") params.delete(k);
-      else params.set(k, v);
-    });
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-  };
+  const [tab, setTab] = useState<TabKey>("tim");
 
   useEffect(() => {
-    if (userLoading) return;
-
-    const roles = getRoles(currentUser);
-    const allowed = roles.some((r) => ALLOWED.includes(r));
-
-    if (!allowed) {
-      toast.error("Akses ditolak. Mengarahkan ke Beranda");
-      router.replace("/dashboard");
-    }
-  }, [userLoading, currentUser, router]);
-
-  type Section = "tim" | "kegiatan" | "petugas";
-  type Mode = "add" | "update";
-
-  const [deleteSampleIds, setDeleteSampleIds] = useState<string[]>([]);
-  const [section, setSection] = useState<Section>("tim");
-  const [mode, setMode] = useState<Mode>("add");
-  const [deleteMode, setDeleteMode] = useState(false);
-
-  useEffect(() => {
-    const tab = (searchParams?.get("tab") as Section) || "tim";
-    const m = (searchParams?.get("mode") as Mode) || "add";
-    const del = searchParams?.get("delete") === "1";
-
-    setSection(tab);
-    setMode(m);
-    setDeleteMode(del);
+    const t = (searchParams.get("tab") ?? "") as TabKey;
+    if (t === "tim" || t === "kegiatan" || t === "petugas") setTab(t);
   }, [searchParams]);
 
-  const client = useApolloClient();
-  const [refreshing, setRefreshing] = useState(false);
-
-  /* ---------- State Form (sama) ---------- */
-  const [formStateF1, setFormStateF1] = useState({ name: "", slug: "" });
-  const [updateStateF1, setUpdateStateF1] = useState({
-    surveyActivityId: "",
-    name: "",
-    slug: "",
-  });
-  const [formStateF2, setFormStateF2] = useState({
-    name: "",
-    slug: "",
-    surveyActivityId: "",
-    startDate: "",
-    endDate: "",
-    targetSample: 0,
-    sampleType: "",
-    activityType: "",
-  });
-  const [updateStateF2, setUpdateStateF2] = useState({
-    subSurveyActivityId: "",
-    name: "",
-    slug: "",
-    surveyActivityId: "",
-    startDate: "",
-    endDate: "",
-    targetSample: 0,
-    sampleType: "",
-    activityType: "",
-  });
-
-  const [userProgressForm, setUserProgressForm] = useState({
-    userId: "",
-    superVisorId: "",
-    subSurveyActivityId: "",
-    surveyActivityId: "",
-    totalAssigned: 0,
-    submitCount: 0,
-    approvedCount: 0,
-    rejectedCount: 0,
-    blockCount: "",
-    lastUpdated: "",
-    districtId: "",
-    villageId: "",
-    docsBill: "",
-  });
-  const [updateUserProgressForm, setUpdateUserProgressForm] = useState({
-    userProgressId: "",
-    subSurveyActivityId: "",
-    surveyActivityId: "",
-    userId: "",
-    totalAssigned: 0,
-    submitCount: 0,
-    approvedCount: 0,
-    rejectedCount: 0,
-    lastUpdated: "",
-    districtId: "",
-    villageId: "",
-    blockCount: "",
-    docsBill: "",
-    progressRole: "",
-  });
-  const emptySampleRow = {
-    id: "",
-    nus: "",
-    identity: "",
-    cacahStatus: "Belum_Cacah",
-    approvalStatus: "Menunggu",
-    geoLat: "",
-    geoLng: "",
-  };
-
-  const [sampleListAdd, setSampleListAdd] = useState([emptySampleRow]);
-  const [sampleListUpdate, setSampleListUpdate] = useState([emptySampleRow]);
-  const [qSupervisor, setQSupervisor] = useState("");
-  const [qEnumerator, setQEnumerator] = useState("");
-  const [qUPUser, setQUPUser] = useState("");
-  const qSupervisorDeb = useDebounced(qSupervisor);
-  const [selectedDistrictIdAdd, setSelectedDistrictIdAdd] = useState<
-    string | null
-  >(null);
-  const [villagesAdd, setVillagesAdd] = useState<Village[]>([]);
-  const [selectedDistrictIdUpdate, setSelectedDistrictIdUpdate] = useState<
-    string | null
-  >(null);
-  const [villagesUpdate, setVillagesUpdate] = useState<Village[]>([]);
-  const [updateRoleFilter, setUpdateRoleFilter] = useState<
-    "PETUGAS" | "PENGAWAS"
-  >("PETUGAS");
-  const prevUpdateDistrictIdRef = useRef<string>("");
-
-  function matchesSearch(u: Partial<User>, q: string) {
-    const s = q.trim().toLowerCase();
-    if (!s) return true;
-    return [u.name, u.email, (u as any)?.phone_number].some((v) =>
-      (v ?? "").toLowerCase().includes(s),
-    );
-  }
-  function matchesUPSearch(up: UserProgressWithUser, q: string) {
-    const s = q.trim().toLowerCase();
-    if (!s) return true;
-    return [up.user?.name ?? "", up.user?.email ?? ""].some((v) =>
-      v.toLowerCase().includes(s),
-    );
-  }
-  function useDebounced<T>(value: T, delay = 200) {
-    const [v, setV] = useState(value);
-    useEffect(() => {
-      const t = setTimeout(() => setV(value), delay);
-      return () => clearTimeout(t);
-    }, [value, delay]);
-    return v;
+  function setTabPersist(next: TabKey) {
+    setTab(next);
+    const sp = new URLSearchParams(searchParams.toString());
+    sp.set("tab", next);
+    router.replace(`?${sp.toString()}`, { scroll: false } as any);
   }
 
-  /* ---------- Queries & Mutations (sama) ---------- */
-  const {
-    data,
-    loading,
-    refetch: refetchSurveyActs,
-  } = useQuery(GET_ALL_SURVEY_ACTIVITIES);
-  const [fetchSubForSubSurveys, { data: SubSurveydata }] = useLazyQuery(
-    GET_ALL_SUB_SURVEY_ACTIVITIES,
+  const [timPage, setTimPage] = useState(1);
+  const [timPageSize, setTimPageSize] = useState(20);
+
+  const [kegiatanPage, setKegiatanPage] = useState(1);
+  const [kegiatanPageSize, setKegiatanPageSize] = useState(20);
+
+  const [petugasPage, setPetugasPage] = useState(1);
+  const [petugasPageSize, setPetugasPageSize] = useState(10);
+
+  // global master
+  const { data: usersData } = useQuery(GET_ALL_USERS);
+  const { data: timData, refetch: refetchTim } = useQuery(
+    GET_ALL_SURVEY_ACTIVITIES,
   );
-  const [fetchSubForSubmitUP, { data: SubmitUPData }] = useLazyQuery(
-    GET_ALL_SUB_SURVEY_ACTIVITIES,
-  );
-  const [fetchSubForUpdateUP, { data: UpdateUPData }] = useLazyQuery(
-    GET_ALL_SUB_SURVEY_ACTIVITIES,
-  );
-  const { data: userData, refetch: refetchUsers } = useQuery(GET_ALL_USERS);
-  const { data: allSubsData, refetch: refetchAllSubs } = useQuery(
-    GET_ALL_OF_SUB_SURVEY_ACTIVITIES,
-    { fetchPolicy: "cache-and-network" },
-  );
-  const { data: allDistrict, refetch: refetchAllDistrict } = useQuery(
-    GET_ALL_OF_DISTRICT,
-    { fetchPolicy: "cache-and-network" },
-  );
-  const { data: allVillage, refetch: refetchAllVillage } = useQuery(
-    GET_ALL_OF_VILLAGE,
-    { fetchPolicy: "cache-and-network" },
-  );
-  const [bulkImportExcel, { loading: importingExcel }] = useMutation(
+  const { data: districtData } = useQuery(GET_ALL_OF_DISTRICT);
+  const { data: villageData } = useQuery(GET_ALL_OF_VILLAGE);
+
+  const users: User[] = (usersData?.getUsers ?? []) as any[];
+  const tims: SurveyActivity[] = (timData?.allSurveyActivities ?? []) as any[];
+  const districts: District[] = (districtData?.allDistricts ?? []) as any[];
+  const villages: Village[] = (villageData?.allVillages ?? []) as any[];
+
+  useEffect(() => setTimPage(1), [tims.length]);
+
+  const pagedTims = useMemo(() => {
+    const start = (timPage - 1) * timPageSize;
+    return tims.slice(start, start + timPageSize);
+  }, [tims, timPage, timPageSize]);
+
+  // Tim mutations
+  const [createTim, { loading: creatingTim }] =
+    useMutation(ADD_SURVEY_ACTIVITY);
+  const [updateTim] = useMutation(UPDATE_SURVEY_ACTIVITY);
+  const [deleteTim] = useMutation(DELETE_SURVEY_ACTIVITY);
+
+  // Kegiatan mutations
+  const [createKegiatan] = useMutation(ADD_SUBSURVEY_ACTIVITY);
+  const [updateKegiatan] = useMutation(UPDATE_SUB_SURVEY_ACTIVITY);
+  const [deleteKegiatan] = useMutation(DELETE_SUBSURVEY_ACTIVITY);
+
+  // Petugas mutations
+  const [createUserProgress] = useMutation(CREATE_USER_PROGRESS);
+  const [updateUserProgress] = useMutation(UPDATE_USER_PROGRESS);
+  const [deleteUserProgress] = useMutation(DELETE_USER_SURVEY_PROGRESS);
+  const [bulkImportExcel, { loading: uploadingExcel }] = useMutation(
     BULK_IMPORT_USERPROGRESS_EXCEL,
   );
-  const { data: districtData, refetch: refetchDistricts } =
-    useQuery(GET_ALL_OF_DISTRICT);
-  const [fetchVillages, { data: villageData }] = useLazyQuery(
-    GET_VILLAGES_BY_DISTRICT,
+
+  // =========================
+  // TAB: TIM
+  // =========================
+  const [timDraft, setTimDraft] = useState({ name: "", slug: "", chiefId: "" });
+  const [timRowEdits, setTimRowEdits] = useState<
+    Record<string, { name: string; slug: string; chiefId: string }>
+  >({});
+
+  useEffect(() => {
+    const next: Record<
+      string,
+      { name: string; slug: string; chiefId: string }
+    > = {};
+    for (const t of tims)
+      next[t.id] = { name: t.name, slug: t.slug, chiefId: t.chiefId };
+    setTimRowEdits(next);
+  }, [tims.length]);
+
+  const userOptions = useMemo(
+    () =>
+      users
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((u) => ({ value: u.id, label: `${u.name} (${u.email})` })),
+    [users],
   );
-  const [fetchUserProgress, { data: userProgressData }] = useLazyQuery(
-    GET_USER_PROGRESS_BY_SUBSURVEY_ID,
+
+  const ketuaOptions = useMemo(
+    () =>
+      users
+        .filter((u) => u.primaryRole === "Admin")
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((u) => ({ value: u.id, label: `${u.name} (${u.email})` })),
+    [users],
   );
-  const [
-    fetchUserProgressByUser,
-    { data: upByUserData, loading: upByUserLoading },
-  ] = useLazyQuery(GET_USER_PROGRESS_BY_USER_ID, {
-    fetchPolicy: "network-only",
+
+  const petugasOptions = useMemo(
+    () =>
+      users
+        .filter((u) => u.roles.includes("User"))
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((u) => ({ value: u.id, label: `${u.name} (${u.email})` })),
+    [users],
+  );
+
+  const pengawasOptions = useMemo(
+    () =>
+      users
+        .filter((u) => u.roles.includes("Supervisor"))
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((u) => ({ value: u.id, label: `${u.name} (${u.email})` })),
+    [users],
+  );
+
+  async function handleAddTim() {
+    const name = timDraft.name.trim();
+    const slug = formatSlug(timDraft.slug || timDraft.name);
+    const chiefId = timDraft.chiefId;
+
+    if (!name || !slug || !chiefId)
+      return toast.error("Nama, slug, dan ketua tim wajib diisi.");
+    try {
+      await createTim({ variables: { input: { name, slug, chiefId } } });
+      toast.success("Tim ditambahkan.");
+      setTimDraft({ name: "", slug: "", chiefId: "" });
+      await refetchTim();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Gagal menambah tim.");
+    }
+  }
+
+  async function handleSaveTimRow(id: string) {
+    const row = timRowEdits[id];
+    if (!row) return;
+    const name = row.name.trim();
+    const slug = formatSlug(row.slug || row.name);
+    const chiefId = row.chiefId;
+    if (!name || !slug || !chiefId)
+      return toast.error("Nama, slug, dan ketua tim wajib diisi.");
+    try {
+      await updateTim({
+        variables: { surveyActivityId: id, input: { name, slug, chiefId } },
+      });
+      toast.success("Tim diupdate.");
+      await refetchTim();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Gagal update tim.");
+    }
+  }
+
+  async function handleDeleteTim(id: string) {
+    if (!window.confirm("Hapus tim beserta seluruh turunannya?")) return;
+    try {
+      const res = await deleteTim({ variables: { input: { id } } });
+      if (res?.data?.deleteSurveyActivity?.success) {
+        toast.success(
+          res?.data?.deleteSurveyActivity?.message ?? "Tim dihapus.",
+        );
+        await refetchTim();
+      } else
+        toast.error(
+          res?.data?.deleteSurveyActivity?.message ?? "Gagal hapus tim.",
+        );
+    } catch (e: any) {
+      toast.error(e?.message ?? "Gagal hapus tim.");
+    }
+  }
+
+  // =========================
+  // TAB: KEGIATAN
+  // =========================
+  const [selectedTimId, setSelectedTimId] = useState<string>("");
+  const [kegiatanSearch, setKegiatanSearch] = useState("");
+  const [kegiatanModalOpen, setKegiatanModalOpen] = useState(false);
+  const [kegiatanModalMode, setKegiatanModalMode] = useState<"add" | "edit">(
+    "add",
+  );
+  const [kegiatanDraft, setKegiatanDraft] = useState<
+    Partial<SubSurveyActivity>
+  >({
+    name: "",
+    slug: "",
+    startDate: "",
+    endDate: "",
+    targetSample: 0,
+    sampleType: "",
+    activityType: "",
   });
-  const [
-    fetchUserProgressByUserForUpdate,
-    { data: upByUserUpdateData, loading: upByUserUpdateLoading },
-  ] = useLazyQuery(GET_USER_PROGRESS_BY_USER_ID, {
-    fetchPolicy: "network-only",
-  });
-  const [addSurveyActivity, { loading: loading1 }] =
-    useMutation(ADD_SURVEY_ACTIVITY);
-  const [addSubSurveyActivity, { loading: loading2 }] = useMutation(
-    ADD_SUBSURVEY_ACTIVITY,
+
+  const { data: kegiatanData, refetch: refetchKegiatan } = useQuery(
+    GET_ALL_SUB_SURVEY_ACTIVITIES,
+    {
+      variables: { surveyActivityId: selectedTimId || "__" },
+      skip: !selectedTimId,
+    },
   );
-  const [updateSurveyActivity] = useMutation(UPDATE_SURVEY_ACTIVITY);
-  const [updateSubSurveyActivity] = useMutation(UPDATE_SUB_SURVEY_ACTIVITY);
-  const [createUserSurveyProgress] = useMutation(CREATE_USER_PROGRESS);
-  const [updateUserSurveyProgress] = useMutation(UPDATE_USER_PROGRESS);
-  const [deleteSurveyActivity] = useMutation(DELETE_SURVEY_ACTIVITY);
-  const [deleteSubSurveyActivity] = useMutation(DELETE_SUBSURVEY_ACTIVITY);
-  const [deleteUserProgressMut] = useMutation(DELETE_USER_SURVEY_PROGRESS);
-  const [patchUserSamples, { loading: patchSampleLoading }] =
-    useMutation(PATCH_USER_SAMPLES);
 
-  const toDateInput = (d?: string | Date) =>
-    d ? new Date(d).toISOString().slice(0, 10) : "";
+  const kegiatanList: SubSurveyActivity[] =
+    (kegiatanData?.subSurveyActivityById ?? []) as any[];
+  const filteredKegiatan = useMemo(() => {
+    const q = kegiatanSearch.trim().toLowerCase();
+    if (!q) return kegiatanList;
+    return kegiatanList.filter(
+      (x) =>
+        x.name.toLowerCase().includes(q) || x.slug.toLowerCase().includes(q),
+    );
+  }, [kegiatanList, kegiatanSearch]);
 
-  const surveyMap = useMemo<Record<string, SurveyActivity>>(
-    () =>
-      Object.fromEntries(
-        (data?.allSurveyActivities ?? []).map((s: SurveyActivity) => [s.id, s]),
-      ),
-    [data],
+  useEffect(
+    () => setKegiatanPage(1),
+    [selectedTimId, kegiatanSearch, kegiatanList.length],
   );
-  const subMap = useMemo<Record<string, SubSurveyActivity>>(
-    () =>
-      Object.fromEntries(
-        (SubSurveydata?.subSurveyActivityById ?? []).map(
-          (s: SubSurveyActivity) => [s.id, s],
-        ),
-      ),
-    [SubSurveydata],
-  );
-  const upMap = useMemo<Record<string, UserProgressWithUser>>(
-    () =>
-      Object.fromEntries(
-        (userProgressData?.userProgressBySubSurveyActivityId ?? []).map(
-          (u: any) => [u.id, u],
-        ),
-      ),
-    [userProgressData],
-  );
-  const toMoney = (v: any) => Number(v ?? 0);
-  const sumDocs = (rows: any[]) =>
-    rows.reduce((acc, r) => acc + toMoney(r.docsBill), 0);
 
-  const isSameMonthYear = (a: Date, b: Date) =>
-    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
+  const pagedKegiatan = useMemo(() => {
+    const start = (kegiatanPage - 1) * kegiatanPageSize;
+    return filteredKegiatan.slice(start, start + kegiatanPageSize);
+  }, [filteredKegiatan, kegiatanPage, kegiatanPageSize]);
 
-  const inRangeInclusive = (now: Date, start?: string, end?: string) => {
-    if (!start || !end) return null;
-    const s = new Date(start);
-    const e = new Date(end);
-    return now >= s && now <= e;
-  };
+  function openAddKegiatan() {
+    if (!selectedTimId) return toast.error("Pilih tim dulu.");
+    setKegiatanModalMode("add");
+    setKegiatanDraft({
+      name: "",
+      slug: "",
+      startDate: "",
+      endDate: "",
+      targetSample: 0,
+      sampleType: "",
+      activityType: "",
+    });
+    setKegiatanModalOpen(true);
+  }
 
-  const getSubInfo = (subId?: string) => {
-    if (!subId) return undefined;
-    return subMap[subId];
-  };
+  function openEditKegiatan(k: SubSurveyActivity) {
+    setKegiatanModalMode("edit");
+    setKegiatanDraft({
+      ...k,
+      startDate: k.startDate?.slice(0, 10),
+      endDate: k.endDate?.slice(0, 10),
+    });
+    setKegiatanModalOpen(true);
+  }
 
-  const includeForThisMonth = (row: any, now = new Date()) => {
-    const sub = getSubInfo(row?.subSurveyActivityId);
-    if (sub?.startDate && sub?.endDate) {
-      const ok = inRangeInclusive(now, sub.startDate, sub.endDate);
-      if (ok !== null) return ok;
-    }
-    if (row?.lastUpdated) {
-      const lu = new Date(row.lastUpdated);
-      return isSameMonthYear(lu, now);
-    }
-    return false;
-  };
+  async function saveKegiatan() {
+    const name = String(kegiatanDraft.name ?? "").trim();
+    const slug = formatSlug(
+      String(kegiatanDraft.slug ?? kegiatanDraft.name ?? ""),
+    );
+    const startDate = String(kegiatanDraft.startDate ?? "");
+    const endDate = String(kegiatanDraft.endDate ?? "");
+    const targetSample = Number(kegiatanDraft.targetSample ?? 0);
+    const sampleType = String(kegiatanDraft.sampleType ?? "").trim();
+    const activityType = String(kegiatanDraft.activityType ?? "").trim();
 
-  const prevSurveyIdRefUpdate = useRef<string | null>(null);
+    if (!selectedTimId) return toast.error("Pilih tim dulu.");
+    if (
+      !name ||
+      !slug ||
+      !startDate ||
+      !endDate ||
+      !sampleType ||
+      !activityType
+    )
+      return toast.error("Semua field wajib diisi.");
 
-  const handleChangeF1 = (e: React.ChangeEvent<HTMLInputElement>) =>
-    setFormStateF1((prev) => ({ ...prev, [e.target.id]: e.target.value }));
-  const handleChangeF2 = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
-  ) => setFormStateF2((prev) => ({ ...prev, [e.target.id]: e.target.value }));
-  const handleChangeUpdateF1 = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
-  ) => setUpdateStateF1((prev) => ({ ...prev, [e.target.id]: e.target.value }));
-  const handleChangeUpdateF2 = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
-  ) => setUpdateStateF2((prev) => ({ ...prev, [e.target.id]: e.target.value }));
-
-  const handleSubmitSurveyAct = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
     try {
-      if (!formStateF1.name || !formStateF1.slug) {
-        toast.error("Nama dan slug wajib diisi!");
-        return;
-      }
-      await addSurveyActivity({ variables: { input: { ...formStateF1 } } });
-      toast.success("Data Tim berhasil ditambahkan!");
-      handleRefresh();
-      setFormStateF1({ name: "", slug: "" });
-    } catch (err) {
-      toast.error("Gagal menambah Data Tim.");
-      console.error("❌ Error create:", err);
-    }
-  };
-
-  const handleSubmitSubSurveyAct = async (
-    e: React.FormEvent<HTMLFormElement>,
-  ) => {
-    e.preventDefault();
-    try {
-      const f = formStateF2;
-      if (
-        !f.name ||
-        !f.slug ||
-        !f.surveyActivityId ||
-        !f.startDate ||
-        !f.endDate ||
-        !f.targetSample
-      ) {
-        toast.error("Semua field wajib diisi!");
-        return;
-      }
-      await addSubSurveyActivity({
-        variables: {
-          input: {
-            ...f,
-            startDate: new Date(f.startDate),
-            endDate: new Date(f.endDate),
-            targetSample: parseInt(f.targetSample.toString(), 10),
-          },
-        },
-      });
-      toast.success("Kegiatan Survey berhasil ditambahkan!");
-      handleRefresh();
-      setFormStateF2({
-        name: "",
-        slug: "",
-        surveyActivityId: "",
-        startDate: "",
-        endDate: "",
-        targetSample: 0,
-        sampleType: "",
-        activityType: "",
-      });
-    } catch (err) {
-      toast.error("Gagal menambah Kegiatan Survey.");
-      console.error("❌ Error create:", err);
-    }
-  };
-
-  const handleUpdateSurveyAct = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    try {
-      const { surveyActivityId, name, slug } = updateStateF1;
-      if (!surveyActivityId || !name || !slug) {
-        toast.error("Semua field wajib diisi!");
-        return;
-      }
-      await updateSurveyActivity({
-        variables: { surveyActivityId, input: { name, slug } },
-      });
-      toast.success("Tim berhasil diupdate!");
-      handleRefresh();
-      setUpdateStateF1({ surveyActivityId: "", name: "", slug: "" });
-    } catch (err) {
-      toast.error("Gagal perbarui Tim.");
-      console.error(err);
-    }
-  };
-
-  const handleUpdateSubSurveyAct = async (
-    e: React.FormEvent<HTMLFormElement>,
-  ) => {
-    e.preventDefault();
-    try {
-      const f = updateStateF2;
-      if (
-        !f.subSurveyActivityId ||
-        !f.name ||
-        !f.slug ||
-        !f.surveyActivityId ||
-        !f.startDate ||
-        !f.endDate ||
-        !f.targetSample ||
-        !f.sampleType ||
-        !f.activityType
-      ) {
-        toast.error("Semua field wajib diisi!");
-        return;
-      }
-      await updateSubSurveyActivity({
-        variables: {
-          subSurveyActivityId: f.subSurveyActivityId,
-          input: {
-            name: f.name,
-            slug: f.slug,
-            surveyActivityId: f.surveyActivityId,
-            startDate: new Date(f.startDate),
-            endDate: new Date(f.endDate),
-            targetSample: parseInt(f.targetSample.toString(), 10),
-            sampleType: f.sampleType,
-            activityType: f.activityType,
-          },
-        },
-      });
-      toast.success("Kegiatan berhasil diupdate!");
-      handleRefresh();
-      setUpdateStateF2({
-        subSurveyActivityId: "",
-        name: "",
-        slug: "",
-        surveyActivityId: "",
-        startDate: "",
-        endDate: "",
-        targetSample: 0,
-        sampleType: "",
-        activityType: "",
-      });
-    } catch (err) {
-      toast.error("Gagal perbarui kegiatan.");
-      console.error(err);
-    }
-  };
-
-  const handleChangeUserProgress = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
-  ) =>
-    setUserProgressForm((prev) => ({ ...prev, [e.target.id]: e.target.value }));
-  const handleChangeUpdateUserProgress = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
-  ) =>
-    setUpdateUserProgressForm((prev) => ({
-      ...prev,
-      [e.target.id]: e.target.value,
-    }));
-
-  const handleSubmitUserProgress = async (
-    e: React.FormEvent<HTMLFormElement>,
-  ) => {
-    e.preventDefault();
-    try {
-      if (userProgressForm.subSurveyActivityId && userProgressForm.userId) {
-        const totalTarget = Number(selectedSubForAdd?.targetSample ?? 0);
-        const already = assignedSumForAdd;
-        const remain = Math.max(0, totalTarget - already);
-        if (Number(userProgressForm.totalAssigned) > remain) {
-          toast.error(`Alokasi melebihi sisa sampel (${remain}).`);
-          return;
-        }
-        if (remain <= 0) {
-          toast.error("Sisa sampel sudah habis untuk kegiatan ini.");
-          return;
-        }
-      }
-
-      if (userProgressForm.userId) {
-        if (!upByUserData) {
-          await fetchUserProgressByUser({
-            variables: { userId: userProgressForm.userId },
-          });
-        }
-        if (willExceedAdd) {
-          toast.error(
-            `Honor petugas melebihi limit pengguna.\n` +
-              `Limit: ${limitBillAdd.toLocaleString("id-ID")} • Terpakai: ${usedDocsAdd.toLocaleString("id-ID")} • ` +
-              `Sisa: ${remainDocsAdd.toLocaleString("id-ID")}`,
-          );
-          return;
-        }
-      }
-
-      await createUserSurveyProgress({
-        variables: {
-          input: {
-            userId: userProgressForm.userId,
-            superVisorId: userProgressForm.superVisorId,
-            subSurveyActivityId: userProgressForm.subSurveyActivityId,
-            districtId: userProgressForm.districtId,
-            villageId: userProgressForm.villageId,
-            docsBill: userProgressForm.docsBill,
-            blockCount: userProgressForm.blockCount,
-            totalAssigned: 0,
-            submitCount: 0,
-            approvedCount: 0,
-            rejectedCount: 0,
-            samples: sampleListAdd.map((s, idx) => ({
-              nus: formatNUS(idx + 1),
-              identity: s.identity,
-              cacahStatus: s.cacahStatus,
-              approvalStatus: s.approvalStatus,
-              geoLat: s.geoLat ? Number(s.geoLat) : null,
-              geoLng: s.geoLng ? Number(s.geoLng) : null,
-            })),
-          },
-        },
-      });
-
-      toast.success("UserProgress berhasil ditambahkan!");
-      handleRefresh();
-      setUserProgressForm({
-        surveyActivityId: userProgressForm.surveyActivityId,
-        subSurveyActivityId: userProgressForm.subSurveyActivityId,
-        userId: "",
-        totalAssigned: 0,
-        submitCount: 0,
-        approvedCount: 0,
-        rejectedCount: 0,
-        blockCount: "",
-        lastUpdated: "",
-        districtId: "",
-        villageId: "",
-        docsBill: "",
-        superVisorId: userProgressForm.superVisorId,
-      });
-      setSampleListAdd([emptySampleRow]);
-    } catch (err) {
-      toast.error("Gagal tambah user progress");
-      console.error(err);
-    }
-  };
-
-  const handleUpdateUserProgress = async (
-    e: React.FormEvent<HTMLFormElement>,
-  ) => {
-    e.preventDefault();
-    try {
-      if (updateUserProgressForm.subSurveyActivityId) {
-        const isPetugas =
-          (updateUserProgressForm.progressRole ?? "") === "PETUGAS";
-
-        if (!isPetugas) {
-          await updateUserSurveyProgress({
-            variables: {
-              input: {
-                id: updateUserProgressForm.userProgressId,
-                districtId: updateUserProgressForm.districtId,
-                villageId: updateUserProgressForm.villageId,
-                blockCount: updateUserProgressForm.blockCount,
-                docsBill: updateUserProgressForm.docsBill,
-              },
-            },
-          });
-          toast.success("Blok pengawas berhasil diupdate!");
-          handleRefresh();
-          setUpdateUserProgressForm({
-            userProgressId: "",
-            subSurveyActivityId: updateUserProgressForm.subSurveyActivityId,
-            surveyActivityId: updateUserProgressForm.surveyActivityId,
-            userId: "",
-            totalAssigned: 0,
-            submitCount: 0,
-            approvedCount: 0,
-            rejectedCount: 0,
-            lastUpdated: "",
-            districtId: "",
-            villageId: "",
-            blockCount: "",
-            docsBill: "",
-            progressRole: "",
-          });
-          setDeleteSampleIds([]);
-          return;
-        }
-        const target = Number(selectedSubForUpdate?.targetSample ?? 0);
-        const currentAssigned = Number(currentUP?.totalAssigned ?? 0);
-        const others = sumAllAssignedForUpdate - currentAssigned;
-        const allowedMax = Math.max(0, target - others);
-
-        const intendedTotalAssigned = isListingUpdate
-          ? Number(updateUserProgressForm.submitCount ?? 0)
-          : Number(updateUserProgressForm.totalAssigned ?? 0);
-
-        const cappedTotalAssigned = updateUserProgressForm.subSurveyActivityId
-          ? Math.min(Math.max(0, intendedTotalAssigned), allowedMax)
-          : Math.max(0, intendedTotalAssigned);
-
-        if (intendedTotalAssigned > allowedMax) {
-          toast.error(
-            `Alokasi melebihi batas untuk petugas ini (${allowedMax}).`,
-          );
-          return;
-        }
-        if (allowedMax <= 0) {
-          toast.error("Tidak ada sisa sampel yang dapat dialokasikan.");
-          return;
-        }
-
-        if (currentUP?.userId) {
-          if (!upByUserUpdateData) {
-            await fetchUserProgressByUserForUpdate({
-              variables: { userId: currentUP.userId },
-            });
-          }
-          if (willExceedUpdate) {
-            toast.error(
-              `Honor petugas melebihi limit pengguna.\n` +
-                `Limit: ${limitBillUpdate.toLocaleString("id-ID")} • Terpakai : ${usedDocsUpdateOthers.toLocaleString("id-ID")} • ` +
-                `Sisa untuk baris ini: ${remainDocsUpdate.toLocaleString("id-ID")}`,
-            );
-            return;
-          }
-        }
-
-        await updateUserSurveyProgress({
+      if (kegiatanModalMode === "add") {
+        await createKegiatan({
           variables: {
             input: {
-              id: updateUserProgressForm.userProgressId,
-              blockCount: updateUserProgressForm.blockCount,
-              totalAssigned: cappedTotalAssigned,
-              submitCount: Number(updateUserProgressForm.submitCount),
-              approvedCount: Number(updateUserProgressForm.approvedCount),
-              rejectedCount: Number(updateUserProgressForm.rejectedCount),
-              districtId: updateUserProgressForm.districtId,
-              villageId: updateUserProgressForm.villageId,
-              docsBill: updateUserProgressForm.docsBill,
-              samples: sampleListUpdate.map((s, idx) => ({
-                ...(s.id ? { id: s.id } : {}),
-                nus: s.nus,
+              name,
+              slug,
+              surveyActivityId: selectedTimId,
+              startDate: new Date(startDate),
+              endDate: new Date(endDate),
+              targetSample: Number.isFinite(targetSample) ? targetSample : 0,
+              sampleType,
+              activityType,
+            },
+          },
+        });
+        toast.success("Kegiatan ditambahkan.");
+      } else {
+        const id = String(kegiatanDraft.id ?? "");
+        await updateKegiatan({
+          variables: {
+            subSurveyActivityId: id,
+            input: {
+              name,
+              slug,
+              surveyActivityId: selectedTimId,
+              startDate: new Date(startDate),
+              endDate: new Date(endDate),
+              targetSample: Number.isFinite(targetSample) ? targetSample : 0,
+              sampleType,
+              activityType,
+            },
+          },
+        });
+        toast.success("Kegiatan diupdate.");
+      }
+      setKegiatanModalOpen(false);
+      await refetchKegiatan();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Gagal menyimpan kegiatan.");
+    }
+  }
+
+  async function handleDeleteKegiatan(id: string) {
+    if (!window.confirm("Hapus kegiatan ini?")) return;
+    try {
+      const res = await deleteKegiatan({ variables: { input: { id } } });
+      if (res?.data?.deleteSubSurveyActivity?.success) {
+        toast.success(
+          res?.data?.deleteSubSurveyActivity?.message ?? "Kegiatan dihapus.",
+        );
+        await refetchKegiatan();
+      } else
+        toast.error(
+          res?.data?.deleteSubSurveyActivity?.message ??
+            "Gagal hapus kegiatan.",
+        );
+    } catch (e: any) {
+      toast.error(e?.message ?? "Gagal hapus kegiatan.");
+    }
+  }
+
+  async function handleCopyKegiatan(k: SubSurveyActivity) {
+    const suffix = Date.now().toString(36).slice(-4);
+    const name = `${k.name} (Copy)`;
+    const slug = `${formatSlug(k.slug)}-copy-${suffix}`;
+    try {
+      await createKegiatan({
+        variables: {
+          input: {
+            name,
+            slug,
+            surveyActivityId: k.surveyActivityId,
+            startDate: new Date(k.startDate),
+            endDate: new Date(k.endDate),
+            targetSample: Number(k.targetSample ?? 0),
+            sampleType: k.sampleType,
+            activityType: k.activityType,
+          },
+        },
+      });
+      toast.success("Kegiatan disalin.");
+      await refetchKegiatan();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Gagal copy kegiatan.");
+    }
+  }
+
+  // =========================
+  // TAB: PETUGAS
+  // =========================
+  const [selectedKegiatanId, setSelectedKegiatanId] = useState<string>("");
+  const [petugasSearch, setPetugasSearch] = useState("");
+  const [expandedPairs, setExpandedPairs] = useState<Record<string, boolean>>(
+    {},
+  );
+
+  const {
+    data: upData,
+    refetch: refetchUP,
+    loading: loadingUP,
+  } = useQuery(GET_USER_PROGRESS_BY_SUBSURVEY_ID, {
+    variables: { subSurveyActivityId: selectedKegiatanId || "__" },
+    skip: !selectedKegiatanId,
+  });
+  const upList: UserProgress[] = (upData?.userProgressBySubSurveyActivityId ??
+    []) as any[];
+
+  // map pengawas blocks by (userId|blockCount)
+  const pengawasByKey = useMemo(() => {
+    const m = new Map<string, UserProgress>();
+    for (const u of upList) {
+      if (String(u.progressRole) !== "PENGAWAS") continue;
+      m.set(`${u.userId}||${u.blockCount ?? ""}`, u);
+    }
+    return m;
+  }, [upList]);
+
+  const petugasBlocks = useMemo(
+    () => upList.filter((u) => String(u.progressRole) === "PETUGAS"),
+    [upList],
+  );
+
+  type Pair = {
+    key: string;
+    userId: string;
+    superVisorId: string;
+    petugasName: string;
+    pengawasName: string;
+    blocks: Array<{
+      petugas: UserProgress;
+      pengawas?: UserProgress;
+    }>;
+  };
+
+  const pairs: Pair[] = useMemo(() => {
+    const g = new Map<string, Pair>();
+    for (const p of petugasBlocks) {
+      const key = `${p.userId}||${p.superVisorId ?? ""}`;
+      const petName = p.user?.name ?? "-";
+      const supName = p.superVisor?.name ?? "-";
+      const pair = g.get(key) ?? {
+        key,
+        userId: p.userId,
+        superVisorId: String(p.superVisorId ?? ""),
+        petugasName: petName,
+        pengawasName: supName,
+        blocks: [],
+      };
+      pair.blocks.push({
+        petugas: p,
+        pengawas: p.superVisorId
+          ? pengawasByKey.get(`${p.superVisorId}||${p.blockCount ?? ""}`)
+          : undefined,
+      });
+      g.set(key, pair);
+    }
+    return Array.from(g.values()).sort((a, b) =>
+      a.petugasName.localeCompare(b.petugasName),
+    );
+  }, [petugasBlocks, pengawasByKey]);
+
+  const [addPairOpen, setAddPairOpen] = useState(false);
+  const [addPairPetugasId, setAddPairPetugasId] = useState<string>("");
+  const [addPairPengawasId, setAddPairPengawasId] = useState<string>("");
+
+  async function handleAddPair() {
+    if (!selectedKegiatanId) return toast.error("Pilih kegiatan dulu.");
+    if (!addPairPetugasId) return toast.error("Petugas wajib dipilih.");
+    // pengawas boleh kosong jika aturan Anda membolehkan
+    try {
+      await createUserProgress({
+        variables: {
+          input: {
+            userId: addPairPetugasId,
+            superVisorId: addPairPengawasId || "",
+            subSurveyActivityId: selectedKegiatanId,
+            blockCount: "DRAFT",
+            districtId: null,
+            villageId: null,
+            docsBill: "0",
+            docsBillPengawas: "0",
+            totalAssigned: 0,
+            submitCount: 0,
+            approvedCount: 0,
+            rejectedCount: 0,
+            samples: [],
+          },
+        },
+      });
+      toast.success("Pair petugas–pengawas ditambahkan.");
+      setAddPairOpen(false);
+      setAddPairPetugasId("");
+      setAddPairPengawasId("");
+      await refetchUP();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Gagal menambahkan pair.");
+    }
+  }
+
+  const filteredPairs = useMemo(() => {
+    const q = petugasSearch.trim().toLowerCase();
+    if (!q) return pairs;
+    return pairs.filter((p) =>
+      (p.petugasName + " " + p.pengawasName).toLowerCase().includes(q),
+    );
+  }, [pairs, petugasSearch]);
+
+  useEffect(
+    () => setPetugasPage(1),
+    [selectedKegiatanId, petugasSearch, pairs.length],
+  );
+
+  const pagedPairs = useMemo(() => {
+    const start = (petugasPage - 1) * petugasPageSize;
+    return filteredPairs.slice(start, start + petugasPageSize);
+  }, [filteredPairs, petugasPage, petugasPageSize]);
+
+  const [pairEdits, setPairEdits] = useState<
+    Record<string, { userId: string; superVisorId: string }>
+  >({});
+  useEffect(() => {
+    const next: Record<string, { userId: string; superVisorId: string }> = {};
+    for (const p of pairs)
+      next[p.key] = { userId: p.userId, superVisorId: p.superVisorId };
+    setPairEdits(next);
+  }, [pairs.length]);
+
+  const [blockModalOpen, setBlockModalOpen] = useState(false);
+  const [blockModalMode, setBlockModalMode] = useState<"add" | "edit">("add");
+  const [activePairKey, setActivePairKey] = useState<string>("");
+  const [activeBlock, setActiveBlock] = useState<{
+    petugasId?: string;
+    pengawasId?: string;
+  } | null>(null);
+  const [blockForm, setBlockForm] = useState({
+    blockCount: "",
+    districtId: "",
+    villageId: "",
+    honorPetugas: "",
+    honorPengawas: "",
+    honorDokPetugas: "",
+    honorDokPengawas: "",
+  });
+  const [samples, setSamples] = useState<
+    Array<{ identity: string; cacahStatus: string; approvalStatus: string }>
+  >([{ identity: "", cacahStatus: "Belum_Cacah", approvalStatus: "Menunggu" }]);
+
+  const districtOptions = useMemo(
+    () =>
+      districts.map((d) => ({
+        value: d.id,
+        label: `${d.name}${d.city ? `, ${d.city}` : ""}`,
+      })),
+    [districts.length],
+  );
+  const villageOptions = useMemo(() => {
+    const filtered = blockForm.districtId
+      ? villages.filter((v) => v.districtId === blockForm.districtId)
+      : villages;
+    return filtered.map((v) => ({ value: v.id, label: v.name }));
+  }, [villages.length, blockForm.districtId]);
+
+  function safePerSample(total: any, count: number) {
+    if (!count || count <= 0) return "0";
+    const n = Number(total ?? 0);
+    if (!Number.isFinite(n)) return "0";
+    return String(n / count);
+  }
+
+  function openAddBlock(pairKey: string) {
+    setActivePairKey(pairKey);
+    setActiveBlock(null);
+    setBlockModalMode("add");
+    setBlockForm({
+      blockCount: "",
+      districtId: "",
+      villageId: "",
+      honorPetugas: "",
+      honorPengawas: "",
+      honorDokPetugas: "",
+      honorDokPengawas: "",
+    });
+    setSamples([
+      { identity: "", cacahStatus: "Belum_Cacah", approvalStatus: "Menunggu" },
+    ]);
+    setBlockModalOpen(true);
+  }
+
+  function openEditBlock(
+    pairKey: string,
+    petugas: UserProgress,
+    pengawas?: UserProgress,
+  ) {
+    setActivePairKey(pairKey);
+    setActiveBlock({ petugasId: petugas.id, pengawasId: pengawas?.id });
+    setBlockModalMode("edit");
+    const list = (petugas.samples ?? []).map((s) => ({
+      identity: s.identity,
+      cacahStatus: (s.cacahStatus as any) ?? "Belum_Cacah",
+      approvalStatus: (s.approvalStatus as any) ?? "Menunggu",
+    }));
+    const count = list.length;
+    setBlockForm({
+      blockCount: String(petugas.blockCount ?? ""),
+      districtId: String(petugas.districtId ?? ""),
+      villageId: String(petugas.villageId ?? ""),
+      honorPetugas: String(petugas.docsBill ?? ""),
+      honorPengawas: String(pengawas?.docsBill ?? ""),
+      honorDokPetugas: safePerSample(petugas.docsBill, list.length),
+      honorDokPengawas: safePerSample(pengawas?.docsBill, list.length),
+    });
+
+    setSamples(
+      list.length
+        ? list
+        : [
+            {
+              identity: "",
+              cacahStatus: "Belum_Cacah",
+              approvalStatus: "Menunggu",
+            },
+          ],
+    );
+    setBlockModalOpen(true);
+  }
+
+  async function savePair(pairKey: string) {
+    const edit = pairEdits[pairKey];
+    if (!edit?.userId) return toast.error("Petugas wajib dipilih.");
+    // pengawas boleh kosong
+    const pair = pairs.find((p) => p.key === pairKey);
+    if (!pair) return;
+
+    try {
+      // update semua blok petugas pada pair ini (ubah userId/superVisorId)
+      for (const b of pair.blocks) {
+        await updateUserProgress({
+          variables: {
+            input: {
+              id: b.petugas.id,
+              userId: edit.userId,
+              superVisorId: edit.superVisorId || null,
+            },
+          },
+        });
+      }
+      toast.success("Petugas/Pengawas diupdate.");
+      await refetchUP();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Gagal update petugas/pengawas.");
+    }
+  }
+
+  async function deletePair(pairKey: string) {
+    const pair = pairs.find((p) => p.key === pairKey);
+    if (!pair) return;
+    if (!window.confirm("Hapus semua blok pada petugas-pengawas ini?")) return;
+    try {
+      const ids = uniq(
+        pair.blocks.flatMap(
+          (b) => [b.petugas.id, b.pengawas?.id].filter(Boolean) as string[],
+        ),
+      );
+      for (const id of ids) {
+        await deleteUserProgress({ variables: { input: { id } } });
+      }
+      toast.success("List dihapus.");
+      await refetchUP();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Gagal menghapus list.");
+    }
+  }
+
+  async function deleteBlock(petugasId: string, pengawasId?: string) {
+    if (!window.confirm("Hapus blok ini?")) return;
+    try {
+      await deleteUserProgress({ variables: { input: { id: petugasId } } });
+      if (pengawasId)
+        await deleteUserProgress({ variables: { input: { id: pengawasId } } });
+      toast.success("Blok dihapus.");
+      await refetchUP();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Gagal hapus blok.");
+    }
+  }
+
+  async function saveBlock() {
+    if (!selectedKegiatanId) return toast.error("Pilih kegiatan dulu.");
+    const pair = pairs.find((p) => p.key === activePairKey);
+    if (!pair) return toast.error("Pair tidak ditemukan.");
+    const editPair = pairEdits[activePairKey] ?? {
+      userId: pair.userId,
+      superVisorId: pair.superVisorId,
+    };
+
+    const blockCount = blockForm.blockCount.trim();
+    const districtId = blockForm.districtId || null;
+    const villageId = blockForm.villageId || null;
+    if (!blockCount) return toast.error("Nama blok wajib diisi.");
+    if (!editPair.userId) return toast.error("Petugas wajib dipilih.");
+
+    const sampleCount = Math.max(0, samples.length);
+    const honorPetugas = Number(blockForm.honorPetugas);
+    const honorPengawas = Number(blockForm.honorPengawas);
+    const docsBillPetugas = String(honorPetugas);
+    const docsBillPengawas = String(honorPengawas);
+
+    // validasi limit_bill (per pengguna)
+    const petugasUser = users.find((u) => u.id === editPair.userId);
+    const petugasLimit = Number(petugasUser?.limit_bill ?? 0);
+    const petugasBill = Number(docsBillPetugas);
+    if (petugasLimit > 0 && petugasBill > petugasLimit) {
+      return toast.error(
+        `Honor petugas melebihi limit bill (${petugasLimit.toLocaleString("id-ID")}).`,
+      );
+    }
+
+    if (editPair.superVisorId) {
+      const pengawasUser = users.find((u) => u.id === editPair.superVisorId);
+      const pengawasLimit = Number(pengawasUser?.limit_bill ?? 0);
+      const pengawasBill = Number(docsBillPengawas);
+      if (pengawasLimit > 0 && pengawasBill > pengawasLimit) {
+        return toast.error(
+          `Honor pengawas melebihi limit bill (${pengawasLimit.toLocaleString("id-ID")}).`,
+        );
+      }
+    }
+
+    try {
+      if (blockModalMode === "add") {
+        await createUserProgress({
+          variables: {
+            input: {
+              userId: editPair.userId,
+              superVisorId: editPair.superVisorId || "",
+              subSurveyActivityId: selectedKegiatanId,
+              districtId,
+              villageId,
+              blockCount,
+              docsBill: docsBillPetugas,
+              docsBillPengawas,
+              totalAssigned: 0,
+              submitCount: 0,
+              approvedCount: 0,
+              rejectedCount: 0,
+              samples: samples.map((s, idx) => ({
+                nus: String(idx + 1).padStart(3, "0"),
                 identity: s.identity,
                 cacahStatus: s.cacahStatus,
                 approvalStatus: s.approvalStatus,
-                geoLat: s.geoLat ? Number(s.geoLat) : null,
-                geoLng: s.geoLng ? Number(s.geoLng) : null,
+                geoLat: null,
+                geoLng: null,
               })),
             },
           },
         });
+        toast.success("Blok ditambahkan.");
       } else {
-        toast.error("Pilih kegiatan survei terlebih dahulu.");
+        if (!activeBlock?.petugasId) return;
+        await updateUserProgress({
+          variables: {
+            input: {
+              id: activeBlock.petugasId,
+              districtId,
+              villageId,
+              blockCount,
+              docsBill: docsBillPetugas,
+              samples: samples.map((s, idx) => ({
+                nus: String(idx + 1).padStart(3, "0"),
+                identity: s.identity,
+                cacahStatus: s.cacahStatus,
+                approvalStatus: s.approvalStatus,
+                geoLat: null,
+                geoLng: null,
+              })),
+            },
+          },
+        });
+
+        // update honor pengawas pada record PENGAWAS yang matching
+        if (activeBlock.pengawasId) {
+          await updateUserProgress({
+            variables: {
+              input: {
+                id: activeBlock.pengawasId,
+                districtId,
+                villageId,
+                blockCount,
+                docsBill: docsBillPengawas,
+              },
+            },
+          });
+        }
+
+        toast.success("Blok diupdate.");
+      }
+
+      setBlockModalOpen(false);
+      await refetchUP();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Gagal menyimpan blok.");
+    }
+  }
+
+  // upload excel
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  async function handleUploadExcel(file: File) {
+    try {
+      // Validasi limit_bill (excel). Menolak upload jika honor melebihi limit pengguna.
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf);
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<any>(ws, { defval: "" });
+
+      const errors: Array<{ row: number; message: string }> = [];
+      rows.forEach((r: any, i: number) => {
+        const rowNo = i + 2; // header di baris 1
+        const petugasId = String(r["Id Petugas"] ?? "").trim();
+        const pengawasId = String(r["Id Pengawas"] ?? "").trim();
+        const honorPetugas = Number(r["Honor Petugas"]);
+        const honorPengawas = Number(r["Honor Pengawas"]);
+
+        if (petugasId) {
+          const u = users.find((x) => x.id === petugasId);
+          const lim = Number(u?.limit_bill ?? 0);
+          if (lim > 0 && honorPetugas > lim)
+            errors.push({
+              row: rowNo,
+              message: `Honor petugas (${honorPetugas.toLocaleString("id-ID")}) > limit_bill (${lim.toLocaleString("id-ID")})`,
+            });
+        }
+        if (pengawasId) {
+          const u = users.find((x) => x.id === pengawasId);
+          const lim = Number(u?.limit_bill ?? 0);
+          if (lim > 0 && honorPengawas > lim)
+            errors.push({
+              row: rowNo,
+              message: `Honor pengawas (${honorPengawas.toLocaleString("id-ID")}) > limit_bill (${lim.toLocaleString("id-ID")})`,
+            });
+        }
+      });
+
+      if (errors.length) {
+        console.error("Limit bill validation errors:", errors);
+        toast.error(
+          `Upload dibatalkan. Ada ${errors.length} baris melebihi limit_bill. (Detail ada di console)`,
+        );
         return;
       }
 
-      toast.success("Petugas berhasil diupdate!");
-      handleRefresh();
-      setUpdateUserProgressForm({
-        userProgressId: "",
-        subSurveyActivityId: updateUserProgressForm.subSurveyActivityId,
-        surveyActivityId: updateUserProgressForm.surveyActivityId,
-        userId: "",
-        totalAssigned: 0,
-        submitCount: 0,
-        approvedCount: 0,
-        rejectedCount: 0,
-        lastUpdated: "",
-        districtId: "",
-        villageId: "",
-        blockCount: "",
-        docsBill: "",
-        progressRole: "",
-      });
-      setSampleListUpdate([emptySampleRow]);
-      setDeleteSampleIds([]);
-    } catch (err) {
-      toast.error("Gagal perbarui petugas");
-      console.error(err);
-    }
-  };
-
-  const handleDeleteSurveyAct = async () => {
-    const id = updateStateF1.surveyActivityId;
-    if (!id) return toast.error("Pilih Tim terlebih dahulu.");
-    if (!window.confirm("Hapus Tim beserta seluruh turunannya?")) return;
-
-    try {
-      const { data } = await deleteSurveyActivity({
-        variables: { input: { id } },
-      });
-      if (data?.deleteSurveyActivity?.success) {
-        toast.success(data?.deleteSurveyActivity?.message ?? "Tim terhapus.");
-        setUpdateStateF1({ surveyActivityId: "", name: "", slug: "" });
-        await handleRefresh();
+      const res = await bulkImportExcel({ variables: { file } });
+      const r = res?.data?.bulkImportUserProgressExcel;
+      if (r?.errors?.length) {
+        toast.error(
+          `Upload selesai dengan ${r.errors.length} error. Cek baris yang ditolak.`,
+        );
+        console.error(r.errors);
       } else {
-        toast.error("Gagal menghapus Tim.");
+        toast.success("Upload selesai.");
       }
+      await refetchUP();
     } catch (e: any) {
-      toast.error(e.message ?? "Gagal menghapus Tim.");
-      console.error(e);
+      toast.error(e?.message ?? "Gagal upload excel.");
     }
-  };
+  }
 
-  const handleDeleteSubSurveyAct = async () => {
-    const id = updateStateF2.subSurveyActivityId;
-    if (!id) return toast.error("Pilih Kegiatan terlebih dahulu.");
-    if (!window.confirm("Hapus Kegiatan & data terkait (SPJ, JobLetter, dsb)?"))
-      return;
-
-    try {
-      const { data } = await deleteSubSurveyActivity({
-        variables: { input: { id } },
-      });
-      if (data?.deleteSubSurveyActivity?.success) {
-        toast.success(
-          data?.deleteSubSurveyActivity?.message ?? "Kegiatan terhapus.",
-        );
-        setUpdateStateF2((prev) => ({
-          ...prev,
-          name: "",
-          slug: "",
-          surveyActivityId: "",
-          startDate: "",
-          endDate: "",
-          targetSample: 0,
-          sampleType: "",
-          activityType: "",
-        }));
-        await handleRefresh();
-      } else {
-        toast.error("Gagal menghapus Kegiatan.");
-      }
-    } catch (e: any) {
-      toast.error(e.message ?? "Gagal menghapus Kegiatan.");
-      console.error(e);
-    }
-  };
-
-  const handleDeleteUserProgress = async () => {
-    const id = updateUserProgressForm.userProgressId;
-    if (!id) return toast.error("Pilih Petugas terlebih dahulu.");
-    if (!window.confirm("Hapus Petugas?")) return;
-
-    try {
-      const { data } = await deleteUserProgressMut({
-        variables: { input: { id } },
-      });
-      if (data?.deleteUserSurveyProgress?.success) {
-        toast.success(
-          data?.deleteUserSurveyProgress?.message ?? "Petugas terhapus.",
-        );
-        setUpdateUserProgressForm((prev) => ({
-          ...prev,
-          userProgressId: "",
-          totalAssigned: 0,
-          submitCount: 0,
-          approvedCount: 0,
-          rejectedCount: 0,
-          lastUpdated: "",
-          districtId: "",
-          villageId: "",
-          docsBill: "",
-        }));
-        setSampleListUpdate([emptySampleRow]);
-        await handleRefresh();
-      } else {
-        toast.error("Gagal menghapus Petugas.");
-      }
-    } catch (e: any) {
-      toast.error(e.message ?? "Gagal menghapus Petugas.");
-      console.error(e);
-    }
-  };
-
-  const handleRefresh = async () => {
-    try {
-      setRefreshing(true);
-      await client.reFetchObservableQueries?.();
-      await Promise.all([
-        refetchSurveyActs(),
-        refetchUsers(),
-        refetchDistricts(),
-      ]);
-
-      const jobs: Promise<any>[] = [];
-      if (updateStateF2.surveyActivityId) {
-        jobs.push(
-          fetchSubForSubSurveys({
-            variables: { surveyActivityId: updateStateF2.surveyActivityId },
-            fetchPolicy: "network-only",
-          }),
-        );
-      }
-      if (userProgressForm.surveyActivityId) {
-        jobs.push(
-          fetchSubForSubmitUP({
-            variables: { surveyActivityId: userProgressForm.surveyActivityId },
-            fetchPolicy: "network-only",
-          }),
-        );
-      }
-      if (updateUserProgressForm.surveyActivityId) {
-        jobs.push(
-          fetchSubForUpdateUP({
-            variables: {
-              surveyActivityId: updateUserProgressForm.surveyActivityId,
-            },
-            fetchPolicy: "network-only",
-          }),
-        );
-      }
-      if (updateUserProgressForm.subSurveyActivityId) {
-        jobs.push(
-          fetchUserProgress({
-            variables: {
-              subSurveyActivityId: updateUserProgressForm.subSurveyActivityId,
-            },
-            fetchPolicy: "network-only",
-          }),
-        );
-      }
-      if (userProgressForm.subSurveyActivityId) {
-        jobs.push(
-          fetchUserProgress({
-            variables: {
-              subSurveyActivityId: userProgressForm.subSurveyActivityId,
-            },
-            fetchPolicy: "network-only",
-          }),
-        );
-      }
-      if (jobs.length) await Promise.all(jobs);
-    } catch (e) {
-      console.error("Refresh error:", e);
-      toast.error("Gagal refresh data");
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  const handleDownloadTemplateUserProgress = () => {
-    const users = (userData?.getUsers ?? []) as any[];
-    const subs = (allSubsData?.allSubSurveyActivities ?? []) as any[];
-    const districts = (allDistrict?.allDistricts ?? []) as any[];
-    const villages = (allVillage?.allVillages ?? []) as any[];
+  function downloadTemplate() {
+    const subs: SubSurveyActivity[] = (kegiatanList ?? []) as any[];
 
     const uploadSheetRows = [
       {
@@ -1019,14 +1082,11 @@ function Admin() {
       No: i + 1,
       "Nama Pengguna": u.name,
       "Email Pengguna": u.email,
-      "Peran Pengguna": u.primaryRole ?? u.roles ?? "",
       "Id Pengguna": u.id,
-      "Masukkan Daftar Nama Pengguna":
-        "Sesuaikan dengan nama asli yang tertera (gunakan proper)",
-      "Masukkan Daftar Nama Pengawas":
-        "Sesuaikan dengan nama asli yang tertera (gunakan proper)",
-      "Formula Ambil Id Pengguna": `=VLOOKUP(F${i + 2};$B:$E;4;FALSE)`,
-      "Formula Ambil Id Pengawas": `=VLOOKUP(G${i + 2};$B:$E;4;FALSE)`,
+      "Masukkan Daftar Nama Pengguna": "Sesuaikan dengan nama asli (proper)",
+      "Masukkan Daftar Nama Pengawas": "Sesuaikan dengan nama asli (proper)",
+      "Formula Ambil Id Pengguna": `=VLOOKUP(E${i + 2};$B:$D;3;FALSE)`,
+      "Formula Ambil Id Pengawas": `=VLOOKUP(F${i + 2};$B:$D;3;FALSE)`,
     }));
 
     const masterSubs = subs.map((s, i) => ({
@@ -1041,34 +1101,24 @@ function Admin() {
       "": "Ambil Id Kegiatan dari sini",
     }));
 
-    const masterDistrict = districts.map((s, i) => ({
+    const masterDistrict = districts.map((d, i) => ({
       No: i + 1,
-      "Nama Kota": s.city,
-      "Nama Kecamatan": s.name,
-      "Kode Wilayah": s.coderegion,
-      "Id Kecamatan": s.id,
-      "Masukkan Daftar Nama Kecamatan": "Pastikan nama sesuai (gunakan proper)",
-      "Formula Ambil Id Kecamatan": `=VLOOKUP(F${i + 2};$C:$E;3;FALSE)`,
+      "Nama Kota": d.city,
+      "Nama Kecamatan": d.name,
+      "Id Kecamatan": d.id,
     }));
 
-    const masterVillage = villages.map((s, i) => ({
+    const masterVillage = villages.map((v, i) => ({
       No: i + 1,
-      "Id Kecamatan": s.districtId,
-      "Nama Desa": s.name,
-      "Kode Wilayah": s.coderegion,
-      "Kode Kecamatan-Desa": `${s.districtId}-${s.name}`,
-      "Id Desa": s.id,
-      "Id Kecamatan Terpilih":
-        "Ambil Id kecamatan terpilih (G) dari MASTER_KECAMATAN",
-      "Masukkan Daftar Nama Desa": "Pastikan nama sesuai (gunakan proper)",
-      "Kode Kecamatan-Desa Terpilih": `=G${i + 2}&"-"&H${i + 2}`,
-      "Formula Ambil Id Desa": `=VLOOKUP(I${i + 2};$E:$F;2;FALSE)`,
+      "Id Kecamatan": v.districtId,
+      "Nama Desa": v.name,
+      "Id Desa": v.id,
     }));
 
     const sampleRows = [
       {
         "Nomor Petugas":
-          "Hubungkan sampel dengan menambahkan nomor petugas dari sheet UPLOAD_PETUGAS",
+          "Hubungkan sampel dengan nomor petugas dari UPLOAD_PETUGAS",
         nus: "",
         identity: "",
         cacahStatus: "",
@@ -1079,78 +1129,12 @@ function Admin() {
     ];
 
     const wb = XLSX.utils.book_new();
-
     const wsUpload = XLSX.utils.json_to_sheet(uploadSheetRows);
-    wsUpload["!cols"] = [
-      { wch: 5 }, // nomor petugas
-      { wch: 36 }, // subSurveyActivityId
-      { wch: 28 }, // userId
-      { wch: 28 }, // superVisorId
-      { wch: 30 }, // districtId
-      { wch: 24 }, // villageId
-      { wch: 12 }, // blockCount
-      { wch: 18 }, // docsBillPetugas
-      { wch: 18 }, // docsBillPengawas
-    ];
-
     const wsUsers = XLSX.utils.json_to_sheet(masterUsers);
-    wsUsers["!cols"] = [
-      { wch: 5 },
-      { wch: 36 },
-      { wch: 28 },
-      { wch: 28 },
-      { wch: 36 },
-      { wch: 40 },
-      { wch: 30 },
-      { wch: 30 },
-      { wch: 30 },
-    ];
-
     const wsSubs = XLSX.utils.json_to_sheet(masterSubs);
-    wsSubs["!cols"] = [
-      { wch: 5 },
-      { wch: 32 },
-      { wch: 36 },
-      { wch: 24 },
-      { wch: 24 },
-      { wch: 12 },
-      { wch: 14 },
-      { wch: 36 },
-    ];
-
-    const wsSamples = XLSX.utils.json_to_sheet(sampleRows);
-    wsSamples["!cols"] = [
-      { wch: 10 }, // NoPetugas
-      { wch: 8 }, // nus
-      { wch: 30 }, // identity
-      { wch: 16 }, // cacahStatus
-      { wch: 16 }, // approvalStatus
-      { wch: 14 }, // geoLat
-      { wch: 14 }, // geoLng
-    ];
-
     const wsDistrict = XLSX.utils.json_to_sheet(masterDistrict);
-    wsDistrict["!cols"] = [
-      { wch: 5 },
-      { wch: 20 },
-      { wch: 20 },
-      { wch: 20 },
-      { wch: 36 },
-      { wch: 36 },
-    ];
-
     const wsVillage = XLSX.utils.json_to_sheet(masterVillage);
-    wsVillage["!cols"] = [
-      { wch: 5 },
-      { wch: 36 },
-      { wch: 20 },
-      { wch: 20 },
-      { wch: 36 },
-      { wch: 36 },
-      { wch: 36 },
-      { wch: 30 },
-      { wch: 36 },
-    ];
+    const wsSamples = XLSX.utils.json_to_sheet(sampleRows);
 
     XLSX.utils.book_append_sheet(wb, wsUpload, "UPLOAD_PETUGAS");
     XLSX.utils.book_append_sheet(wb, wsSamples, "UPLOAD_SAMPEL");
@@ -1159,1914 +1143,1014 @@ function Admin() {
     XLSX.utils.book_append_sheet(wb, wsDistrict, "MASTER_KECAMATAN");
     XLSX.utils.book_append_sheet(wb, wsVillage, "MASTER_DESA");
 
-    XLSX.writeFile(wb, "Template_Upload_Petugas.xlsx");
-  };
-
-  const handleUploadExcelUserProgress = async (file: File) => {
-    try {
-      const res = await bulkImportExcel({ variables: { file } });
-      const r = res.data?.bulkImportUserProgressExcel;
-
-      const errCount = r?.errors?.length ?? 0;
-      toast.success(
-        `Import selesai.
-        Petugas: +${r.insertedPetugas} / upd ${r.updatedPetugas}
-        Pengawas: +${r.insertedPengawas} / upd ${r.updatedPengawas}
-        Error: ${errCount}`,
-      );
-
-      if (errCount) {
-        console.table(r.errors);
-        toast.error("Ada error baris. Lihat console.table(errors).");
-      }
-
-      handleRefresh();
-    } catch (e: any) {
-      console.error(e);
-      toast.error(e?.message ?? "Gagal import excel");
-    }
-  };
-
-  const setUPField = <K extends keyof typeof userProgressForm>(
-    key: K,
-    value: (typeof userProgressForm)[K],
-  ) => {
-    setUserProgressForm((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const setUpdateUPField = <K extends keyof typeof updateUserProgressForm>(
-    key: K,
-    value: (typeof updateUserProgressForm)[K],
-  ) => {
-    setUpdateUserProgressForm((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const setF2Field = <K extends keyof typeof updateStateF2>(
-    key: K,
-    value: (typeof updateStateF2)[K],
-  ) => {
-    setFormStateF2((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const setUpdateF2Field = <K extends keyof typeof updateStateF2>(
-    key: K,
-    value: (typeof updateStateF2)[K],
-  ) => {
-    setUpdateStateF2((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const setUpdateF1Field = <K extends keyof typeof updateStateF1>(
-    key: K,
-    value: (typeof updateStateF1)[K],
-  ) => {
-    setUpdateStateF1((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const toOpts = <T,>(
-    rows: T[],
-    pick: (row: T) => { value: string; label: string; subLabel?: string },
-  ) => rows.map(pick);
-
-  /* ---------- Effects (sama) ---------- */
-  useEffect(() => {
-    if (updateStateF2.surveyActivityId) {
-      fetchSubForSubSurveys({
-        variables: { surveyActivityId: updateStateF2.surveyActivityId },
-      });
-    }
-  }, [updateStateF2.surveyActivityId, fetchSubForSubSurveys]);
-
-  useEffect(() => {
-    if (userProgressForm.surveyActivityId) {
-      fetchSubForSubmitUP({
-        variables: { surveyActivityId: userProgressForm.surveyActivityId },
-      });
-    }
-  }, [userProgressForm.surveyActivityId, fetchSubForSubmitUP]);
-
-  useEffect(() => {
-    if (!userProgressForm.districtId) return;
-
-    fetchVillages({ variables: { districtId: userProgressForm.districtId } });
-
-    setUserProgressForm((prev) => ({ ...prev, villageId: "" }));
-  }, [userProgressForm.districtId, fetchVillages]);
-
-  useEffect(() => {
-    if (updateUserProgressForm.surveyActivityId) {
-      fetchSubForUpdateUP({
-        variables: {
-          surveyActivityId: updateUserProgressForm.surveyActivityId,
-        },
-      });
-    }
-  }, [updateUserProgressForm.surveyActivityId, fetchSubForUpdateUP]);
-
-  useEffect(() => {
-    if (updateUserProgressForm.subSurveyActivityId) {
-      fetchUserProgress({
-        variables: {
-          subSurveyActivityId: updateUserProgressForm.subSurveyActivityId,
-        },
-      });
-    }
-  }, [updateUserProgressForm.subSurveyActivityId, fetchUserProgress]);
-
-  useEffect(() => {
-    const districtId = updateUserProgressForm.districtId || "";
-    const prevDistrictId = prevUpdateDistrictIdRef.current || "";
-
-    if (!districtId) {
-      setSelectedDistrictIdUpdate(null);
-      setVillagesUpdate([]);
-      if (prevDistrictId) {
-        setUpdateUserProgressForm((prev) => ({ ...prev, villageId: "" }));
-      }
-      prevUpdateDistrictIdRef.current = "";
-      return;
-    }
-
-    setSelectedDistrictIdUpdate(districtId);
-    (async () => {
-      const res = await fetchVillages({ variables: { districtId } });
-      setVillagesUpdate(res.data?.villagesByDistrict ?? []);
-
-      if (prevDistrictId && prevDistrictId !== districtId) {
-        setUpdateUserProgressForm((prev) => ({ ...prev, villageId: "" }));
-      }
-      prevUpdateDistrictIdRef.current = districtId;
-    })();
-  }, [updateUserProgressForm.districtId, fetchVillages]);
-
-  useEffect(() => {
-    const s = surveyMap[updateStateF1.surveyActivityId];
-    setUpdateStateF1((prev) => ({
-      ...prev,
-      name: s?.name ?? "",
-      slug: s?.slug ?? "",
-    }));
-  }, [updateStateF1.surveyActivityId, surveyMap]);
-
-  useEffect(() => {
-    const sub = subMap[updateStateF2.subSurveyActivityId];
-    if (sub) {
-      setUpdateStateF2((prev) => ({
-        ...prev,
-        name: sub.name ?? "",
-        slug: sub.slug ?? "",
-        surveyActivityId: sub.surveyActivityId ?? prev.surveyActivityId,
-        startDate: toDateInput(sub.startDate),
-        endDate: toDateInput(sub.endDate),
-        targetSample: Number(sub.targetSample ?? 0),
-        sampleType: sub.sampleType ?? prev.sampleType,
-        activityType: sub.activityType ?? prev.activityType,
-      }));
-    }
-  }, [updateStateF2.subSurveyActivityId, subMap]);
-
-  useEffect(() => {
-    setUserProgressForm((prev) => ({
-      ...prev,
-      subSurveyActivityId: "",
-      superVisorId: "",
-      userId: "",
-      districtId: "",
-      villageId: "",
-      blockCount: "",
-      docsBill: "",
-    }));
-    setSampleListAdd([emptySampleRow]);
-  }, [userProgressForm.surveyActivityId]);
-
-  useEffect(() => {
-    const up = upMap[updateUserProgressForm.userProgressId];
-    if (up) {
-      setUpdateUserProgressForm((prev) => ({
-        ...prev,
-        totalAssigned: Number(up.totalAssigned ?? 0),
-        submitCount: Number(up.submitCount ?? 0),
-        approvedCount: Number(up.approvedCount ?? 0),
-        rejectedCount: Number(up.rejectedCount ?? 0),
-        lastUpdated: toDateInput(up.lastUpdated),
-        districtId: up.districtId ?? "",
-        villageId: up.villageId ?? "",
-        blockCount: up.blockCount ?? "",
-        docsBill: up.docsBill ?? "",
-        progressRole: up.progressRole ?? "",
-      }));
-      setSelectedDistrictIdUpdate(up.districtId ?? null);
-    } else {
-      if (!updateUserProgressForm.userProgressId) {
-        setUpdateUserProgressForm((prev) => ({
-          ...prev,
-          totalAssigned: 0,
-          submitCount: 0,
-          approvedCount: 0,
-          rejectedCount: 0,
-          lastUpdated: "",
-          districtId: "",
-          villageId: "",
-          blockCount: "",
-          docsBill: "",
-          progressRole: "",
-        }));
-        setSelectedDistrictIdUpdate(null);
-      }
-    }
-  }, [updateUserProgressForm.userProgressId, upMap]);
-
-  useEffect(() => {
-    setUpdateUserProgressForm((prev) => ({ ...prev, userProgressId: "" }));
-  }, [updateUserProgressForm.subSurveyActivityId]);
-
-  useEffect(() => {
-    const curr = updateUserProgressForm?.surveyActivityId || "";
-    const prev = prevSurveyIdRefUpdate.current || "";
-
-    if (curr !== prev) {
-      setUpdateUserProgressForm((s: any) => ({
-        ...s,
-        subSurveyActivityId: "",
-        userId: "",
-      }));
-    }
-
-    prevSurveyIdRefUpdate.current = curr;
-  }, [updateUserProgressForm?.surveyActivityId, setUpdateUserProgressForm]);
-
-  useEffect(() => {
-    if (userProgressForm.subSurveyActivityId)
-      fetchUserProgress({
-        variables: {
-          subSurveyActivityId: userProgressForm.subSurveyActivityId,
-        },
-      });
-  }, [userProgressForm.subSurveyActivityId, fetchUserProgress]);
-
-  useEffect(() => {
-    if (userProgressForm.userId) {
-      fetchUserProgressByUser({
-        variables: { userId: userProgressForm.userId },
-      });
-    }
-  }, [userProgressForm.userId, fetchUserProgressByUser]);
-
-  useEffect(() => {
-    const onEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setDeleteMode(false);
-        setQuery({ tab: section, mode, delete: null });
-      }
-    };
-    window.addEventListener("keydown", onEsc);
-    return () => window.removeEventListener("keydown", onEsc);
-  }, [section, mode]);
-
-  useEffect(() => {
-    const hasTab = searchParams?.has("tab");
-    const hasMode = searchParams?.has("mode");
-
-    if (hasTab && hasMode) return;
-
-    const params = new URLSearchParams(searchParams?.toString() || "");
-    if (!hasTab) params.set("tab", section);
-    if (!hasMode) params.set("mode", mode);
-    if (deleteMode) params.set("delete", "1");
-
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-  }, []);
-
-  /*===================== LOGIC ===================== */
-  const selectedSubForAdd = useMemo(
-    () =>
-      (SubmitUPData?.subSurveyActivityById ?? []).find(
-        (s: SubSurveyActivity) => s.id === userProgressForm.subSurveyActivityId,
-      ),
-    [SubmitUPData, userProgressForm.subSurveyActivityId],
-  );
-  const assignedSumForAdd = useMemo(
-    () =>
-      (userProgressData?.userProgressBySubSurveyActivityId ?? []).reduce(
-        (acc: number, up: UserProgress) => acc + Number(up.totalAssigned ?? 0),
-        0,
-      ),
-    [userProgressData],
-  );
-  const remainingQuotaForAdd = Math.max(
-    0,
-    Number(selectedSubForAdd?.targetSample ?? 0) - assignedSumForAdd,
-  );
-
-  const selectedSubForUpdate = useMemo(
-    () =>
-      (UpdateUPData?.subSurveyActivityById ?? []).find(
-        (s: SubSurveyActivity) =>
-          s.id === updateUserProgressForm.subSurveyActivityId,
-      ),
-    [UpdateUPData, updateUserProgressForm.subSurveyActivityId],
-  );
-  const isListingUpdate =
-    (selectedSubForUpdate?.activityType ?? "") === "Listing";
-  const upListForUpdate: UserProgress[] =
-    userProgressData?.userProgressBySubSurveyActivityId ?? [];
-  const upPetugasOnlyForQuota = useMemo(
-    () =>
-      upListForUpdate.filter((u: any) => (u.progressRole ?? "") === "PETUGAS"),
-    [upListForUpdate],
-  );
-  const filteredUPsForUpdate = useMemo(
-    () => upListForUpdate.filter((up) => matchesUPSearch(up as any, qUPUser)),
-    [upListForUpdate, qUPUser],
-  );
-  const currentUP = useMemo(
-    () =>
-      upListForUpdate.find(
-        (u) => u.id === updateUserProgressForm.userProgressId,
-      ),
-    [upListForUpdate, updateUserProgressForm.userProgressId],
-  );
-  const sumAllAssignedForUpdate = useMemo(
-    () =>
-      upPetugasOnlyForQuota.reduce(
-        (acc: number, u) => acc + Number(u.totalAssigned ?? 0),
-        0,
-      ),
-    [upPetugasOnlyForQuota],
-  );
-  const allowedMaxForUpdate = useMemo(() => {
-    if ((currentUP?.progressRole ?? "") !== "PETUGAS") return 0;
-    const target = Number(selectedSubForUpdate?.targetSample ?? 0);
-    const currentAssigned = Number(currentUP?.totalAssigned ?? 0);
-    const others = sumAllAssignedForUpdate - currentAssigned;
-    return Math.max(0, target - others);
-  }, [selectedSubForUpdate, currentUP, sumAllAssignedForUpdate]);
-
-  const existingUPForAdd: UserProgressWithUser[] =
-    userProgressData?.userProgressBySubSurveyActivityId ?? [];
-  const usedUserIdsForAdd = useMemo(
-    () => new Set(existingUPForAdd.map((up) => up.userId)),
-    [existingUPForAdd],
-  );
-
-  const supervisors: User[] = useMemo(
-    () =>
-      (userData?.getUsers ?? []).filter((u: any) =>
-        getRoles(u).includes("Supervisor"),
-      ),
-    [userData],
-  );
-  const filteredSupervisors = useMemo(
-    () => supervisors.filter((u) => matchesSearch(u, qSupervisorDeb)),
-    [supervisors, qSupervisorDeb],
-  );
-  const admins: User[] = useMemo(
-    () =>
-      (userData?.getUsers ?? []).filter((u: any) =>
-        getRoles(u).includes("Admin"),
-      ),
-    [userData],
-  );
-  const enumeratorsForAdd: User[] = useMemo(
-    () =>
-      (userData?.getUsers ?? [])
-        // .filter((u: User) => u.role !== "Supervisor")
-        // .filter((u: User) => u.role !== "Admin")
-        .filter((u: User) => !getRoles(u).includes("Superadmin")),
-    [userData, usedUserIdsForAdd],
-  );
-  const filteredEnumeratorsForAdd = useMemo(
-    () => enumeratorsForAdd.filter((u) => matchesSearch(u, qEnumerator)),
-    [enumeratorsForAdd, qEnumerator],
-  );
-  const selectedUserForAdd = useMemo(
-    () =>
-      (userData?.getUsers ?? []).find(
-        (u: any) => u.id === userProgressForm.userId,
-      ),
-    [userData, userProgressForm.userId],
-  );
-  const limitBillAdd = toMoney(selectedUserForAdd?.limit_bill);
-  const usedDocsAdd = useMemo(() => {
-    const rows = upByUserData?.userProgressSurveyByUserId ?? [];
-    const filtered = rows.filter((r: any) => includeForThisMonth(r));
-    return sumDocs(filtered);
-  }, [upByUserData, subMap]);
-  const newDocsAdd = toMoney(userProgressForm.docsBill);
-  const remainDocsAdd = Math.max(0, limitBillAdd - usedDocsAdd);
-  const willExceedAdd = newDocsAdd > remainDocsAdd;
-
-  const selectedUserForUpdate = currentUP
-    ? (userData?.getUsers ?? []).find((u: any) => u.id === currentUP.userId)
-    : null;
-
-  const limitBillUpdate = toMoney(selectedUserForUpdate?.limit_bill);
-
-  const usedDocsUpdateAll = useMemo(() => {
-    const rows = upByUserUpdateData?.userProgressSurveyByUserId ?? [];
-    const filtered = rows.filter((r: any) => includeForThisMonth(r));
-    return sumDocs(filtered);
-  }, [upByUserUpdateData, subMap]);
-
-  const currentRowCounted = currentUP ? includeForThisMonth(currentUP) : false;
-  const currentRowOldDocs = toMoney(currentUP?.docsBill);
-  const usedDocsUpdateOthers = Math.max(
-    0,
-    usedDocsUpdateAll - (currentRowCounted ? currentRowOldDocs : 0),
-  );
-  const newDocsUpdate = toMoney(updateUserProgressForm.docsBill);
-  const remainDocsUpdate = Math.max(
-    0,
-    limitBillUpdate - usedDocsUpdateOthers,
-  );
-  const willExceedUpdate = newDocsUpdate > remainDocsUpdate;
-  const nusToNumber = (nus: string) => {
-    const n = Number(String(nus ?? "").trim());
-    return Number.isFinite(n) ? n : 0;
-  };
-
-  const getNextNus = (rows: any[]) => {
-    const max = Math.max(0, ...(rows ?? []).map((r) => nusToNumber(r.nus)));
-    return formatNUS(max + 1);
-  };
-
-  const sortByNusAsc = (rows: any[]) =>
-    [...(rows ?? [])].sort((a, b) => nusToNumber(a.nus) - nusToNumber(b.nus));
-
-  useEffect(() => {
-    if (isListingUpdate) {
-      const submit = Number(updateUserProgressForm.submitCount ?? 0);
-      const capped = updateUserProgressForm.subSurveyActivityId
-        ? Math.min(Math.max(0, submit), allowedMaxForUpdate)
-        : Math.max(0, submit);
-      setUpdateUserProgressForm((prev) => ({ ...prev, totalAssigned: capped }));
-    }
-  }, [
-    isListingUpdate,
-    updateUserProgressForm.submitCount,
-    allowedMaxForUpdate,
-    updateUserProgressForm.subSurveyActivityId,
-  ]);
-
-  useEffect(() => {
-    const uid = currentUP?.userId;
-    if (uid) {
-      fetchUserProgressByUserForUpdate({ variables: { userId: uid } });
-    }
-  }, [currentUP?.userId, fetchUserProgressByUserForUpdate]);
-
-  useEffect(() => {
-    if (!currentUP) {
-      setSampleListUpdate([]);
-      return;
-    }
-
-    const samples = (currentUP as any)?.samples ?? [];
-    if (Array.isArray(samples) && samples.length > 0) {
-      const mapped = samples.map((s: any) => ({
-        id: s.id,
-        nus: s.nus ?? "",
-        identity: s.identity ?? "",
-        cacahStatus: s.cacahStatus ?? "Belum_Cacah",
-        approvalStatus: s.approvalStatus ?? "Menunggu",
-        geoLat: s.geoLat != null ? String(s.geoLat) : "",
-        geoLng: s.geoLng != null ? String(s.geoLng) : "",
-      }));
-
-      setSampleListUpdate(sortByNusAsc(mapped));
-    } else {
-      setSampleListUpdate([]);
-    }
-  }, [currentUP?.id]);
-
-  useEffect(() => {
-    if (!userProgressForm.userId) {
-      setSampleListAdd([]);
-    }
-  }, [userProgressForm.userId]);
-
-  useEffect(() => {
-    if (!updateUserProgressForm.userProgressId) {
-      setSampleListUpdate([]);
-      setDeleteSampleIds([]);
-    }
-  }, [updateUserProgressForm.userProgressId]);
-
-  /* ===================== UI ===================== */
-  if (userLoading) {
-    return (
-      <div className="max-w-screen-xl mx-auto px-3 py-6 font-Poppins">
-        Memuat…
-      </div>
-    );
+    XLSX.writeFile(wb, `Template_Upload_Petugas.xlsx`);
   }
 
-  if (!currentUser) return null;
-
-  const roles = getRoles(currentUser);
-  const allowed = roles.some((r) => ALLOWED.includes(r));
-
-  if (!allowed) {
-    return null;
-  }
+  // =========================
+  // UI
+  // =========================
+  const tabBtn = (k: TabKey, label: string) => (
+    <button
+      type="button"
+      onClick={() => setTabPersist(k)}
+      className={`px-4 py-2 rounded-lg text-sm font-semibold ${tab === k ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-800 hover:bg-gray-200"}`}
+    >
+      {label}
+    </button>
+  );
 
   return (
     <div className="max-w-screen-xl mx-auto px-3 sm:px-6 md:px-8 py-6 space-y-4 font-Poppins">
-      {/* Main Tabs + actions */}
       <div className="bg-orange-50 rounded-lg p-3 md:p-4 font-bold text-lg md:text-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 shadow-md">
-        <span>Panel Manajemen Tim</span>
-        <div className="flex items-center gap-2">
-          {loading && (
-            <span className="text-xs text-gray-500">Memuat data…</span>
-          )}
-          <button
-            onClick={() => {
-              handleRefresh();
-              toast.success("Data telah di-refresh");
-            }}
-            disabled={refreshing}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition font-semibold w-full sm:w-auto"
-          >
-            {refreshing ? "Refreshing..." : "Refresh"}
-          </button>
+        <span>Admin</span>
+        <div className="flex gap-2">
+          {tabBtn("tim", "Tim")}
+          {tabBtn("kegiatan", "Kegiatan")}
+          {tabBtn("petugas", "Petugas")}
         </div>
       </div>
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-        <Tabs
-          tabs={[
-            { key: "tim", label: "Tim" },
-            { key: "kegiatan", label: "Kegiatan Survei" },
-            { key: "petugas", label: "Petugas" },
-          ]}
-          value={section}
-          onChange={(k) => {
-            setSection(k);
-            setQuery({ tab: k, mode, delete: deleteMode ? "1" : null });
-          }}
-        />
 
-        <div
-          className={`flex ${mode === "update" ? "justify-between" : "justify-end"} space-x-3`}
-        >
-          {mode === "update" && (
+      {/* ================= TIM ================= */}
+      {tab === "tim" && (
+        <div className="bg-white rounded-lg p-4 shadow-md space-y-3">
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 w-full">
+              <input
+                className="w-full px-3 py-2 border rounded-md"
+                placeholder="Nama tim"
+                value={timDraft.name}
+                onChange={(e) =>
+                  setTimDraft((p) => ({ ...p, name: e.target.value }))
+                }
+              />
+              <input
+                className="w-full px-3 py-2 border rounded-md"
+                placeholder="Slug"
+                value={timDraft.slug}
+                onChange={(e) =>
+                  setTimDraft((p) => ({ ...p, slug: e.target.value }))
+                }
+              />
+              <HUSelect
+                value={timDraft.chiefId || null}
+                onValueChange={(v) =>
+                  setTimDraft((p) => ({ ...p, chiefId: (v ?? "") as string }))
+                }
+                options={ketuaOptions}
+                placeholder="Ketua tim"
+              />
+            </div>
             <button
               type="button"
-              onClick={() => {
-                const next = !deleteMode;
-                setDeleteMode(next);
-                setQuery({ tab: section, mode, delete: next ? "1" : null });
-              }}
-              className={`px-4 py-1 my-3 rounded-lg text-sm text-white ${
-                deleteMode
-                  ? "bg-red-600 hover:bg-red-700"
-                  : "bg-gray-700 hover:bg-gray-800"
-              }`}
-              title={
-                deleteMode ? "Matikan Mode Hapus (Esc)" : "Aktifkan Mode Hapus"
-              }
+              onClick={handleAddTim}
+              disabled={creatingTim}
+              className={`${styles.button} text-white w-full`}
             >
-              {deleteMode ? "Selesai Hapus" : "Mode Hapus"}
+              {creatingTim ? "Menyimpan..." : "Tambah Tim"}
             </button>
-          )}
-          <SubTabs
-            tabs={[
-              { key: "add", label: "Tambah" },
-              { key: "update", label: "Ubah" },
-            ]}
-            value={mode}
-            onChange={(m) => {
-              setMode(m);
-              const nextDelete = m === "update" ? deleteMode : false;
-              setDeleteMode(nextDelete);
-              setQuery({
-                tab: section,
-                mode: m,
-                delete: nextDelete ? "1" : null,
-              });
-            }}
+          </div>
+
+          <div className="overflow-auto max-h-[60vh] border rounded-lg">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left border-b bg-gray-50">
+                  <th className="py-2 px-3 sticky top-0 bg-gray-50 z-10 font-semibold text-gray-700">
+                    Nama Tim
+                  </th>
+                  <th className="py-2 px-3 sticky top-0 bg-gray-50 z-10 font-semibold text-gray-700">
+                    Slug
+                  </th>
+                  <th className="py-2 px-3 sticky top-0 bg-gray-50 z-10 font-semibold text-gray-700">
+                    Ketua Tim
+                  </th>
+                  <th className="py-2 px-3 w-28 sticky top-0 bg-gray-50 z-10 font-semibold text-gray-700">
+                    Aksi
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {pagedTims.map((t) => {
+                  const row = timRowEdits[t.id] ?? {
+                    name: t.name,
+                    slug: t.slug,
+                    chiefId: t.chiefId,
+                  };
+                  return (
+                    <tr
+                      key={t.id}
+                      className="text-left border-b hover:bg-gray-50"
+                    >
+                      <td className="py-2 px-3">
+                        <input
+                          className="w-full px-2 py-1 border rounded"
+                          value={row.name}
+                          onChange={(e) =>
+                            setTimRowEdits((p) => ({
+                              ...p,
+                              [t.id]: { ...row, name: e.target.value },
+                            }))
+                          }
+                        />
+                      </td>
+                      <td className="py-2 px-3">
+                        <input
+                          className="w-full px-2 py-1 border rounded"
+                          value={row.slug}
+                          onChange={(e) =>
+                            setTimRowEdits((p) => ({
+                              ...p,
+                              [t.id]: { ...row, slug: e.target.value },
+                            }))
+                          }
+                        />
+                      </td>
+                      <td className="py-2 px-3">
+                        <HUSelect
+                          value={row.chiefId || null}
+                          onValueChange={(v) =>
+                            setTimRowEdits((p) => ({
+                              ...p,
+                              [t.id]: { ...row, chiefId: (v ?? "") as string },
+                            }))
+                          }
+                          options={ketuaOptions}
+                          placeholder="Pilih ketua tim"
+                        />
+                      </td>
+                      <td className="py-2 px-3">
+                        <div className="flex gap-2">
+                          <IconButton
+                            title="Simpan"
+                            onClick={() => handleSaveTimRow(t.id)}
+                            variant="primary"
+                          >
+                            <Save size={16} />
+                          </IconButton>
+                          <IconButton
+                            title="Hapus"
+                            onClick={() => handleDeleteTim(t.id)}
+                            variant="danger"
+                          >
+                            <X size={16} />
+                          </IconButton>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <Pager
+            page={timPage}
+            pageSize={timPageSize}
+            total={tims.length}
+            onPageChange={setTimPage}
+            onPageSizeChange={setTimPageSize}
           />
         </div>
-      </div>
-
-      {/* ---------- TIM ---------- */}
-      {section === "tim" && mode === "add" && (
-        <div className="bg-orange-50 rounded-lg p-4 shadow-md">
-          <form
-            onSubmit={handleSubmitSurveyAct}
-            className="grid grid-cols-1 md:grid-cols-2 gap-4"
-          >
-            <div className="md:col-span-2">
-              <h3 className="text-lg font-bold">Tambahkan Tim</h3>
-            </div>
-            <div>
-              <label htmlFor="name" className="block text-sm font-bold mb-2">
-                Nama Tim
-              </label>
-              <input
-                type="text"
-                id="name"
-                value={formStateF1.name}
-                onChange={handleChangeF1}
-                placeholder="Contoh: Tim Sensus Penduduk"
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
-            </div>
-            <div>
-              <label htmlFor="slug" className="block text-sm font-bold mb-2">
-                Slug
-              </label>
-              <input
-                type="text"
-                id="slug"
-                value={formStateF1.slug}
-                onChange={handleChangeF1}
-                placeholder="Contoh: tim-sensus-penduduk"
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
-            </div>
-            <div className="md:col-span-2 flex justify-end">
-              <button
-                disabled={loading1}
-                type="submit"
-                className={`${styles.button} my-2 text-white w-full sm:w-auto`}
-              >
-                {loading1 ? "Menyimpan..." : "Tambah"}
-              </button>
-            </div>
-          </form>
-        </div>
       )}
 
-      {section === "tim" && mode === "update" && (
-        <div className="bg-blue-50 rounded-lg p-4 shadow-md">
-          <form
-            onSubmit={handleUpdateSurveyAct}
-            className="grid grid-cols-1 md:grid-cols-2 gap-4"
-          >
-            <div className="md:col-span-2">
-              <h3 className="text-lg font-bold">Perbarui Tim</h3>
-            </div>
-            <div>
-              <label
-                htmlFor="surveyActivityId"
-                className="block text-sm font-bold mb-2"
-              >
-                Pilih Tim
-              </label>
-
+      {/* ================= KEGIATAN ================= */}
+      {tab === "kegiatan" && (
+        <div className="bg-white rounded-lg p-4 shadow-md space-y-3">
+          <div className="py-4 space-y-2 w-full">
+            <div className="flex justify-between space-x-2 w-full">
               <HUSelect
-                value={updateStateF1.surveyActivityId || null}
-                onValueChange={(v) =>
-                  setUpdateF1Field("surveyActivityId", (v ?? "") as string)
-                }
-                options={data?.allSurveyActivities.map((s: SurveyActivity) => ({
-                  value: s.id,
-                  label: s.name,
-                }))}
-                placeholder="-- Pilih Tim --"
-              />
-            </div>
-            <div>
-              <label htmlFor="name" className="block text-sm font-bold mb-2">
-                Nama Tim Baru
-              </label>
-              <input
-                id="name"
-                value={updateStateF1.name}
-                onChange={handleChangeUpdateF1}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
-            </div>
-            <div>
-              <label htmlFor="slug" className="block text-sm font-bold mb-2">
-                Slug Baru
-              </label>
-              <input
-                id="slug"
-                value={updateStateF1.slug}
-                onChange={handleChangeUpdateF1}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
-            </div>
-            <div className="md:col-span-2 flex items-center gap-4">
-              {deleteMode ? (
-                <button
-                  type="button"
-                  onClick={handleDeleteSurveyAct}
-                  className="my-2 px-6 py-3 rounded-full bg-red-600 text-white font-semibold hover:bg-red-700 w-full"
-                >
-                  Hapus Tim
-                </button>
-              ) : (
-                <button
-                  type="submit"
-                  className={`${styles.button} my-2 text-white`}
-                >
-                  Perbarui Tim
-                </button>
-              )}
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* ---------- KEGIATAN SURVEI ---------- */}
-      {section === "kegiatan" && mode === "add" && (
-        <div className="bg-orange-50 rounded-lg p-4 shadow-md">
-          <form
-            onSubmit={handleSubmitSubSurveyAct}
-            className="grid grid-cols-1 md:grid-cols-2 gap-4"
-          >
-            <div className="md:col-span-2">
-              <h3 className="text-lg font-bold">Tambah Kegiatan</h3>
-            </div>
-            <div>
-              <label htmlFor="name" className="block text-sm font-bold mb-2">
-                Nama Kegiatan
-              </label>
-              <input
-                id="name"
-                value={formStateF2.name}
-                onChange={handleChangeF2}
-                placeholder="Contoh: Sensus Penduduk 2020"
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
-            </div>
-            <div>
-              <label htmlFor="slug" className="block text-sm font-bold mb-2">
-                Slug
-              </label>
-              <input
-                id="slug"
-                value={formStateF2.slug}
-                onChange={handleChangeF2}
-                placeholder="Contoh: sensus-penduduk-2020"
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="startDate"
-                className="block text-sm font-bold mb-2"
-              >
-                Tanggal Mulai
-              </label>
-              <input
-                type="date"
-                id="startDate"
-                value={formStateF2.startDate}
-                onChange={handleChangeF2}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
-            </div>
-            <div>
-              <label htmlFor="endDate" className="block text-sm font-bold mb-2">
-                Tanggal Selesai
-              </label>
-              <input
-                type="date"
-                id="endDate"
-                value={formStateF2.endDate}
-                onChange={handleChangeF2}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="surveyActivityId"
-                className="block text-sm font-bold mb-2"
-              >
-                Tim Penyelenggara
-              </label>
-
-              <HUSelect
-                value={formStateF2.surveyActivityId || null}
-                onValueChange={(v) =>
-                  setF2Field("surveyActivityId", (v ?? "") as string)
-                }
-                options={data?.allSurveyActivities.map((s: SurveyActivity) => ({
-                  value: s.id,
-                  label: s.name,
-                }))}
-                placeholder="-- Pilih Tim --"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="targetSample"
-                className="block text-sm font-bold mb-2"
-              >
-                Target Sampel
-              </label>
-              <input
-                type="number"
-                id="targetSample"
-                value={formStateF2.targetSample}
-                onChange={handleChangeF2}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="sampleType"
-                className="block text-sm font-bold mb-2"
-              >
-                Jenis Sampel
-              </label>
-              <input
-                id="sampleType"
-                value={formStateF2.sampleType}
-                onChange={handleChangeF2}
-                placeholder="Contoh: Rumah Tangga, SLS, dll"
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="activityType"
-                className="block text-sm font-bold mb-2"
-              >
-                Jenis Kegiatan
-              </label>
-
-              <HUSelect
-                value={formStateF2.activityType || null}
-                onValueChange={(v) =>
-                  setF2Field("activityType", (v ?? "") as string)
-                }
-                options={[
-                  { value: "Listing", label: "Listing" },
-                  { value: "Pencacahan", label: "Pencacahan" },
-                ]}
-                placeholder="-- Pilih Jenis Kegiatan --"
-              />
-            </div>
-            <div className="md:col-span-2 flex justify-end">
-              <button
-                disabled={loading2}
-                type="submit"
-                className={`${styles.button} my-2 text-white w-full sm:w-auto`}
-              >
-                {loading2 ? "Menyimpan..." : "Tambah"}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {section === "kegiatan" && mode === "update" && (
-        <div className="bg-blue-50 rounded-lg p-4 shadow-md">
-          <form
-            onSubmit={handleUpdateSubSurveyAct}
-            className="grid grid-cols-1 md:grid-cols-2 gap-4"
-          >
-            <div className="md:col-span-2">
-              <h3 className="text-lg font-bold">Perbarui Kegiatan</h3>
-            </div>
-            <div>
-              <label
-                htmlFor="surveyActivityId"
-                className="block text-sm font-bold mb-2"
-              >
-                Tim Penyelenggara
-              </label>
-
-              <HUSelect
-                value={updateStateF2.surveyActivityId || null}
-                onValueChange={(v) =>
-                  setUpdateF2Field("surveyActivityId", (v ?? "") as string)
-                }
-                options={data?.allSurveyActivities.map((s: SurveyActivity) => ({
-                  value: s.id,
-                  label: s.name,
-                }))}
-                placeholder="-- Pilih Tim --"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="subSurveyActivityId"
-                className="block text-sm font-bold mb-2"
-              >
-                Kegiatan Survei
-              </label>
-
-              <HUSelect
-                value={updateStateF2.subSurveyActivityId || null}
-                onValueChange={(v) =>
-                  setUpdateF2Field("subSurveyActivityId", (v ?? "") as string)
-                }
-                options={
-                  SubSurveydata?.subSurveyActivityById
-                    ? SubSurveydata?.subSurveyActivityById.map(
-                        (s: SubSurveyActivity) => ({
-                          value: s.id,
-                          label: s.name,
-                        }),
-                      )
-                    : []
-                }
-                placeholder="-- Pilih Kegiatan --"
-              />
-            </div>
-            <div>
-              <label htmlFor="name" className="block text-sm font-bold mb-2">
-                Nama Kegiatan Baru
-              </label>
-              <input
-                id="name"
-                value={updateStateF2.name}
-                onChange={handleChangeUpdateF2}
-                placeholder="Contoh: Sensus Penduduk 2020"
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
-            </div>
-            <div>
-              <label htmlFor="slug" className="block text-sm font-bold mb-2">
-                Slug Baru
-              </label>
-              <input
-                id="slug"
-                value={updateStateF2.slug}
-                onChange={handleChangeUpdateF2}
-                placeholder="Contoh: sensus-penduduk-2020"
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="startDate"
-                className="block text-sm font-bold mb-2"
-              >
-                Tanggal Mulai
-              </label>
-              <input
-                type="date"
-                id="startDate"
-                value={updateStateF2.startDate}
-                onChange={handleChangeUpdateF2}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
-            </div>
-            <div>
-              <label htmlFor="endDate" className="block text-sm font-bold mb-2">
-                Tanggal Selesai
-              </label>
-              <input
-                type="date"
-                id="endDate"
-                value={updateStateF2.endDate}
-                onChange={handleChangeUpdateF2}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="targetSample"
-                className="block text-sm font-bold mb-2"
-              >
-                Target Sample
-              </label>
-              <input
-                type="number"
-                id="targetSample"
-                value={updateStateF2.targetSample}
-                onChange={handleChangeUpdateF2}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="sampleType"
-                className="block text-sm font-bold mb-2"
-              >
-                Jenis Sampel
-              </label>
-              <input
-                id="sampleType"
-                value={updateStateF2.sampleType}
-                onChange={handleChangeUpdateF2}
-                placeholder="Contoh: Rumah Tangga, SLS, dll"
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="activityType"
-                className="block text-sm font-bold mb-2"
-              >
-                Jenis Kegiatan
-              </label>
-
-              <HUSelect
-                value={updateStateF2.activityType || null}
-                onValueChange={(v) =>
-                  setUpdateF2Field("activityType", (v ?? "") as string)
-                }
-                options={[
-                  { label: "Listing", value: "Listing" },
-                  { label: "Pencacahan", value: "Pencacahan" },
-                ]}
-                placeholder="-- Pilih Jenis Kegiatan --"
-              />
-            </div>
-            <div className="md:col-span-2 flex gap-2">
-              {deleteMode ? (
-                <button
-                  type="button"
-                  onClick={handleDeleteSubSurveyAct}
-                  className="my-2 px-6 py-3 rounded-full bg-red-600 text-white font-semibold hover:bg-red-700 w-full"
-                >
-                  Hapus Kegiatan
-                </button>
-              ) : (
-                <button
-                  type="submit"
-                  className={`${styles.button} my-2 text-white`}
-                >
-                  Perbarui Kegiatan
-                </button>
-              )}
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* ---------- PETUGAS ---------- */}
-      {section === "petugas" && mode === "add" && (
-        <div className="bg-orange-50 rounded-lg p-4 shadow-md">
-          <form
-            onSubmit={handleSubmitUserProgress}
-            className="grid grid-cols-1 md:grid-cols-2 gap-4"
-          >
-            <div className="md:col-span-2 flex justify-between">
-              <h3 className="text-lg font-bold">Tambah Blok Petugas</h3>
-              <div className="flex gap-2 items-center">
-                <button
-                  type="button"
-                  onClick={handleDownloadTemplateUserProgress}
-                  className="px-3 py-2 rounded-md bg-green-600 text-white hover:bg-green-700"
-                >
-                  Download Template Upload
-                </button>
-
-                <label
-                  className={`px-3 py-2 rounded-md text-white cursor-pointer ${importingExcel ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"}`}
-                >
-                  {importingExcel ? "Sedang Upload" : "Upload Excel"}
-                  <input
-                    type="file"
-                    accept=".xlsx,.xls"
-                    className="hidden"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) handleUploadExcelUserProgress(f);
-                      e.currentTarget.value = "";
-                    }}
-                    disabled={importingExcel}
-                  />
-                </label>
-              </div>
-            </div>
-
-            <div>
-              <label
-                htmlFor="surveyActivityId"
-                className="block text-sm font-bold mb-2"
-              >
-                Tim Penyelenggara
-              </label>
-              <HUComboBox
-                value={userProgressForm.surveyActivityId || null}
-                onValueChange={(v) =>
-                  setUPField("surveyActivityId", (v ?? "") as string)
-                }
-                options={data?.allSurveyActivities.map((s: SurveyActivity) => ({
-                  value: s.id,
-                  label: s.name ?? "",
-                }))}
-                placeholder="-- Pilih Tim Penyelenggara --"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="subSurveyActivityId"
-                className="block text-sm font-bold mb-2"
-              >
-                Kegiatan Survei
-              </label>
-
-              <HUSelect
-                value={userProgressForm.subSurveyActivityId || null}
-                onValueChange={(v) =>
-                  setUPField("subSurveyActivityId", (v ?? "") as string)
-                }
-                options={
-                  SubmitUPData?.subSurveyActivityById
-                    ? SubmitUPData?.subSurveyActivityById?.map(
-                        (sub: SubSurveyActivity) => ({
-                          label: sub.name,
-                          value: sub.id,
-                        }),
-                      )
-                    : []
-                }
-                placeholder="-- Pilih Kegiatan --"
-              />
-              {userProgressForm.subSurveyActivityId && (
-                <div className="mt-1 text-xs">
-                  <span className="inline-block rounded bg-white border px-2 py-1">
-                    Target total: <b>{selectedSubForAdd?.targetSample ?? 0}</b>{" "}
-                    • Sudah dialokasikan: <b>{assignedSumForAdd}</b> • Sisa:{" "}
-                    <b>{remainingQuotaForAdd}</b>
-                  </span>
-                </div>
-              )}
-            </div>
-
-            <div>
-              <label
-                htmlFor="superVisorId"
-                className="block text-sm font-bold mb-2"
-              >
-                Pengawas
-              </label>
-
-              <HUComboBox
-                value={userProgressForm.superVisorId || null}
-                onValueChange={(v) =>
-                  setUPField("superVisorId", (v ?? "") as string)
-                }
-                options={supervisors.map((u) => ({
-                  value: u.id,
-                  label: u.name ?? "-",
-                  subLabel: u.email ?? "",
-                }))}
-                placeholder="-- Pilih Pengawas --"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="userId" className="block text-sm font-bold mb-2">
-                Petugas
-              </label>
-
-              <HUComboBox
-                value={userProgressForm.userId || null}
-                onValueChange={(v) => setUPField("userId", (v ?? "") as string)}
-                options={enumeratorsForAdd.map((u) => ({
-                  value: u.id,
-                  label: u.name ?? "-",
-                  subLabel: u.email ?? "",
-                }))}
-                placeholder="-- Pilih Petugas --"
-              />
-              {userProgressForm.userId && (
-                <p className="mt-1 text-xs">
-                  Limit: <b>{limitBillAdd.toLocaleString("id-ID")}</b> •
-                  Terpakai: <b>{usedDocsAdd.toLocaleString("id-ID")}</b> •
-                  Sisa:{" "}
-                  <b className={remainDocsAdd <= 0 ? "text-red-600" : ""}>
-                    {remainDocsAdd.toLocaleString("id-ID")}
-                  </b>
-                </p>
-              )}
-            </div>
-            <div>
-              <label
-                htmlFor="districtId"
-                className="block text-sm font-bold mb-2"
-              >
-                Kecamatan
-              </label>
-
-              <HUComboBox
-                value={userProgressForm.districtId || null}
-                onValueChange={async (v) => {
-                  const districtId = (v ?? "") as string;
-                  setUPField("districtId", districtId);
-                  setSelectedDistrictIdAdd(districtId);
-
-                  if (districtId) {
-                    const res = await fetchVillages({
-                      variables: { districtId },
-                    });
-                    setVillagesAdd(res.data?.villagesByDistrict ?? []);
-                  } else {
-                    setVillagesAdd([]);
-                  }
-                }}
-                options={districtData?.allDistricts?.map((d: District) => ({
-                  value: d.id,
-                  label: d.name ?? "-",
-                }))}
-                placeholder="-- Pilih Kecamatan --"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="villageId"
-                className="block text-sm font-bold mb-2"
-              >
-                Desa
-              </label>
-              <HUSelect
-                value={userProgressForm.villageId || null}
-                onValueChange={(v) =>
-                  setUPField("villageId", (v ?? "") as string)
-                }
-                options={villagesAdd.map((v: Village) => ({
-                  value: v.id,
-                  label: v.name,
-                }))}
-                placeholder={
-                  selectedDistrictIdAdd
-                    ? "-- Pilih Desa --"
-                    : "Pilih kecamatan dulu"
-                }
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="blockCount"
-                className="block text-sm font-bold mb-2"
-              >
-                Blok Pendataan
-              </label>
-              <input
-                id="blockCount"
-                type="text"
-                value={userProgressForm.blockCount}
-                onChange={handleChangeUserProgress}
-                placeholder="Tuliskan Nama Blok"
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="docsBill"
-                className="block text-sm font-bold mb-2"
-              >
-                Honor Petugas
-              </label>
-              <input
-                id="docsBill"
-                type="number"
-                value={userProgressForm.docsBill}
-                onChange={handleChangeUserProgress}
-                placeholder="Sertakan Jumlah Honor"
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
-              {userProgressForm.userId && (
-                <p
-                  className={`mt-1 text-xs ${willExceedAdd ? "text-red-600" : "text-gray-600"}`}
-                >
-                  Akan terpakai: {newDocsAdd.toLocaleString("id-ID")}{" "}
-                  {willExceedAdd &&
-                    "— Melebihi limit! Total honor sudah mencapai " +
-                      (usedDocsAdd + newDocsAdd).toLocaleString("id-ID")}
-                </p>
-              )}
-            </div>
-            {/* === Daftar Sampel Blok Petugas (ADD) === */}
-            <div className="md:col-span-2 border rounded-md p-3 bg-white">
-              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-2">
-                <h4 className="font-bold text-sm">
-                  Daftar Sampel Blok Petugas ({sampleListAdd.length} Baris)
-                </h4>
-                <div>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setSampleListAdd((prev) => [...prev, emptySampleRow])
-                    }
-                    className="flex flex-row items-center justify-center px-3 rounded-md cursor-pointer bg-[#2190ff] min-h-[30px] w-full sm:w-auto font-Poppins font-semibold text-white hover:bg-[#1977cc] transition-colors text-sm"
-                  >
-                    + Tambah Baris
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                <div className="overflow-x-auto">
-                  <div className="min-w-[720px] md:min-w-0 px-1">
-                    {sampleListAdd.map((row, idx) => (
-                      <div
-                        key={idx}
-                        className="flex gap-2 items-center my-2 w-full"
-                      >
-                        <input
-                          placeholder="NUS"
-                          value={formatNUS(idx + 1)}
-                          readOnly
-                          className="w-full sm:col-span-2 md:col-span-1 px-3 py-2 border rounded-md bg-white"
-                        />
-
-                        <input
-                          placeholder="Identitas"
-                          value={row.identity}
-                          onChange={(e) =>
-                            setSampleListAdd((prev) =>
-                              prev.map((r, i) =>
-                                i === idx
-                                  ? { ...r, identity: e.target.value }
-                                  : r,
-                              ),
-                            )
-                          }
-                          className="w-full sm:col-span-2 md:col-span-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                        />
-
-                        <select
-                          value={row.cacahStatus}
-                          onChange={(e) =>
-                            setSampleListAdd((prev) =>
-                              prev.map((r, i) =>
-                                i === idx
-                                  ? { ...r, cacahStatus: e.target.value }
-                                  : r,
-                              ),
-                            )
-                          }
-                          className="w-full px-3 py-2 border rounded-md bg-white text-sm"
-                        >
-                          <option value="Belum_Cacah">Belum Dicacah</option>
-                          <option value="Selesai">Selesai</option>
-                          {/* <option value="Drop_Out">Drop Out</option> */}
-                        </select>
-
-                        <select
-                          value={row.approvalStatus}
-                          onChange={(e) =>
-                            setSampleListAdd((prev) =>
-                              prev.map((r, i) =>
-                                i === idx
-                                  ? { ...r, approvalStatus: e.target.value }
-                                  : r,
-                              ),
-                            )
-                          }
-                          className="w-full px-3 py-2 border rounded-md bg-white text-sm"
-                        >
-                          <option value="Menunggu">Menunggu</option>
-                          <option value="Disetujui">Disetujui</option>
-                          <option value="Ditolak">Ditolak</option>
-                        </select>
-
-                        <input
-                          placeholder="Lat"
-                          value={row.geoLat ?? ""}
-                          onChange={(e) =>
-                            setSampleListAdd((prev) =>
-                              prev.map((r, i) =>
-                                i === idx
-                                  ? { ...r, geoLat: e.target.value }
-                                  : r,
-                              ),
-                            )
-                          }
-                          className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                        />
-                        <input
-                          placeholder="Lng"
-                          value={row.geoLng ?? ""}
-                          onChange={(e) =>
-                            setSampleListAdd((prev) =>
-                              prev.map((r, i) =>
-                                i === idx
-                                  ? { ...r, geoLng: e.target.value }
-                                  : r,
-                              ),
-                            )
-                          }
-                          className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSampleListAdd((prev) =>
-                              prev.filter((_, i) => i !== idx),
-                            );
-                          }}
-                          className="px-3 py-2 border rounded-md text-sm bg-red-500 text-white hover:bg-red-600 transition-colors font-semibold"
-                        >
-                          Hapus
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="md:col-span-2 flex justify-end">
-              <button
-                type="submit"
-                className={`${styles.button} my-2 text-white w-full sm:w-auto`}
-                disabled={
-                  !!userProgressForm.subSurveyActivityId &&
-                  remainingQuotaForAdd <= 0
-                }
-              >
-                Tambah
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {section === "petugas" && mode === "update" && (
-        <div className="bg-blue-100 rounded-lg p-4 shadow-md">
-          <form
-            onSubmit={handleUpdateUserProgress}
-            className="grid grid-cols-1 md:grid-cols-2 gap-4"
-          >
-            <div className="md:col-span-2">
-              <h3 className="text-lg font-bold">Perbarui Blok Petugas</h3>
-            </div>
-            <div>
-              <label
-                htmlFor="surveyActivityId"
-                className="block text-sm font-bold mb-2"
-              >
-                Tim Penyelenggara
-              </label>
-
-              <HUComboBox
-                value={updateUserProgressForm.surveyActivityId || null}
-                onValueChange={(v) =>
-                  setUpdateUPField("surveyActivityId", (v ?? "") as string)
-                }
-                options={data?.allSurveyActivities.map((s: SurveyActivity) => ({
-                  value: s.id,
-                  label: s.name ?? "-",
-                }))}
-                placeholder="-- Pilih Tim Penyelenggara --"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="subSurveyActivityId"
-                className="block text-sm font-bold mb-2"
-              >
-                Kegiatan Survei
-              </label>
-
-              <HUSelect
-                value={updateUserProgressForm.subSurveyActivityId || null}
-                onValueChange={(v) =>
-                  setUpdateUPField("subSurveyActivityId", (v ?? "") as string)
-                }
-                options={
-                  UpdateUPData?.subSurveyActivityById
-                    ? UpdateUPData?.subSurveyActivityById?.map(
-                        (s: SubSurveyActivity) => ({
-                          value: s.id,
-                          label: s.name,
-                        }),
-                      )
-                    : []
-                }
-                placeholder="-- Pilih Kegiatan --"
-              />
-              {updateUserProgressForm.subSurveyActivityId && (
-                <div className="mt-1 text-xs">
-                  <span className="inline-block rounded bg-white border px-2 py-1">
-                    Target total:{" "}
-                    <b>{selectedSubForUpdate?.targetSample ?? 0}</b> • Total
-                    alokasi: <b>{sumAllAssignedForUpdate}</b> • Maks untuk
-                    petugas ini: <b>{allowedMaxForUpdate}</b>
-                  </span>
-                </div>
-              )}
-            </div>{" "}
-            <div>
-              <label className="block text-sm font-bold mb-2">Role</label>
-              <HUSelect
-                value={updateRoleFilter}
+                value={selectedTimId || null}
                 onValueChange={(v) => {
-                  const role = (v ?? "PETUGAS") as "PETUGAS" | "PENGAWAS";
-                  setUpdateRoleFilter(role);
-                  // reset pilihan UP agar tidak nyangkut dari role sebelumnya
-                  setUpdateUPField("userProgressId", "");
-                  setUpdateUPField("progressRole", "");
+                  setSelectedTimId((v ?? "") as string);
+                  setSelectedKegiatanId("");
                 }}
-                options={[
-                  { value: "PETUGAS", label: "PETUGAS" },
-                  { value: "PENGAWAS", label: "PENGAWAS" },
-                ]}
-                placeholder="-- Pilih Role --"
+                options={tims.map((t) => ({ value: t.id, label: t.name }))}
+                placeholder="Pilih tim"
+                className="w-full"
               />
+              <div className="relative w-full">
+                <Search
+                  size={16}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                />
+                <input
+                  className="w-full pl-9 pr-3 py-2 border rounded-md"
+                  placeholder="Cari kegiatan"
+                  value={kegiatanSearch}
+                  onChange={(e) => setKegiatanSearch(e.target.value)}
+                />
+              </div>
             </div>
-            <div>
-              <label
-                htmlFor="userProgressId"
-                className="block text-sm font-bold mb-2"
-              >
-                Blok Petugas
-              </label>
 
-              <HUComboBox
-                value={updateUserProgressForm.userProgressId || null}
-                onValueChange={async (v) => {
-                  const id = (v ?? "") as string;
-                  if (!id) {
-                    setUpdateUserProgressForm((prev) => ({
-                      ...prev,
-                      userProgressId: "",
-                      totalAssigned: 0,
-                      submitCount: 0,
-                      approvedCount: 0,
-                      rejectedCount: 0,
-                      lastUpdated: "",
-                      districtId: "",
-                      villageId: "",
-                      blockCount: "",
-                      docsBill: "",
-                      progressRole: "",
-                    }));
-                    setSelectedDistrictIdUpdate(null);
-                    setVillagesUpdate([]);
-                    return;
-                  }
+            <button
+              type="button"
+              onClick={openAddKegiatan}
+              className={`${styles.button} text-white`}
+            >
+              Tambah Kegiatan
+            </button>
+          </div>
 
-                  const up = upMap[id];
-                  if (!up) {
-                    // fallback aman kalau map belum siap
-                    setUpdateUPField("userProgressId", id);
-                    return;
-                  }
-
-                  setUpdateUserProgressForm((prev) => ({
-                    ...prev,
-                    userProgressId: id,
-                    totalAssigned: Number(up.totalAssigned ?? 0),
-                    submitCount: Number(up.submitCount ?? 0),
-                    approvedCount: Number(up.approvedCount ?? 0),
-                    rejectedCount: Number(up.rejectedCount ?? 0),
-                    lastUpdated: toDateInput(up.lastUpdated),
-                    districtId: up.districtId ?? "",
-                    villageId: up.villageId ?? "",
-                    blockCount: up.blockCount ?? "",
-                    docsBill: up.docsBill ?? "",
-                    progressRole: up.progressRole ?? "",
-                  }));
-
-                  const districtId = up.districtId ?? "";
-                  setSelectedDistrictIdUpdate(districtId || null);
-                  if (up.districtId) {
-                    const res = await fetchVillages({
-                      variables: { districtId: up.districtId },
-                    });
-                    setVillagesUpdate(res.data?.villagesByDistrict ?? []);
-                  } else {
-                    setVillagesUpdate([]);
-                  }
-                }}
-                options={filteredUPsForUpdate
-                  .filter(
-                    (up: any) => (up.progressRole ?? "") === updateRoleFilter,
-                  )
-                  .map((up: any) => ({
-                    value: up.id,
-                    label: `${up.user?.name ?? "-"} - ${up.village?.name ?? "-"}`,
-                    subLabel: up.user?.email ?? "",
-                    onvalueChange: () => {
-                      setUpdateUPField("progressRole", up.progressRole ?? 0);
-                    },
-                  }))}
-                placeholder={
-                  updateRoleFilter === "PENGAWAS"
-                    ? "-- Pilih Blok Pengawas --"
-                    : "-- Pilih Blok Petugas --"
-                }
-              />
-              {currentUP?.userId && (
-                <p className="mt-1 text-xs">
-                  Limit: <b>{limitBillUpdate.toLocaleString("id-ID")}</b> •
-                  Terpakai:{" "}
-                  <b>{usedDocsUpdateOthers.toLocaleString("id-ID")}</b> • Sisa
-                  untuk baris ini:{" "}
-                  <b className={remainDocsUpdate <= 0 ? "text-red-600" : ""}>
-                    {remainDocsUpdate.toLocaleString("id-ID")}
-                  </b>
-                </p>
-              )}
-            </div>
-            <div>
-              <label
-                htmlFor="districtId"
-                className="block text-sm font-bold mb-2"
-              >
-                Kecamatan
-              </label>
-
-              <HUComboBox
-                value={updateUserProgressForm.districtId || null}
-                onValueChange={async (v) => {
-                  const districtId = (v ?? "") as string;
-                  setUpdateUPField("districtId", districtId);
-                  setSelectedDistrictIdUpdate(districtId);
-
-                  if (districtId) {
-                    const res = await fetchVillages({
-                      variables: { districtId },
-                    });
-                    setVillagesUpdate(res.data?.villagesByDistrict ?? []);
-                  } else {
-                    setVillagesUpdate([]);
-                  }
-                }}
-                options={districtData?.allDistricts?.map((d: District) => ({
-                  value: d.id,
-                  label: d.name,
-                }))}
-                placeholder="-- Pilih Kecamatan --"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="villageId"
-                className="block text-sm font-bold mb-2"
-              >
-                Desa
-              </label>
-              <HUSelect
-                value={updateUserProgressForm.villageId || null}
-                onValueChange={(v) =>
-                  setUpdateUPField("villageId", (v ?? "") as string)
-                }
-                options={villagesUpdate.map((v: Village) => ({
-                  value: v.id,
-                  label: v.name,
-                }))}
-                placeholder={
-                  selectedDistrictIdUpdate
-                    ? "-- Pilih Desa --"
-                    : "Pilih kecamatan dulu"
-                }
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="docsBill"
-                className="block text-sm font-bold mb-2"
-              >
-                Honor Petugas
-              </label>
-              <input
-                id="docsBill"
-                type="number"
-                value={updateUserProgressForm.docsBill}
-                onChange={handleChangeUpdateUserProgress}
-                placeholder="Sertakan Jumlah Honor"
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
-              {currentUP?.userId && (
-                <p
-                  className={`mt-1 text-xs ${willExceedUpdate ? "text-red-600" : "text-gray-600"}`}
-                >
-                  Akan terpakai: {newDocsUpdate.toLocaleString("id-ID")}{" "}
-                  {willExceedUpdate &&
-                    "— Melebihi limit! Total honor sudah mencapai " +
-                      (usedDocsUpdateOthers + newDocsUpdate).toLocaleString(
-                        "id-ID",
-                      )}
-                </p>
-              )}
-            </div>
-            <div>
-              <label
-                htmlFor="blockCount"
-                className="block text-sm font-bold mb-2"
-              >
-                Nama Blok
-              </label>
-              <input
-                id="blockCount"
-                type="text"
-                value={updateUserProgressForm.blockCount}
-                onChange={(e) => setUpdateUPField("blockCount", e.target.value)}
-                placeholder="Contoh: A, B, 01, BLOK-1"
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              />
-            </div>
-            {/* === Daftar Sampel Blok Petugas (UPDATE) === */}
-            {updateUserProgressForm.progressRole === "PETUGAS" && (
-              <div className="md:col-span-2 border rounded-md p-3 bg-white">
-                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-2">
-                  <h4 className="font-bold text-sm">
-                    Daftar Sampel Blok Petugas ({sampleListUpdate.length} Baris)
-                  </h4>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setSampleListUpdate((prev) => {
-                        const nus = getNextNus(prev);
-                        const next = [...prev, { ...emptySampleRow, nus }];
-                        return sortByNusAsc(next);
-                      })
-                    }
-                    className="flex flex-row items-center justify-center px-3 rounded-md cursor-pointer bg-[#2190ff] min-h-[30px] font-Poppins font-semibold text-white hover:bg-[#1977cc] transition-colors text-sm"
-                    disabled={!updateUserProgressForm.userProgressId}
-                    title={
-                      !updateUserProgressForm.userProgressId
-                        ? "Pilih Blok Petugas dulu"
-                        : ""
-                    }
+          <div className="overflow-auto max-h-[60vh] border rounded-lg">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left border-b bg-gray-50">
+                  <th className="py-2 px-3 sticky top-0 bg-gray-50 z-10 font-semibold text-gray-700">
+                    Nama Kegiatan
+                  </th>
+                  <th className="py-2 px-3 w-40 sticky top-0 bg-gray-50 z-10 font-semibold text-gray-700">
+                    Aksi
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {pagedKegiatan.map((k) => (
+                  <tr
+                    key={k.id}
+                    className="text-left border-b hover:bg-gray-50"
                   >
-                    + Tambah Baris
-                  </button>
+                    <td className="py-2 px-3">{k.name}</td>
+                    <td className="py-2 px-3">
+                      <div className="flex gap-2">
+                        <IconButton
+                          title="Update"
+                          onClick={() => openEditKegiatan(k)}
+                          variant="neutral"
+                        >
+                          <Pencil size={16} />
+                        </IconButton>
+                        <IconButton
+                          title="Copy"
+                          onClick={() => handleCopyKegiatan(k)}
+                          variant="neutral"
+                        >
+                          <Copy size={16} />
+                        </IconButton>
+                        <IconButton
+                          title="Hapus"
+                          onClick={() => handleDeleteKegiatan(k.id)}
+                          variant="danger"
+                        >
+                          <Trash2 size={16} />
+                        </IconButton>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <Pager
+            page={kegiatanPage}
+            pageSize={kegiatanPageSize}
+            total={filteredKegiatan.length}
+            onPageChange={setKegiatanPage}
+            onPageSizeChange={setKegiatanPageSize}
+          />
+
+          {kegiatanModalOpen && (
+            <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-3 z-50">
+              <div className="bg-white w-full max-w-2xl rounded-lg p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="font-bold">
+                    {kegiatanModalMode === "add"
+                      ? "Tambah Kegiatan"
+                      : "Update Kegiatan"}
+                  </div>
+                  <IconButton
+                    title="Tutup"
+                    onClick={() => setKegiatanModalOpen(false)}
+                    variant="neutral"
+                  >
+                    <X size={16} />
+                  </IconButton>
                 </div>
 
-                {!updateUserProgressForm.userProgressId ? (
-                  <div className="text-xs text-gray-600">
-                    Pilih Blok Petugas terlebih dahulu untuk memuat sampel.
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div>
+                    <div className="text-sm font-semibold mb-1">
+                      Nama kegiatan
+                    </div>
+                    <input
+                      className="w-full px-3 py-2 border rounded"
+                      value={String(kegiatanDraft.name ?? "")}
+                      onChange={(e) =>
+                        setKegiatanDraft((p) => ({
+                          ...p,
+                          name: e.target.value,
+                        }))
+                      }
+                    />
                   </div>
+                  <div>
+                    <div className="text-sm font-semibold mb-1">Slug</div>
+                    <input
+                      className="w-full px-3 py-2 border rounded"
+                      value={String(kegiatanDraft.slug ?? "")}
+                      onChange={(e) =>
+                        setKegiatanDraft((p) => ({
+                          ...p,
+                          slug: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold mb-1">
+                      Tanggal mulai
+                    </div>
+                    <input
+                      type="date"
+                      className="w-full px-3 py-2 border rounded"
+                      value={String(kegiatanDraft.startDate ?? "")}
+                      onChange={(e) =>
+                        setKegiatanDraft((p) => ({
+                          ...p,
+                          startDate: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold mb-1">
+                      Tanggal selesai
+                    </div>
+                    <input
+                      type="date"
+                      className="w-full px-3 py-2 border rounded"
+                      value={String(kegiatanDraft.endDate ?? "")}
+                      onChange={(e) =>
+                        setKegiatanDraft((p) => ({
+                          ...p,
+                          endDate: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold mb-1">
+                      Target sampel
+                    </div>
+                    <input
+                      type="number"
+                      className="w-full px-3 py-2 border rounded"
+                      value={Number(kegiatanDraft.targetSample ?? 0)}
+                      onChange={(e) =>
+                        setKegiatanDraft((p) => ({
+                          ...p,
+                          targetSample: Number(e.target.value),
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold mb-1">
+                      Jenis sampel
+                    </div>
+                    <input
+                      className="w-full px-3 py-2 border rounded"
+                      value={String(kegiatanDraft.sampleType ?? "")}
+                      onChange={(e) =>
+                        setKegiatanDraft((p) => ({
+                          ...p,
+                          sampleType: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold mb-1">
+                      Jenis kegiatan
+                    </div>
+                    <HUSelect
+                      value={String(kegiatanDraft.activityType ?? "") || null}
+                      onValueChange={(v) =>
+                        setKegiatanDraft((p) => ({
+                          ...p,
+                          activityType: (v ?? "") as string,
+                        }))
+                      }
+                      options={[
+                        { value: "Listing", label: "Listing" },
+                        { value: "Pencacahan", label: "Pencacahan" },
+                      ]}
+                      placeholder="Pilih"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setKegiatanModalOpen(false)}
+                    className="px-4 py-2 rounded bg-gray-100"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={saveKegiatan}
+                    className={`${styles.button} text-white`}
+                  >
+                    Simpan
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ================= PETUGAS ================= */}
+      {tab === "petugas" && (
+        <div className="bg-white rounded-lg p-4 shadow-md space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <HUSelect
+              value={selectedTimId || null}
+              onValueChange={(v) => {
+                setSelectedTimId((v ?? "") as string);
+                setSelectedKegiatanId("");
+              }}
+              options={tims.map((t) => ({ value: t.id, label: t.name }))}
+              placeholder="Pilih tim"
+            />
+            <HUSelect
+              value={selectedKegiatanId || null}
+              onValueChange={(v) => setSelectedKegiatanId((v ?? "") as string)}
+              options={(kegiatanList ?? []).map((k) => ({
+                value: k.id,
+                label: k.name,
+              }))}
+              placeholder="Pilih kegiatan"
+            />
+            <div className="relative">
+              <Search
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              />
+              <input
+                className="w-full pl-9 pr-3 py-2 border rounded-md"
+                placeholder="Cari petugas/pengawas"
+                value={petugasSearch}
+                onChange={(e) => setPetugasSearch(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col md:flex-row gap-2 md:items-center md:justify-between">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={downloadTemplate}
+                className="px-4 py-2 rounded bg-gray-800 text-white"
+              >
+                Download Template Excel
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void handleUploadExcel(f);
+                  e.currentTarget.value = "";
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingExcel}
+                className="px-4 py-2 rounded bg-blue-600 text-white"
+              >
+                {uploadingExcel ? "Uploading..." : "Upload Excel"}
+              </button>
+            </div>
+            <div className="text-xs text-gray-500">
+              <button
+                type="button"
+                disabled={selectedKegiatanId === ""}
+                onClick={() => setAddPairOpen((v) => !v)}
+                className={`${styles.button} text-white w-full`}
+              >
+                Tambah Petugas
+              </button>
+            </div>
+          </div>
+
+          {addPairOpen && (
+            <div className="border rounded-lg p-3 bg-gray-50 space-y-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <HUComboBox
+                  value={addPairPetugasId || null}
+                  onValueChange={(v) =>
+                    setAddPairPetugasId((v ?? "") as string)
+                  }
+                  options={petugasOptions}
+                  placeholder="Pilih petugas"
+                />
+                <HUComboBox
+                  value={addPairPengawasId || null}
+                  onValueChange={(v) =>
+                    setAddPairPengawasId((v ?? "") as string)
+                  }
+                  options={pengawasOptions}
+                  placeholder="Pilih pengawas"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleAddPair()}
+                  className="px-4 py-2 rounded bg-blue-600 text-white"
+                >
+                  Simpan
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddPairOpen(false);
+                    setAddPairPetugasId("");
+                    setAddPairPengawasId("");
+                  }}
+                  className="px-4 py-2 rounded bg-white border"
+                >
+                  Batal
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="overflow-auto max-h-[60vh] border rounded-lg">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left border-b bg-gray-50">
+                  <th className="py-2 px-3 sticky top-0 bg-gray-50 z-10 font-semibold text-gray-700">
+                    Petugas
+                  </th>
+                  <th className="py-2 px-3 sticky top-0 bg-gray-50 z-10 font-semibold text-gray-700">
+                    Pengawas
+                  </th>
+                  <th className="py-2 px-3 w-40 sticky top-0 bg-gray-50 z-10 font-semibold text-gray-700">
+                    Aksi
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {!selectedKegiatanId ? (
+                  <tr>
+                    <td colSpan={3} className="py-6 text-center text-gray-500">
+                      Pilih kegiatan dulu.
+                    </td>
+                  </tr>
+                ) : loadingUP ? (
+                  <tr>
+                    <td colSpan={3} className="py-6 text-center text-gray-500">
+                      Data sedang dimuat...
+                    </td>
+                  </tr>
+                ) : pagedPairs.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="py-6 text-center text-gray-500">
+                      Belum ada data.
+                    </td>
+                  </tr>
                 ) : (
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    <div className="overflow-x-auto">
-                      <div className="min-w-[720px] md:min-w-0 px-1">
-                        {sampleListUpdate.map((row, idx) => (
-                          <div
-                            key={idx}
-                            className="flex gap-2 items-center my-2 w-full"
-                          >
-                            <input
-                              placeholder="NUS"
-                              value={row.nus}
-                              readOnly
-                              className="w-full sm:col-span-2 md:col-span-1 px-3 py-2 border rounded-md bg-white"
+                  pagedPairs.map((p) => {
+                    const edit = pairEdits[p.key] ?? {
+                      userId: p.userId,
+                      superVisorId: p.superVisorId,
+                    };
+                    const expanded = !!expandedPairs[p.key];
+                    return (
+                      <React.Fragment key={p.key}>
+                        <tr className="border-b hover:bg-gray-50 py-2">
+                          <td className="py-2 px-3">
+                            <HUComboBox
+                              value={edit.userId || null}
+                              onValueChange={(v) =>
+                                setPairEdits((prev) => ({
+                                  ...prev,
+                                  [p.key]: {
+                                    ...edit,
+                                    userId: (v ?? "") as string,
+                                  },
+                                }))
+                              }
+                              options={userOptions}
+                              placeholder="Pilih petugas"
                             />
-
-                            <input
-                              placeholder="Identitas"
-                              value={row.identity}
-                              onChange={(e) =>
-                                setSampleListUpdate((prev) =>
-                                  prev.map((r, i) =>
-                                    i === idx
-                                      ? { ...r, identity: e.target.value }
-                                      : r,
-                                  ),
-                                )
+                            <div className="mt-1 flex flex-wrap gap-2 text-xs text-gray-600">
+                              <span className="px-2 py-0.5 rounded bg-gray-100">
+                                Blok: {p.blocks.length}
+                              </span>
+                              <span className="px-2 py-0.5 rounded bg-gray-100">
+                                Sampel:{" "}
+                                {p.blocks.reduce(
+                                  (acc, b) =>
+                                    acc + (b.petugas.samples?.length ?? 0),
+                                  0,
+                                )}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="py-2 px-3">
+                            <HUComboBox
+                              value={edit.superVisorId || null}
+                              onValueChange={(v) =>
+                                setPairEdits((prev) => ({
+                                  ...prev,
+                                  [p.key]: {
+                                    ...edit,
+                                    superVisorId: (v ?? "") as string,
+                                  },
+                                }))
                               }
-                              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                              options={[
+                                { value: "", label: "-" },
+                                ...userOptions,
+                              ]}
+                              placeholder="Pilih pengawas"
                             />
+                            <div className="mt-1 flex flex-wrap gap-2 text-xs text-gray-600 py-[10px]"></div>
+                          </td>
+                          <td className="py-2 px-3">
+                            <div className="flex gap-2">
+                              <IconButton
+                                title="Tambah blok"
+                                onClick={() => openAddBlock(p.key)}
+                                variant="neutral"
+                              >
+                                <Plus size={16} />
+                              </IconButton>
+                              <IconButton
+                                title="Simpan petugas/pengawas"
+                                onClick={() => savePair(p.key)}
+                                variant="primary"
+                              >
+                                <Save size={16} />
+                              </IconButton>
+                              <IconButton
+                                title="Hapus list"
+                                onClick={() => deletePair(p.key)}
+                                variant="danger"
+                              >
+                                <X size={16} />
+                              </IconButton>
+                              <IconButton
+                                title="Tampilkan blok"
+                                onClick={() =>
+                                  setExpandedPairs((x) => ({
+                                    ...x,
+                                    [p.key]: !expanded,
+                                  }))
+                                }
+                                variant="neutral"
+                              >
+                                <ChevronDown size={16} />
+                              </IconButton>
+                            </div>
+                            <div className="mt-1 flex flex-wrap gap-2 text-xs text-gray-600 py-[10px]"></div>
+                          </td>
+                        </tr>
 
-                            <select
-                              value={row.cacahStatus}
-                              onChange={(e) =>
-                                setSampleListUpdate((prev) =>
-                                  prev.map((r, i) =>
-                                    i === idx
-                                      ? { ...r, cacahStatus: e.target.value }
-                                      : r,
-                                  ),
-                                )
-                              }
-                              className="w-full px-3 py-2 border rounded-md bg-white text-sm"
-                            >
-                              <option value="Belum_Cacah">Belum Dicacah</option>
-                              <option value="Selesai">Selesai</option>
-                              {/* <option value="Drop_Out">Drop Out</option> */}
-                            </select>
-
-                            <select
-                              value={row.approvalStatus}
-                              onChange={(e) =>
-                                setSampleListUpdate((prev) =>
-                                  prev.map((r, i) =>
-                                    i === idx
-                                      ? { ...r, approvalStatus: e.target.value }
-                                      : r,
-                                  ),
-                                )
-                              }
-                              className="w-full px-3 py-2 border rounded-md bg-white text-sm"
-                            >
-                              <option value="Menunggu">Menunggu</option>
-                              <option value="Disetujui">Disetujui</option>
-                              <option value="Ditolak">Ditolak</option>
-                            </select>
-
-                            <input
-                              placeholder="Lat"
-                              value={row.geoLat ?? ""}
-                              onChange={(e) =>
-                                setSampleListUpdate((prev) =>
-                                  prev.map((r, i) =>
-                                    i === idx
-                                      ? { ...r, geoLat: e.target.value }
-                                      : r,
-                                  ),
-                                )
-                              }
-                              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                            />
-
-                            <input
-                              placeholder="Lng"
-                              value={row.geoLng ?? ""}
-                              onChange={(e) =>
-                                setSampleListUpdate((prev) =>
-                                  prev.map((r, i) =>
-                                    i === idx
-                                      ? { ...r, geoLng: e.target.value }
-                                      : r,
-                                  ),
-                                )
-                              }
-                              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                            />
-
-                            {/* Hapus baris dari UI */}
-                            <button
-                              type="button"
-                              disabled={patchSampleLoading}
-                              onClick={async () => {
-                                const row: any = sampleListUpdate[idx];
-
-                                if (!row?.id) {
-                                  setSampleListUpdate((prev) =>
-                                    sortByNusAsc(
-                                      prev.filter((_, i) => i !== idx),
-                                    ),
+                        {expanded && (
+                          <tr className="border-b bg-gray-50">
+                            <td colSpan={3} className="py-2">
+                              <div className="space-y-2">
+                                {p.blocks.map((b) => {
+                                  const dName = b.petugas.district?.name ?? "-";
+                                  const vName = b.petugas.village?.name ?? "-";
+                                  const pengawasDocs =
+                                    b.pengawas?.docsBill ?? "0";
+                                  return (
+                                    <div
+                                      key={b.petugas.id}
+                                      className="flex items-center justify-between gap-2 border rounded p-2 bg-white"
+                                    >
+                                      <div className="text-sm">
+                                        <div className="font-semibold">
+                                          {b.petugas.blockCount ??
+                                            "(tanpa nama blok)"}
+                                        </div>
+                                        <div className="text-xs text-gray-600">
+                                          {dName} • {vName} • Honor petugas:{" "}
+                                          {toMoney(
+                                            b.petugas.docsBill,
+                                          ).toLocaleString("id-ID")}{" "}
+                                          • Honor pengawas:{" "}
+                                          {toMoney(pengawasDocs).toLocaleString(
+                                            "id-ID",
+                                          )}
+                                        </div>
+                                      </div>
+                                      <div className="flex gap-2">
+                                        <IconButton
+                                          title="Update blok"
+                                          onClick={() =>
+                                            openEditBlock(
+                                              p.key,
+                                              b.petugas,
+                                              b.pengawas,
+                                            )
+                                          }
+                                          variant="neutral"
+                                        >
+                                          <Pencil size={16} />
+                                        </IconButton>
+                                        <IconButton
+                                          title="Hapus blok"
+                                          onClick={() =>
+                                            deleteBlock(
+                                              b.petugas.id,
+                                              b.pengawas?.id,
+                                            )
+                                          }
+                                          variant="danger"
+                                        >
+                                          <Trash2 size={16} />
+                                        </IconButton>
+                                      </div>
+                                    </div>
                                   );
+                                })}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
 
-                                  return;
-                                }
+          <Pager
+            page={petugasPage}
+            pageSize={petugasPageSize}
+            total={filteredPairs.length}
+            onPageChange={setPetugasPage}
+            onPageSizeChange={setPetugasPageSize}
+          />
 
-                                const userProgressId =
-                                  updateUserProgressForm.userProgressId;
-                                if (!userProgressId) {
-                                  toast.error("User Progress belum dipilih.");
-                                  return;
-                                }
+          {blockModalOpen && (
+            <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-3 z-50">
+              <div className="bg-white w-full max-w-4xl rounded-lg p-4 space-y-3 max-h-[90vh] overflow-auto">
+                <div className="flex items-center justify-between">
+                  <div className="font-bold">
+                    {blockModalMode === "add" ? "Tambah Blok" : "Update Blok"}
+                  </div>
+                  <IconButton
+                    title="Tutup"
+                    onClick={() => setBlockModalOpen(false)}
+                    variant="neutral"
+                  >
+                    <X size={16} />
+                  </IconButton>
+                </div>
 
-                                if (
-                                  !window.confirm(
-                                    "Hapus sample ini beserta fotonya?",
-                                  )
-                                )
-                                  return;
-
-                                try {
-                                  await patchUserSamples({
-                                    variables: {
-                                      input: {
-                                        userProgressId,
-                                        deleteSampleIds: [row.id],
-                                      },
-                                    },
-                                  });
-
-                                  setSampleListUpdate((prev) =>
-                                    prev.filter((_, i) => i !== idx),
-                                  );
-                                } catch (err) {
-                                  console.error(err);
-                                  toast.error("Gagal menghapus sample.");
-                                }
-                              }}
-                              className="px-3 py-2 border rounded-md text-sm bg-red-500 text-white hover:bg-red-600 transition-colors font-semibold disabled:opacity-60"
-                            >
-                              Hapus
-                            </button>
-                          </div>
-                        ))}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div>
+                    <div className="text-sm font-semibold mb-1">Nama blok</div>
+                    <input
+                      className="w-full px-3 py-2 border rounded"
+                      value={blockForm.blockCount}
+                      onChange={(e) =>
+                        setBlockForm((p) => ({
+                          ...p,
+                          blockCount: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <div className="text-sm font-semibold mb-1">
+                        Honor petugas per sampel
                       </div>
+                      <input
+                        className="w-full px-3 py-2 border rounded"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={
+                          toMoney(
+                            Number(blockForm.honorDokPetugas),
+                          ).toLocaleString("id-ID") ?? ""
+                        }
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/[^0-9]/g, "");
+                          const perDoc = raw === "" ? 0 : Number(raw);
+                          setBlockForm((p) => ({
+                            ...p,
+                            honorPetugas: String(perDoc * samples.length),
+                            honorDokPetugas: raw,
+                          }));
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold mb-1">
+                        Honor pengawas per sampel
+                      </div>
+                      <input
+                        className="w-full px-3 py-2 border rounded"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={blockForm.honorDokPengawas ?? ""}
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/[^0-9]/g, "");
+                          const perDoc = raw === "" ? 0 : Number(raw);
+                          setBlockForm((p) => ({
+                            ...p,
+                            honorPengawas: String(perDoc * samples.length),
+                            honorDokPengawas: raw,
+                          }));
+                        }}
+                      />
                     </div>
                   </div>
-                )}
+                  <div>
+                    <div className="text-sm font-semibold mb-1">Kecamatan</div>
+                    <HUSelect
+                      value={blockForm.districtId || null}
+                      onValueChange={(v) =>
+                        setBlockForm((p) => ({
+                          ...p,
+                          districtId: (v ?? "") as string,
+                          villageId: "",
+                        }))
+                      }
+                      options={districtOptions}
+                      placeholder="Pilih kecamatan"
+                    />
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold mb-1">Desa</div>
+                    <HUSelect
+                      value={blockForm.villageId || null}
+                      onValueChange={(v) =>
+                        setBlockForm((p) => ({
+                          ...p,
+                          villageId: (v ?? "") as string,
+                        }))
+                      }
+                      options={villageOptions}
+                      placeholder="Pilih desa"
+                    />
+                  </div>
+                </div>
+
+                <div className="border rounded p-3">
+                  <div className="font-semibold mb-2">
+                    Tabel sampel (disimpan di petugas saja)
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="text-left border-b bg-gray-50">
+                          <th className="py-2 pr-3 sticky top-0 bg-gray-50 z-10 font-semibold text-gray-700">
+                            Identity
+                          </th>
+                          <th className="py-2 pr-3 sticky top-0 bg-gray-50 z-10 font-semibold text-gray-700">
+                            Cacah
+                          </th>
+                          <th className="py-2 pr-3 sticky top-0 bg-gray-50 z-10 font-semibold text-gray-700">
+                            Approval
+                          </th>
+                          <th className="py-2 pr-3 w-20 sticky top-0 bg-gray-50 z-10 font-semibold text-gray-700">
+                            Aksi
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {samples.map((s, i) => (
+                          <tr key={i} className="border-b hover:bg-gray-50">
+                            <td className="py-2 pr-3">
+                              <input
+                                className="w-full px-2 py-1 border rounded"
+                                value={s.identity}
+                                onChange={(e) =>
+                                  setSamples((prev) =>
+                                    prev.map((x, idx) =>
+                                      idx === i
+                                        ? { ...x, identity: e.target.value }
+                                        : x,
+                                    ),
+                                  )
+                                }
+                              />
+                            </td>
+                            <td className="py-2 pr-3">
+                              <HUSelect
+                                value={s.cacahStatus || null}
+                                onValueChange={(v) =>
+                                  setSamples((prev) =>
+                                    prev.map((x, idx) =>
+                                      idx === i
+                                        ? {
+                                            ...x,
+                                            cacahStatus: (v ?? "") as string,
+                                          }
+                                        : x,
+                                    ),
+                                  )
+                                }
+                                options={[
+                                  { value: "Belum_Cacah", label: "Belum" },
+                                  { value: "Selesai", label: "Selesai" },
+                                ]}
+                                placeholder="Pilih"
+                              />
+                            </td>
+                            <td className="py-2 pr-3">
+                              <HUSelect
+                                value={s.approvalStatus || null}
+                                onValueChange={(v) =>
+                                  setSamples((prev) =>
+                                    prev.map((x, idx) =>
+                                      idx === i
+                                        ? {
+                                            ...x,
+                                            approvalStatus: (v ?? "") as string,
+                                          }
+                                        : x,
+                                    ),
+                                  )
+                                }
+                                options={[
+                                  { value: "Menunggu", label: "Menunggu" },
+                                  { value: "Disetujui", label: "Disetujui" },
+                                  { value: "Ditolak", label: "Ditolak" },
+                                ]}
+                                placeholder="Pilih"
+                              />
+                            </td>
+                            <td className="py-2 pr-3">
+                              <IconButton
+                                title="Hapus sampel"
+                                onClick={() =>
+                                  setSamples((prev) =>
+                                    prev.filter((_, idx) => idx !== i),
+                                  )
+                                }
+                                variant="danger"
+                              >
+                                <Trash2 size={16} />
+                              </IconButton>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="flex justify-between items-center mt-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSamples((p) => [
+                          ...p,
+                          {
+                            identity: "",
+                            cacahStatus: "Belum_Cacah",
+                            approvalStatus: "Menunggu",
+                          },
+                        ])
+                      }
+                      className="px-3 py-2 rounded bg-gray-100"
+                    >
+                      Tambah baris
+                    </button>
+                    <div className="text-sm text-gray-600">
+                      Jumlah sampel : {samples.length} • Honor petugas:{" "}
+                      {toMoney(blockForm.honorPetugas).toLocaleString("id-ID")}{" "}
+                      • Honor pengawas:{" "}
+                      {toMoney(blockForm.honorPengawas).toLocaleString("id-ID")}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBlockModalOpen(false)}
+                    className="px-4 py-2 rounded bg-gray-100"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={saveBlock}
+                    className={`${styles.button} text-white`}
+                  >
+                    Simpan
+                  </button>
+                </div>
               </div>
-            )}
-            <div className="md:col-span-2 flex gap-2">
-              {deleteMode ? (
-                <button
-                  type="button"
-                  onClick={handleDeleteUserProgress}
-                  className="my-2 px-6 py-3 rounded-full bg-red-600 text-white font-semibold hover:bg-red-700 w-full"
-                >
-                  Hapus Petugas
-                </button>
-              ) : (
-                <button
-                  type="submit"
-                  className={`${styles.button} my-2 text-white`}
-                >
-                  Perbarui Blok Petugas
-                </button>
-              )}
             </div>
-          </form>
+          )}
         </div>
       )}
     </div>
   );
 }
-
-export default Admin;

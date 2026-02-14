@@ -8,6 +8,11 @@ mutation AddSurveyActivity($input: CreateSurveyActivityDTO!) {
     id
     name
     slug
+    chiefId
+    chief {
+      id
+      name
+    }
   }
 }
 `;

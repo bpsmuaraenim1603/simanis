@@ -334,11 +334,6 @@ export class SurveyActivityService {
     if (!existing)
       throw new NotFoundException('SubSurveyActivity tidak ditemukan');
 
-    if (updateData.startDate != null || updateData.endDate != null) {
-      throw new BadRequestException(
-        'Tanggal kegiatan tidak bisa diubah. Jika salah, hapus lalu buat kegiatan baru.',
-      );
-    }
     const cleanedData = Object.fromEntries(
       Object.entries(updateData).filter(([_, value]) => value != null),
     );
@@ -410,12 +405,14 @@ export class SurveyActivityService {
     districtId?: string | null;
     blockCount?: string | null;
     villageId?: string | null;
+    docsBillPengawas?: string | null;
   }) {
     const subSurveyActivityId = params.subSurveyActivityId ?? null;
     const superVisorId = params.superVisorId ?? null;
     const districtId = params.districtId ?? null;
     const blockCount = params.blockCount ?? null;
     const villageId = params.villageId ?? null;
+    const docsBillPengawas = params.docsBillPengawas ?? null;
     if (!subSurveyActivityId || !superVisorId) return;
 
     const exists = await this.prisma.userProgress.findFirst({
@@ -423,6 +420,7 @@ export class SurveyActivityService {
         userId: superVisorId,
         subSurveyActivityId,
         progressRole: 'PENGAWAS',
+        blockCount: blockCount ?? null,
       },
       select: { id: true },
     });
@@ -440,7 +438,10 @@ export class SurveyActivityService {
         blockCount: blockCount ?? null,
         districtId: districtId ?? null,
         villageId: villageId ?? null,
-        docsBill: '0',
+        docsBill:
+          docsBillPengawas && String(docsBillPengawas).trim()
+            ? String(docsBillPengawas).trim()
+            : '0',
         superVisorId: null,
       },
     });
@@ -450,7 +451,7 @@ export class SurveyActivityService {
     input: CreateUserProgressDTO,
     actorId?: string,
   ) {
-    const { samples, ...rest } = input;
+    const { samples, docsBillPengawas, ...rest } = input;
     let totalAssigned = rest.totalAssigned ?? 0;
     let submitCount = rest.submitCount ?? 0;
     let approvedCount = rest.approvedCount ?? 0;
@@ -525,7 +526,25 @@ export class SurveyActivityService {
       districtId: created.districtId,
       blockCount: created.blockCount,
       villageId: created.villageId,
+      docsBillPengawas: docsBillPengawas ?? null,
     });
+
+    // Jika progress pengawas sudah ada, dan input mengirim honor pengawas, update nilainya
+    if (
+      created.superVisorId &&
+      docsBillPengawas &&
+      String(docsBillPengawas).trim()
+    ) {
+      await this.prisma.userProgress.updateMany({
+        where: {
+          userId: created.superVisorId,
+          subSurveyActivityId: created.subSurveyActivityId,
+          progressRole: 'PENGAWAS',
+          blockCount: created.blockCount ?? null,
+        },
+        data: { docsBill: String(docsBillPengawas).trim() },
+      });
+    }
 
     const [sub, user, supervisor] = await Promise.all([
       created.subSurveyActivityId
@@ -709,7 +728,16 @@ export class SurveyActivityService {
     return this.prisma.$transaction(async (tx) => {
       const upBefore = await tx.userProgress.findUnique({
         where: { id },
-        select: { id: true, userId: true, subSurveyActivityId: true },
+        select: {
+          id: true,
+          userId: true,
+          subSurveyActivityId: true,
+          progressRole: true,
+          superVisorId: true,
+          blockCount: true,
+          districtId: true,
+          villageId: true,
+        },
       });
       if (!upBefore)
         throw new NotFoundException('UserProgress tidak ditemukan');
@@ -718,6 +746,116 @@ export class SurveyActivityService {
         where: { id },
         data: { ...rest },
       });
+
+      // Jika petugas diganti pengawasnya, pastikan record progressRole=PENGAWAS tersedia.
+      const upAfter = await tx.userProgress.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          progressRole: true,
+          subSurveyActivityId: true,
+          superVisorId: true,
+          districtId: true,
+          villageId: true,
+          blockCount: true,
+        },
+      });
+
+      if (
+        upAfter &&
+        upAfter.progressRole === 'PETUGAS' &&
+        upAfter.subSurveyActivityId &&
+        upAfter.superVisorId
+      ) {
+        const oldBlock = upBefore.blockCount ?? null;
+        const newBlock = upAfter.blockCount ?? null;
+
+        const oldSup = upBefore.superVisorId ?? null;
+        const newSup = upAfter.superVisorId ?? null;
+
+        const isPetugas = upAfter.progressRole === 'PETUGAS';
+        const hasSub = !!upAfter.subSurveyActivityId;
+
+        // Deteksi kondisi yang berpotensi bikin duplikat
+        const isRenameBlock = oldBlock !== newBlock;
+        const isChangeSupervisor = oldSup !== newSup;
+
+        if (
+          isPetugas &&
+          hasSub &&
+          newSup &&
+          (isRenameBlock || isChangeSupervisor)
+        ) {
+          const existsNew = await tx.userProgress.findFirst({
+            where: {
+              userId: newSup,
+              subSurveyActivityId: upAfter.subSurveyActivityId,
+              progressRole: 'PENGAWAS',
+              blockCount: newBlock,
+            },
+            select: { id: true },
+          });
+          const oldSupProgress = await tx.userProgress.findFirst({
+            where: {
+              userId: oldSup ?? newSup,
+              subSurveyActivityId: upAfter.subSurveyActivityId,
+              progressRole: 'PENGAWAS',
+              blockCount: oldBlock,
+            },
+            select: { id: true, docsBill: true },
+          });
+
+          if (!existsNew && oldSupProgress) {
+            await tx.userProgress.update({
+              where: { id: oldSupProgress.id },
+              data: {
+                userId: newSup,
+                blockCount: newBlock,
+                districtId: upAfter.districtId ?? null,
+                villageId: upAfter.villageId ?? null,
+              },
+            });
+          } else if (
+            existsNew &&
+            oldSupProgress &&
+            oldSupProgress.id !== existsNew.id
+          ) {
+            if (String(oldSupProgress.docsBill ?? '0') === '0') {
+              await tx.userProgress.delete({
+                where: { id: oldSupProgress.id },
+              });
+            }
+          }
+        }
+        const existsSup = await tx.userProgress.findFirst({
+          where: {
+            userId: upAfter.superVisorId,
+            subSurveyActivityId: upAfter.subSurveyActivityId,
+            progressRole: 'PENGAWAS',
+            blockCount: upAfter.blockCount ?? null,
+          },
+          select: { id: true },
+        });
+
+        if (!existsSup) {
+          await tx.userProgress.create({
+            data: {
+              userId: upAfter.superVisorId,
+              subSurveyActivityId: upAfter.subSurveyActivityId,
+              progressRole: 'PENGAWAS',
+              totalAssigned: 0,
+              submitCount: 0,
+              approvedCount: 0,
+              rejectedCount: 0,
+              blockCount: upAfter.blockCount ?? null,
+              districtId: upAfter.districtId ?? null,
+              villageId: upAfter.villageId ?? null,
+              docsBill: '0',
+              superVisorId: null,
+            },
+          });
+        }
+      }
 
       const existing = await tx.userSample.findMany({
         where: { userProgressId: id },

@@ -201,6 +201,11 @@ export class CreateUserProgressDTO {
   @Field({ nullable: true })
   docsBill?: string;
 
+  // khusus untuk pengawas (tanpa sampel). Jika diisi, sistem akan meng-upsert progressRole=PENGAWAS
+  // pada subSurveyActivityId + blockCount yang sama.
+  @Field({ nullable: true })
+  docsBillPengawas?: string;
+
   @Field({ nullable: true })
   budgetCode?: string;
 
@@ -239,6 +244,13 @@ export class UserSampleInput {
 export class UpdateUserProgressDTO {
   @Field()
   id: string;
+
+  // opsional: untuk mengganti petugas atau pengawas yang terhubung pada progressRole=PETUGAS
+  @Field({ nullable: true })
+  userId?: string;
+
+  @Field({ nullable: true })
+  superVisorId?: string;
 
   @Field({ nullable: true })
   blockCount?: string;

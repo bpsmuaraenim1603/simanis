@@ -8,6 +8,11 @@ export const GET_ALL_SURVEY_ACTIVITIES: DocumentNode = gql`
       id
       name
       slug
+      chiefId
+      chief {
+        id
+        name
+      }
     }
   }
 `;

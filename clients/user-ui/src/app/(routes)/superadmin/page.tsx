@@ -139,6 +139,20 @@ function formatDateShort(iso: string) {
   return `${dd}/${mm}/${yy}`;
 }
 
+const isActiveInThisMonth = (sub: any, now = new Date()) => {
+  if (!sub?.startDate || !sub?.endDate) return false;
+
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  endOfMonth.setHours(23, 59, 59, 999);
+
+  const s = new Date(sub.startDate);
+  const e = new Date(sub.endDate);
+  e.setHours(23, 59, 59, 999);
+
+  return s <= endOfMonth && e >= startOfMonth;
+};
+
 function MonthlyStaffUsagePanel({
   year,
   setYear,
@@ -153,14 +167,14 @@ function MonthlyStaffUsagePanel({
     {
       variables: { year },
       fetchPolicy: "cache-and-network",
-    }
+    },
   );
 
   const [fetchExport, { loading: exporting }] = useLazyQuery(
     GET_STAFF_YEARLY_EXPORT,
     {
       fetchPolicy: "network-only",
-    }
+    },
   );
 
   const rows = (data?.getMonthlyActivityStaffUsage ?? []) as Array<{
@@ -182,13 +196,13 @@ function MonthlyStaffUsagePanel({
     }
 
     const entries = Array.from(map.entries()).sort(([a], [b]) =>
-      a.localeCompare(b)
+      a.localeCompare(b),
     );
 
     for (const [, arr] of entries) {
       arr.sort(
         (x, y) =>
-          new Date(x.startDate).getTime() - new Date(y.startDate).getTime()
+          new Date(x.startDate).getTime() - new Date(y.startDate).getTime(),
       );
     }
     return entries;
@@ -220,7 +234,7 @@ function MonthlyStaffUsagePanel({
     }
 
     return Array.from(map.values()).sort((a, b) =>
-      (a.name ?? "").localeCompare(b.name ?? "", "id")
+      (a.name ?? "").localeCompare(b.name ?? "", "id"),
     );
   }, [rows]);
 
@@ -711,7 +725,7 @@ function MonthlyStaffUsagePanel({
                     (selectedActivity.staffUsers ?? [])
                       .slice()
                       .sort((a, b) =>
-                        (a.name ?? "").localeCompare(b.name ?? "", "id")
+                        (a.name ?? "").localeCompare(b.name ?? "", "id"),
                       )
                       .map((u) => (
                         <button
@@ -775,7 +789,7 @@ export default function SuperAdminManagePage() {
   });
 
   const [rotateDailySignupCode, { loading: rotatingCode }] = useMutation(
-    ROTATE_DAILY_SIGNUP_CODE
+    ROTATE_DAILY_SIGNUP_CODE,
   );
 
   const dailySignupCode = dailyCodeData?.getDailySignupCode?.code as
@@ -833,7 +847,7 @@ export default function SuperAdminManagePage() {
       }
       router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     },
-    [router, pathname, searchParams]
+    [router, pathname, searchParams],
   );
 
   const [honorUser, setHonorUser] = useState<any | null>(null);
@@ -906,20 +920,20 @@ export default function SuperAdminManagePage() {
       const currentRolesRaw: string[] = Array.isArray(user.roles)
         ? user.roles
         : user.primaryRole
-        ? [user.primaryRole]
-        : user.role
-        ? [user.role]
-        : [];
+          ? [user.primaryRole]
+          : user.role
+            ? [user.role]
+            : [];
 
       const draftRolesRaw: string[] =
         roleDraft[user.id] ??
         (Array.isArray(user.roles)
           ? user.roles
           : user.primaryRole
-          ? [user.primaryRole]
-          : user.role
-          ? [user.role]
-          : []);
+            ? [user.primaryRole]
+            : user.role
+              ? [user.role]
+              : []);
 
       const currentPrimary = user.primaryRole ?? currentRolesRaw[0] ?? "User";
       const draftPrimary =
@@ -932,7 +946,7 @@ export default function SuperAdminManagePage() {
 
       const currentRoles = normalize(currentRolesRaw);
       const draftRoles = normalize(
-        draftRolesRaw.length ? draftRolesRaw : ["User"]
+        draftRolesRaw.length ? draftRolesRaw : ["User"],
       );
 
       const dirtyRole =
@@ -1019,7 +1033,7 @@ export default function SuperAdminManagePage() {
       updateRole,
       updateBillLimit,
       refetch,
-    ]
+    ],
   );
 
   const openHonorModal = async (user: any) => {
@@ -1046,6 +1060,9 @@ export default function SuperAdminManagePage() {
   const closeHonorModal = () => setHonorUser(null);
 
   const honorRows: any[] = honorData?.userProgressSurveyByUserId ?? [];
+  const honorRowsActive = useMemo(() => {
+    return honorRows.filter((r) => isActiveInThisMonth(r.subSurveyActivity));
+  }, [honorRows]);
   const honorGrouped = useMemo(() => {
     const map = new Map<
       string,
@@ -1057,7 +1074,7 @@ export default function SuperAdminManagePage() {
         total: number;
       }
     >();
-    for (const r of honorRows) {
+    for (const r of honorRowsActive) {
       const key = r.subSurveyActivityId || "unknown";
       const prev = map.get(key);
       const add = Number(r.docsBill ?? 0);
@@ -1076,14 +1093,52 @@ export default function SuperAdminManagePage() {
       }
     }
     return Array.from(map.values()).sort((a, b) =>
-      a.subName.localeCompare(b.subName, "id")
+      a.subName.localeCompare(b.subName, "id"),
     );
-  }, [honorRows]);
+  }, [honorRowsActive]);
 
   const honorGrandTotal = useMemo(
     () => honorGrouped.reduce((acc, it) => acc + it.total, 0),
-    [honorGrouped]
+    [honorGrouped],
   );
+
+  const honorGroupedHistory = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        subId: string;
+        subName: string;
+        activityType?: string;
+        district?: string;
+        lastUpdated: string;
+        count: number;
+        total: number;
+      }
+    >();
+    for (const r of honorRows) {
+      const key = r.subSurveyActivityId || "unknown";
+      const prev = map.get(key);
+      const add = Number(r.docsBill ?? 0);
+      const limitBill = Number(honorData?.user?.limit_bill ?? 0);
+      if (prev) {
+        prev.count += 1;
+        prev.total += add;
+      } else {
+        map.set(key, {
+          subId: key,
+          subName: r.subSurveyActivity?.name ?? "(Tanpa nama)",
+          activityType: r.subSurveyActivity?.activityType,
+          district: r.district?.name,
+          lastUpdated: r.lastUpdated,
+          count: 1,
+          total: add,
+        });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) =>
+      a.subName.localeCompare(b.subName, "id"),
+    );
+  }, [honorRows]);
 
   const limitBill = useMemo(() => {
     const direct = Number(honorUser?.limit_bill ?? honorUser?.limitBill ?? NaN);
@@ -1121,7 +1176,7 @@ export default function SuperAdminManagePage() {
                   {dailySignupDate ? `(${dailySignupDate})` : ""}
                 </span> */}
                 <span className="font-mono font-semibold tracking-widest">
-                  {dailyCodeLoading ? "MEMUAT…" : dailySignupCode ?? "-"}
+                  {dailyCodeLoading ? "MEMUAT…" : (dailySignupCode ?? "-")}
                 </span>
               </span>
               <button
@@ -1228,40 +1283,40 @@ export default function SuperAdminManagePage() {
 
                       {filteredUsers.map((user: any) => {
                         const baseLimit = Number(
-                          user.limit_bill ?? user.limitBill ?? 0
+                          user.limit_bill ?? user.limitBill ?? 0,
                         );
                         const limitPending = pendingLimit[user.id];
                         const effectiveLimit =
                           limitPending ?? String(baseLimit);
 
                         const currentRolesRaw: string[] = Array.isArray(
-                          user.roles
+                          user.roles,
                         )
                           ? user.roles
                           : user.primaryRole
-                          ? [user.primaryRole]
-                          : user.role
-                          ? [user.role]
-                          : [];
+                            ? [user.primaryRole]
+                            : user.role
+                              ? [user.role]
+                              : [];
 
                         const draftRolesRaw: string[] =
                           roleDraft[user.id] ??
                           (Array.isArray(user.roles)
                             ? user.roles
                             : user.primaryRole
-                            ? [user.primaryRole]
-                            : user.role
-                            ? [user.role]
-                            : []);
+                              ? [user.primaryRole]
+                              : user.role
+                                ? [user.role]
+                                : []);
 
                         const normalize = (arr: string[]) =>
                           Array.from(
-                            new Set((arr ?? []).filter(Boolean))
+                            new Set((arr ?? []).filter(Boolean)),
                           ).sort();
 
                         const currentRoles = normalize(currentRolesRaw);
                         const draftRoles = normalize(
-                          draftRolesRaw.length ? draftRolesRaw : ["User"]
+                          draftRolesRaw.length ? draftRolesRaw : ["User"],
                         );
 
                         const currentPrimary =
@@ -1303,10 +1358,10 @@ export default function SuperAdminManagePage() {
                                   (Array.isArray(user.roles)
                                     ? user.roles
                                     : user.primaryRole
-                                    ? [user.primaryRole]
-                                    : user.role
-                                    ? [user.role]
-                                    : []);
+                                      ? [user.primaryRole]
+                                      : user.role
+                                        ? [user.role]
+                                        : []);
 
                                 const basePrimary =
                                   primaryDraft[user.id] ??
@@ -1431,7 +1486,7 @@ export default function SuperAdminManagePage() {
                                   inputMode="numeric"
                                   pattern="[0-9]*"
                                   value={fmtID.format(
-                                    Number(effectiveLimit || "0")
+                                    Number(effectiveLimit || "0"),
                                   )}
                                   onChange={(e) =>
                                     handleLimitChange(user.id, e.target.value)
@@ -1439,7 +1494,7 @@ export default function SuperAdminManagePage() {
                                   onFocus={(e) =>
                                     e.currentTarget.setSelectionRange(
                                       0,
-                                      e.currentTarget.value.length
+                                      e.currentTarget.value.length,
                                     )
                                   }
                                   className="h-10 w-40 border border-gray-300 -ml-px rounded-r-md bg-white px-3 text-sm text-left outline-none"
@@ -1591,10 +1646,10 @@ export default function SuperAdminManagePage() {
                                 <th className="px-4 py-2">Kegiatan</th>
                                 <th className="px-4 py-2">Jenis</th>
                                 <th className="px-4 py-2 text-right">
-                                  Jumlah Blok
+                                  Blok
                                 </th>
                                 <th className="px-4 py-2 text-right">
-                                  Total Honor
+                                  Honor
                                 </th>
                               </tr>
                             </thead>
@@ -1609,7 +1664,7 @@ export default function SuperAdminManagePage() {
                                     {fmtID.format(g.count)}
                                   </td>
                                   <td className="px-4 py-2 text-right font-semibold">
-                                    Rp {fmtID.format(g.total)}
+                                    {fmtID.format(g.total)}
                                   </td>
                                 </tr>
                               ))}
@@ -1617,10 +1672,10 @@ export default function SuperAdminManagePage() {
                             <tfoot>
                               <tr className="bg-gray-50 border-t">
                                 <td className="px-4 py-3 font-bold" colSpan={3}>
-                                  Total Akumulasi
+                                  Total Akumulasi Honor
                                 </td>
                                 <td className="px-4 py-3 text-right font-bold">
-                                  Rp {fmtID.format(honorGrandTotal)}
+                                  {fmtID.format(honorGrandTotal)}
                                 </td>
                               </tr>
                             </tfoot>
@@ -1659,33 +1714,36 @@ export default function SuperAdminManagePage() {
                                 <tr>
                                   <th className="px-3 py-2">Kegiatan</th>
                                   <th className="px-3 py-2">Jenis</th>
-                                  <th className="px-3 py-2">Kecamatan/Desa</th>
+                                  <th className="px-3 py-2">Kecamatan</th>
+                                  <th className="px-3 py-2 text-right">Blok</th>
                                   <th className="px-3 py-2 text-right">
                                     Honor
                                   </th>
-                                  <th className="px-3 py-2">Last Updated</th>
+                                  <th className="px-3 py-2">Terakhir diubah</th>
                                 </tr>
                               </thead>
                               <tbody className="bg-white">
-                                {honorRows.map((r, idx) => (
-                                  <tr key={r.id ?? idx} className="border-t">
+                                {honorGroupedHistory.map((r, idx) => (
+                                  <tr key={r.subId ?? idx} className="border-t">
                                     <td className="px-3 py-2">
-                                      {r.subSurveyActivity?.name ?? "-"}
+                                      {r.subName ?? "-"}
                                     </td>
                                     <td className="px-3 py-2">
-                                      {r.subSurveyActivity?.activityType ?? "-"}
+                                      {r.activityType ?? "-"}
                                     </td>
                                     <td className="px-3 py-2">
-                                      {r.district?.name ?? r.village?.name ?? "-"}
+                                      {r.district ?? "-"}
                                     </td>
                                     <td className="px-3 py-2 text-right">
-                                      Rp{" "}
-                                      {fmtID.format(Number(r.docsBill ?? 0))}
+                                      {fmtID.format(r.count ?? 0)}
+                                    </td>
+                                    <td className="px-3 py-2 text-right">
+                                      {fmtID.format(Number(r.total ?? 0))}
                                     </td>
                                     <td className="px-3 py-2">
                                       {r.lastUpdated
                                         ? new Date(
-                                            r.lastUpdated
+                                            r.lastUpdated,
                                           ).toLocaleString("id-ID")
                                         : "-"}
                                     </td>
