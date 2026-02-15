@@ -136,7 +136,6 @@ model User {
   phone_number String
   address      String?
   job_name     String?
-  village_name String?
   password     String
   primaryRole  Role     @default(User)
   roles        Role[]   @default([User])
@@ -144,21 +143,22 @@ model User {
   limit_bill   String
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  nip          String?  @unique
+  districtId   String
+  district     District @relation(fields: [districtId], references: [id])
+  villageId    String
+  village      Village @relation(fields: [villageId], references: [id])
 
   UPUser    UserProgress[] @relation("UserProgress_User")
   JobLetter JobLetter[]
   SubmitSPJ SubmitSPJ[]
-
   IssueComment IssueComment[]
-
   ContentIssue ContentIssue[]
-
   UpSuperVisor UserProgress[] @relation("UserProgress_Supervisor")
-
   NotificationR Notification[] @relation("Notification_Recipient")
-
   NotificationA    Notification[]   @relation("Notification_Actor")
   surveyActivities SurveyActivity[]
+  MonthlyAdminDocRecapAsPPK MonthlyAdminDocRecap[] @relation("MonthlyAdminDocRecap_PPK")
 }
 
 model ContentIssue {
@@ -239,6 +239,7 @@ model District {
 
   UserProgress UserProgress[]
   villages     Village[]
+  users        User[]
 }
 
 model Village {
@@ -249,6 +250,7 @@ model Village {
   district   District @relation(fields: [districtId], references: [id])
 
   UserProgress UserProgress[]
+  users        User[]
 }
 
 model JobLetter {
@@ -328,4 +330,45 @@ model TempDoc {
   @@index([userId])
 }
 
-// name,email,password,role,phone_number,address, 
+model MonthlyAdminDocRecap {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  year      Int
+  month     Int
+
+  ppkUserId  String?
+  ppkUser    User?    @relation("MonthlyAdminDocRecap_PPK", fields: [ppkUserId], references: [id])
+  ppkName    String
+  ppkNip     String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items MonthlyAdminDocRecapItem[]
+
+  @@unique([userId, year, month])
+  @@index([year, month])
+}
+
+model MonthlyAdminDocRecapItem {
+  id        String   @id @default(uuid())
+  recapId   String
+  recap     MonthlyAdminDocRecap @relation(fields: [recapId], references: [id], onDelete: Cascade)
+
+  subSurveyActivityId String
+  subSurveyActivity   SubSurveyActivity @relation(fields: [subSurveyActivityId], references: [id], onDelete: Cascade)
+
+  budgetCode String?
+
+  spkNumber  String?
+  bastNumber String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([recapId, subSurveyActivityId])
+  @@index([subSurveyActivityId])
+}
+

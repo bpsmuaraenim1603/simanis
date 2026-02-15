@@ -21,7 +21,9 @@ function Profile() {
     phone_number: user?.phone_number || "",
     address: user?.address || "",
     job_name: user?.job_name || "",
-    village_name: user?.village_name || "",
+    nip: user?.nip || "",
+    district_name: user?.district?.name || "",
+    village_name: user?.village?.name || "",
   });
 
   useEffect(() => {
@@ -32,7 +34,9 @@ function Profile() {
         phone_number: user.phone_number || "",
         address: user.address || "",
         job_name: user.job_name || "",
-        village_name: user.village_name || "",
+        nip: user.nip || "",
+        district_name: user.district?.name || "",
+        village_name: user.village?.name || "",
       });
     }
   }, [user]);
@@ -85,7 +89,13 @@ function Profile() {
             <strong>Alamat:</strong> {user?.address || "-"}
           </p>
           <p>
-            <strong>Desa:</strong> {user?.village_name || "-"}
+            <strong>NIP:</strong> {user?.nip || "-"}
+          </p>
+          <p>
+            <strong>Kecamatan:</strong> {user?.district?.name || "-"}
+          </p>
+          <p>
+            <strong>Desa:</strong> {user?.village?.name || "-"}
           </p>
           <p>
             <strong>Pekerjaan:</strong> {user?.job_name || "-"}

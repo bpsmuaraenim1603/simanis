@@ -18,7 +18,7 @@ import { JwtService } from '@nestjs/jwt/dist/jwt.service';
 import { APP_GUARD } from '@nestjs/core/constants';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TempDocCleanupService } from './temp-doc-cleanup.service';
-
+import { SubSurveyStatusJob } from './jobs/subsurvey-status.job';
 @Module({
   imports: [
     HttpModule,
@@ -37,7 +37,6 @@ import { TempDocCleanupService } from './temp-doc-cleanup.service';
       playground: process.env.NODE_ENV !== 'production',
     }),
   ],
-  // Tidak memakai REST ZIP lagi. Dokumen dibuat via GraphQL dan disimpan di storage.
   controllers: [],
   providers: [
     SurveyActivityService,
@@ -51,6 +50,7 @@ import { TempDocCleanupService } from './temp-doc-cleanup.service';
     JwtService,
     { provide: APP_GUARD, useClass: AuthGuard },
     TempDocCleanupService,
+    SubSurveyStatusJob,
   ],
   exports: [],
 })

@@ -14,6 +14,7 @@ export const GET_ALL_SUB_SURVEY_ACTIVITIES: DocumentNode = gql`
       targetSample
       sampleType
       activityType
+      status
     }
   }
 `;

@@ -34,6 +34,7 @@ import {
   JobLetter,
   SubmitSPJ,
   User,
+  SubSurveyStatus,
 } from '@prisma/client';
 import { HttpService } from '@nestjs/axios';
 import { identity, lastValueFrom } from 'rxjs';
@@ -158,7 +159,6 @@ export class SurveyActivityService {
   private formatNumberID(n: number) {
     const v = Number(n);
     const safe = Number.isFinite(v) ? v : 0;
-    // Dokumen honor umumnya bilangan bulat.
     return new Intl.NumberFormat('id-ID', {
       maximumFractionDigits: 0,
     }).format(Math.round(safe));
@@ -426,6 +426,17 @@ export class SurveyActivityService {
     });
     if (exists) return;
 
+    const supBill = this.parseMoney(
+      docsBillPengawas && String(docsBillPengawas).trim()
+        ? String(docsBillPengawas).trim()
+        : '0',
+    );
+
+    await this.assertMonthlyBillLimit({
+      userId: superVisorId,
+      subSurveyActivityId,
+      addAmount: supBill,
+    });
     await this.prisma.userProgress.create({
       data: {
         userId: superVisorId,
@@ -490,16 +501,22 @@ export class SurveyActivityService {
         (actor.roles ?? []).includes('Keuangan'));
 
     const now = new Date();
-    const finishedByDate =
-      now.getTime() > new Date(subfilter.endDate).getTime();
+    // const finishedByDate =
+    //   now.getTime() > new Date(subfilter.endDate).getTime();
     const finishedByStatus = subfilter.status === 'SELESAI';
 
-    // aturan: dianggap selesai kalau status selesai ATAU lewat endDate
-    if ((finishedByStatus || finishedByDate) && !isKeuangan) {
+    if (finishedByStatus && !isKeuangan) {
       throw new ForbiddenException(
-        'Kegiatan sudah selesai. Hanya role Keuangan yang boleh menambah petugas.',
+        'Kegiatan sudah selesai. Tidak bisa menambah petugas/pengawas.',
       );
     }
+
+    const addPetugas = this.parseMoney((rest as any)?.docsBill ?? null);
+    await this.assertMonthlyBillLimit({
+      userId: input.userId,
+      subSurveyActivityId: input.subSurveyActivityId,
+      addAmount: addPetugas,
+    });
 
     const created = await this.prisma.userProgress.create({
       data: {
@@ -529,12 +546,34 @@ export class SurveyActivityService {
       docsBillPengawas: docsBillPengawas ?? null,
     });
 
-    // Jika progress pengawas sudah ada, dan input mengirim honor pengawas, update nilainya
     if (
       created.superVisorId &&
       docsBillPengawas &&
       String(docsBillPengawas).trim()
     ) {
+      const existingSup = await this.prisma.userProgress.findFirst({
+        where: {
+          userId: created.superVisorId,
+          subSurveyActivityId: created.subSurveyActivityId,
+          progressRole: 'PENGAWAS',
+          blockCount: created.blockCount ?? null,
+        },
+        select: { id: true, docsBill: true },
+      });
+      const nextSup = this.parseMoney(String(docsBillPengawas).trim());
+      const prevSup = this.parseMoney(existingSup?.docsBill ?? null);
+      const deltaSup = Math.max(0, nextSup - prevSup);
+      const superVisorId = created.superVisorId;
+      const subSurveyActivityId = created.subSurveyActivityId;
+
+      if (superVisorId && subSurveyActivityId) {
+        await this.assertMonthlyBillLimit({
+          userId: superVisorId,
+          subSurveyActivityId: subSurveyActivityId,
+          addAmount: deltaSup,
+        });
+      }
+
       await this.prisma.userProgress.updateMany({
         where: {
           userId: created.superVisorId,
@@ -735,6 +774,7 @@ export class SurveyActivityService {
           progressRole: true,
           superVisorId: true,
           blockCount: true,
+          docsBill: true,
           districtId: true,
           villageId: true,
         },
@@ -742,12 +782,25 @@ export class SurveyActivityService {
       if (!upBefore)
         throw new NotFoundException('UserProgress tidak ditemukan');
 
+      if (
+        Object.prototype.hasOwnProperty.call(rest as any, 'docsBill') &&
+        upBefore.subSurveyActivityId
+      ) {
+        const nextBill = this.parseMoney((rest as any)?.docsBill ?? null);
+
+        await this.assertMonthlyBillLimit({
+          userId: upBefore.userId,
+          subSurveyActivityId: upBefore.subSurveyActivityId,
+          addAmount: nextBill,
+          excludeProgressIds: [id],
+        });
+      }
+
       await tx.userProgress.update({
         where: { id },
         data: { ...rest },
       });
 
-      // Jika petugas diganti pengawasnya, pastikan record progressRole=PENGAWAS tersedia.
       const upAfter = await tx.userProgress.findUnique({
         where: { id },
         select: {
@@ -776,7 +829,6 @@ export class SurveyActivityService {
         const isPetugas = upAfter.progressRole === 'PETUGAS';
         const hasSub = !!upAfter.subSurveyActivityId;
 
-        // Deteksi kondisi yang berpotensi bikin duplikat
         const isRenameBlock = oldBlock !== newBlock;
         const isChangeSupervisor = oldSup !== newSup;
 
@@ -1652,6 +1704,73 @@ export class SurveyActivityService {
     };
   }
 
+  private async assertMonthlyBillLimit(params: {
+    userId: string;
+    subSurveyActivityId: string;
+    addAmount: number;
+    now?: Date;
+    excludeProgressIds?: string[];
+  }) {
+    const { userId, subSurveyActivityId } = params;
+    const addAmount = Number(params.addAmount ?? 0);
+    if (!Number.isFinite(addAmount) || addAmount <= 0) return;
+
+    const now = params.now ?? new Date();
+    const { from, to } = this.monthRange(now.getMonth() + 1, now.getFullYear());
+
+    const [u, sub] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { limit_bill: true, name: true },
+      }),
+      this.prisma.subSurveyActivity.findUnique({
+        where: { id: subSurveyActivityId },
+        select: { startDate: true, endDate: true, name: true },
+      }),
+    ]);
+
+    if (!u) throw new NotFoundException('User tidak ditemukan');
+    if (!sub) throw new NotFoundException('SubSurveyActivity tidak ditemukan');
+
+    const limit = this.parseMoney(u.limit_bill);
+    if (!Number.isFinite(limit) || limit <= 0) return;
+
+    const overlap =
+      new Date(sub.startDate).getTime() <= to.getTime() &&
+      new Date(sub.endDate).getTime() >= from.getTime();
+    if (!overlap) return;
+
+    const excludeIds = (params.excludeProgressIds ?? []).filter(Boolean);
+
+    const progresses = await this.prisma.userProgress.findMany({
+      where: {
+        userId,
+        ...(excludeIds.length ? { NOT: excludeIds.map((id) => ({ id })) } : {}),
+        subSurveyActivity: {
+          startDate: { lte: to },
+          endDate: { gte: from },
+        },
+      },
+      select: { docsBill: true },
+    });
+
+    const currentTotal = progresses.reduce(
+      (acc, p) => acc + this.parseMoney(p.docsBill),
+      0,
+    );
+    const nextTotal = currentTotal + addAmount;
+
+    if (nextTotal > limit) {
+      throw new BadRequestException(
+        `Batas honor bulan ini terlampaui untuk ${u.name || 'user'}: ` +
+          `batas ${this.formatNumberID(limit)}, ` +
+          `total saat ini ${this.formatNumberID(currentTotal)}, ` +
+          `penambahan ${this.formatNumberID(addAmount)}. ` +
+          `Kegiatan: ${sub.name || '-'} (${this.formatDateId(from)} s.d. ${this.formatDateId(to)}).`,
+      );
+    }
+  }
+
   async getMonthlyActivityStaffUsage(year: number, actor: any) {
     actor = await this.enrichActor(actor);
     const actorId = actor?.id;
@@ -2131,7 +2250,6 @@ export class SurveyActivityService {
       sampleRows = XLSX.utils.sheet_to_json(sheetSamples, { defval: '' });
     }
 
-    // Kelompokkan sampel per "No Petugas"
     const samplesByNoPetugas = new Map<
       string,
       {
@@ -2187,7 +2305,7 @@ export class SurveyActivityService {
 
     for (let i = 0; i < petugasRows.length; i++) {
       const r = petugasRows[i];
-      const rowIndex = i + 2; // baris di Excel (header di baris 1)
+      const rowIndex = i + 2;
 
       try {
         const noPetugas = String(r['Nomor Petugas'] || '').trim();
@@ -2220,20 +2338,27 @@ export class SurveyActivityService {
           );
         }
 
-        // Ambil daftar sampel untuk No Petugas ini (boleh kosong)
         const samplesForThisPetugas = samplesByNoPetugas.get(noPetugas) ?? [];
 
         // ============ TRANSAKSI PER PETUGAS ============
 
         const rowResult = await this.prisma.$transaction(async (tx) => {
-          // Validasi referensi
           const subs = await tx.subSurveyActivity.findUnique({
             where: { id: subSurveyActivityId },
-            select: { id: true },
+            select: { id: true, status: true, endDate: true },
           });
           if (!subs) {
             throw new Error(
               `subSurveyActivityId tidak ditemukan: ${subSurveyActivityId}`,
+            );
+          }
+
+          // const now = new Date();
+          // const endDate = new Date(subs.endDate);
+          // if (subs.status === 'SELESAI' || endDate.getTime() < now.getTime()) {
+          if (subs.status === 'SELESAI') {
+            throw new Error(
+              'Kegiatan sudah selesai. Tidak bisa menambah petugas/pengawas.',
             );
           }
 
@@ -2285,7 +2410,6 @@ export class SurveyActivityService {
           let pengawasInserted = 0;
           let pengawasUpdated = 0;
 
-          // Cek apakah sudah ada userProgress untuk PETUGAS ini
           const existingPetugas = await tx.userProgress.findFirst({
             where: {
               userId,
@@ -2293,12 +2417,18 @@ export class SurveyActivityService {
               progressRole: 'PETUGAS',
               blockCount,
             },
-            select: { id: true },
+            select: { id: true, docsBill: true },
           });
 
           let userProgressId: string;
 
           if (!existingPetugas) {
+            const nextPetugasBill = this.parseMoney(docsBillPetugas);
+            await this.assertMonthlyBillLimit({
+              userId,
+              subSurveyActivityId,
+              addAmount: nextPetugasBill,
+            });
             const created = await tx.userProgress.create({
               data: {
                 userId,
@@ -2339,6 +2469,14 @@ export class SurveyActivityService {
             petugasInserted++;
           } else {
             userProgressId = existingPetugas.id;
+            const prevPetugasBill = this.parseMoney(existingPetugas.docsBill);
+            const nextPetugasBill = this.parseMoney(docsBillPetugas);
+            const deltaPetugas = Math.max(0, nextPetugasBill - prevPetugasBill);
+            await this.assertMonthlyBillLimit({
+              userId,
+              subSurveyActivityId,
+              addAmount: deltaPetugas,
+            });
 
             await tx.userProgress.update({
               where: { id: userProgressId },
@@ -2385,10 +2523,16 @@ export class SurveyActivityService {
                 progressRole: 'PENGAWAS',
                 blockCount,
               },
-              select: { id: true },
+              select: { id: true, docsBill: true },
             });
 
             if (!existingSup) {
+              const nextSupBill = this.parseMoney(docsBillPengawas);
+              await this.assertMonthlyBillLimit({
+                userId: superVisorId,
+                subSurveyActivityId,
+                addAmount: nextSupBill,
+              });
               await tx.userProgress.create({
                 data: {
                   userId: superVisorId,
@@ -2407,6 +2551,14 @@ export class SurveyActivityService {
               });
               pengawasInserted++;
             } else {
+              const prevSupBill = this.parseMoney(existingSup.docsBill);
+              const nextSupBill = this.parseMoney(docsBillPengawas);
+              const deltaSup = Math.max(0, nextSupBill - prevSupBill);
+              await this.assertMonthlyBillLimit({
+                userId: superVisorId,
+                subSurveyActivityId,
+                addAmount: deltaSup,
+              });
               await tx.userProgress.update({
                 where: { id: existingSup.id },
                 data: { docsBill: docsBillPengawas },
@@ -2445,7 +2597,6 @@ export class SurveyActivityService {
     userProgressId: string,
     actorId?: string,
   ): Promise<{ zipUrl: string; totalPhotos: number }> {
-    // 1. Cek userProgress dan pemiliknya
     const up = await this.prisma.userProgress.findUnique({
       where: { id: userProgressId },
       select: {
@@ -2533,7 +2684,7 @@ export class SurveyActivityService {
 
     const { data: signed, error: signedErr } = await supabase.storage
       .from(bucket)
-      .createSignedUrl(exportKey, 60 * 60); // 1 jam
+      .createSignedUrl(exportKey, 60 * 60);
 
     if (signedErr || !signed?.signedUrl) {
       throw new BadRequestException('Gagal membuat signed URL export');
@@ -2555,13 +2706,64 @@ export class SurveyActivityService {
     return { from, to };
   }
 
-  private parseMoney(v?: string | null): number {
-    if (!v) return 0;
-    const s = String(v)
-      .replace(/[^\d.,-]/g, '')
-      .replace(',', '.');
-    const n = Number(s);
-    return Number.isFinite(n) ? n : 0;
+  private parseMoney(input?: string | number | null): number {
+    if (input === null || input === undefined) return 0;
+
+    if (typeof input === 'number') return Number.isFinite(input) ? input : 0;
+
+    let s = String(input).trim();
+    if (!s) return 0;
+
+    let negative = false;
+    if (s.startsWith('(') && s.endsWith(')')) {
+      negative = true;
+      s = s.slice(1, -1).trim();
+    }
+
+    s = s.replace(/\s+/g, '');
+    s = s.replace(/[^0-9.,-]/g, '');
+
+    if (s.startsWith('-')) {
+      negative = true;
+      s = s.slice(1);
+    }
+    s = s.replace(/-/g, '');
+
+    if (!s) return 0;
+
+    const lastDot = s.lastIndexOf('.');
+    const lastComma = s.lastIndexOf(',');
+
+    let decSep: '.' | ',' | null = null;
+    if (lastDot === -1 && lastComma === -1) {
+      decSep = null;
+    } else if (lastDot > lastComma) {
+      decSep = '.';
+    } else {
+      decSep = ',';
+    }
+
+    let intPart = s;
+    let fracPart = '';
+
+    if (decSep) {
+      const idx = decSep === '.' ? lastDot : lastComma;
+      intPart = s.slice(0, idx);
+      fracPart = s.slice(idx + 1);
+    }
+
+    intPart = intPart.replace(/[.,]/g, '');
+    fracPart = fracPart.replace(/[.,]/g, '');
+
+    if (!/\d/.test(intPart) && !/\d/.test(fracPart)) return 0;
+
+    const normalized = fracPart
+      ? `${intPart || '0'}.${fracPart}`
+      : intPart || '0';
+    const n = Number(normalized);
+
+    if (!Number.isFinite(n)) return 0;
+    return negative ? -n : n;
   }
 
   async getMonthlyStaffDocPreview(userId: string, month: number, year: number) {
@@ -2662,7 +2864,6 @@ export class SurveyActivityService {
         map.set(key, {
           subSurveyActivityId: ssa.id,
           activityName: ssa.name,
-          // simpan yang sudah dipotong sesuai bulan yang dipilih
           startDate: startInMonth,
           endDate: endInMonth,
           totalDocs: docs,
@@ -2695,14 +2896,12 @@ export class SurveyActivityService {
       };
     });
 
-    // urutkan biar enak dibaca: nama kegiatan A-Z
     rows.sort((a, b) => a.activityName.localeCompare(b.activityName));
 
     return rows;
   }
 
   private resolveTemplatePath(rel: string) {
-    // dev: process.cwd() biasanya di servers/
     const candidates = [
       path.join(process.cwd(), 'apps', 'surveyact', 'templates', rel),
       path.join(
@@ -2737,12 +2936,11 @@ export class SurveyActivityService {
   }
 
   private async sheetToDocxBuffer(sheet: XLSX.WorkSheet, title?: string) {
-    // Paksa range hanya A:H agar kolom tidak jadi 50+
     const startRow = 0;
     const endRow = XLSX.utils.decode_range(sheet['!ref'] || 'A1:H1').e.r;
 
-    const startCol = 0; // A
-    const endCol = 7; // H
+    const startCol = 0;
+    const endCol = 7;
 
     const rows: TableRow[] = [];
 
@@ -2873,7 +3071,6 @@ export class SurveyActivityService {
   }
 
   private getMonthlyStaffDocTtlHours() {
-    // default: 24 jam (mirip mekanisme kode registrasi yang expired)
     const raw = process.env.MONTHLY_STAFF_DOC_TTL_HOURS;
     const n = Number(raw);
     if (!raw) return 24;
@@ -2932,7 +3129,6 @@ export class SurveyActivityService {
   }) {
     const built = await this.generateMonthlyStaffDocsBuffers(input);
 
-    // Upload ke Supabase Storage, lalu simpan TTL (expiresAt) ke DB agar file bisa ikut terhapus.
     let spk: Awaited<ReturnType<typeof this.uploadMonthlyStaffDoc>> | null =
       null;
     let bast: Awaited<ReturnType<typeof this.uploadMonthlyStaffDoc>> | null =
@@ -2962,8 +3158,22 @@ export class SurveyActivityService {
           },
         ],
       });
+      
+      await this.upsertMonthlyAdminDocRecap({
+        userId: input.userId,
+        year: input.year,
+        month: input.month,
+        ppkUserId: null,
+        ppkName: input.ppkName,
+        ppkNip: input.ppkNip,
+        nomorSPK: built.nomorSPK,
+        nomorBAST: built.nomorBAST,
+        rows: input.rows.map((r) => ({
+          subSurveyActivityId: r.subSurveyActivityId,
+          budgetCode: r.budgetCode,
+        })),
+      });
     } catch (e) {
-      // kalau salah satu upload gagal, hapus yang sempat terupload
       const bucket =
         process.env.SUPABASE_MONTHLY_STAFF_DOC_BUCKET || 'monthly-staff-docs';
       await this.storage.removeMany(bucket, [
@@ -3012,10 +3222,9 @@ export class SurveyActivityService {
     ).trim();
 
     const desaTinggalPetugas = String(
-      input.desaTinggalPetugas ?? (user as any)?.village_name ?? '',
+      input.desaTinggalPetugas ?? (user as any)?.village?.name ?? '',
     ).trim();
 
-    // ambil preview server-side agar eligibility tetap aman
     const preview = await this.getMonthlyStaffDocPreview(
       input.userId,
       input.month,
@@ -3070,7 +3279,6 @@ export class SurveyActivityService {
     if (!nomorSPK) throw new BadRequestException('nomorSPK wajib diisi');
     if (!nomorBAST) throw new BadRequestException('nomorBAST wajib diisi');
 
-    // validasi ringan agar mengurangi salah format
     if (!nomorSPK.includes('/BPS1603/PPK/SPK/')) {
       throw new BadRequestException(
         'Format nomorSPK tidak sesuai (wajib mengandung /BPS1603/PPK/SPK/)',
@@ -3102,7 +3310,6 @@ export class SurveyActivityService {
     const honorTotalAllTerbilang = this.terbilang(Math.floor(grandTotal));
     const honorTerbilang = honorTotalAllTerbilang;
 
-    // rows untuk template (SPK & BAST beda kolom)
     const rowsSpk = eligibleRows.map((r, i) => {
       const tglMulai = this.formatDateId(r.startDate);
       const tglSelesai = this.formatDateId(r.endDate);
@@ -3244,5 +3451,78 @@ export class SurveyActivityService {
       rows: input.rows,
     });
     return docType === 'BAST' ? out.bastUrl : out.spkUrl;
+  }
+
+  private async upsertMonthlyAdminDocRecap(input: {
+    userId: string;
+    year: number;
+    month: number;
+    ppkUserId?: string | null;
+    ppkName: string;
+    ppkNip: string;
+    nomorSPK: string;
+    nomorBAST: string;
+    rows: Array<{
+      subSurveyActivityId: string;
+      budgetCode?: string;
+    }>;
+  }) {
+    const recap = await this.prisma.monthlyAdminDocRecap.upsert({
+      where: {
+        userId_year_month: {
+          userId: input.userId,
+          year: input.year,
+          month: input.month,
+        },
+      },
+      create: {
+        userId: input.userId,
+        year: input.year,
+        month: input.month,
+        ppkUserId: input.ppkUserId ?? null,
+        ppkName: input.ppkName,
+        ppkNip: input.ppkNip,
+      },
+      update: {
+        ppkUserId: input.ppkUserId ?? null,
+        ppkName: input.ppkName,
+        ppkNip: input.ppkNip,
+      },
+    });
+
+    for (const r of input.rows) {
+      await this.prisma.monthlyAdminDocRecapItem.upsert({
+        where: {
+          recapId_subSurveyActivityId: {
+            recapId: recap.id,
+            subSurveyActivityId: r.subSurveyActivityId,
+          },
+        },
+        create: {
+          recapId: recap.id,
+          subSurveyActivityId: r.subSurveyActivityId,
+          budgetCode: r.budgetCode ?? null,
+          spkNumber: input.nomorSPK,
+          bastNumber: input.nomorBAST,
+        },
+        update: {
+          budgetCode: r.budgetCode ?? null,
+          spkNumber: input.nomorSPK,
+          bastNumber: input.nomorBAST,
+        },
+      });
+    }
+
+    return recap;
+  }
+
+  async updateSubSurveyActivityStatus(
+    subSurveyActivityId: string,
+    status: any,
+  ) {
+    return this.prisma.subSurveyActivity.update({
+      where: { id: subSurveyActivityId },
+      data: { status },
+    });
   }
 }

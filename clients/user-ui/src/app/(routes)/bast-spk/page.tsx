@@ -10,6 +10,7 @@ import styles from "@/src/utils/style";
 import { GET_ALL_USERS } from "@/src/graphql/actions/find-allusers.action";
 import { GET_MONTHLY_STAFF_DOC_PREVIEW } from "@/src/graphql/actions/get-monthly-staff-doc-preview.action";
 import { GENERATE_MONTHLY_STAFF_DOCS } from "@/src/graphql/actions/generate-monthly-staff-docs.action";
+import { PPK_OPTIONS } from "@/src/graphql/actions/users.ppkOptions.gql";
 
 type PreviewRow = {
   subSurveyActivityId: string;
@@ -62,6 +63,8 @@ export default function BastSpkPage() {
   const canAccess = hasAnyRole(user, ["Superadmin", "Admin", "Keuangan"]);
 
   const { data: usersData, loading: usersLoading } = useQuery(GET_ALL_USERS);
+  const { data: ppkData } = useQuery(PPK_OPTIONS);
+
   const users = usersData?.getUsers ?? [];
 
   const userOptions: HUOption[] = useMemo(() => {
@@ -91,6 +94,7 @@ export default function BastSpkPage() {
   const [spkUrl, setSpkUrl] = useState<string | null>(null);
   const [bastUrl, setBastUrl] = useState<string | null>(null);
   const [expiresAtInfo, setExpiresAtInfo] = useState<string>("");
+  const [ppkUserId, setPpkUserId] = useState<string>("");
 
   const [rows, setRows] = useState<EditableRow[]>([]);
 
@@ -146,6 +150,14 @@ export default function BastSpkPage() {
     },
   );
 
+  const ppkOptions: HUOption[] = useMemo(() => {
+    return (ppkData?.ppkOptions ?? []).map((p: any) => ({
+      value: p.id,
+      label: p.name,
+      subLabel: p.nip ?? "-",
+    }));
+  }, [ppkData]);
+
   const selectedUser = useMemo(() => {
     if (!selectedUserId) return null;
     return users.find((u: any) => u.id === selectedUserId) ?? null;
@@ -179,7 +191,7 @@ export default function BastSpkPage() {
       return;
     }
     setPetugasJobName(selectedUser.job_name ?? "");
-    setPetugasVillageName(selectedUser.village_name ?? "");
+    setPetugasVillageName(selectedUser.village?.name ?? "");
   }, [selectedUser]);
 
   useEffect(() => {
@@ -304,22 +316,21 @@ export default function BastSpkPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-semibold mb-1">Nama PPK</label>
-            <input
-              className="w-full rounded-md border px-3 py-2 bg-white"
-              value={ppkName}
-              onChange={(e) => setPpkName(e.target.value)}
-              placeholder="Nama PPK"
-            />
-          </div>
+            <label className="text-sm font-semibold">PPK</label>
+            <HUComboBox
+              value={ppkUserId || null}
+              onValueChange={(v) => {
+                const id = (v ?? "") as string;
+                setPpkUserId(id);
 
-          <div>
-            <label className="block text-sm font-semibold mb-1">NIP PPK</label>
-            <input
-              className="w-full rounded-md border px-3 py-2 bg-white"
-              value={ppkNip}
-              onChange={(e) => setPpkNip(e.target.value)}
-              placeholder="Contoh: 1987xxxxxxxxxxxx"
+                const picked = (ppkData?.ppkOptions ?? []).find(
+                  (x: any) => x.id === id,
+                );
+                setPpkName(picked?.name ?? "");
+                setPpkNip(picked?.nip ?? "");
+              }}
+              options={ppkOptions}
+              placeholder="-- Pilih PPK --"
             />
           </div>
 
@@ -555,7 +566,7 @@ export default function BastSpkPage() {
                 return toast.error("Nomor BAST wajib diisi.");
 
               const payloadRows = rows
-                .filter((r) => r.eligible)
+                .filter((r) => r.eligible && r.included)
                 .map((r) => ({
                   subSurveyActivityId: r.subSurveyActivityId,
                   unitName: (r.editUnitName || "Dokumen").trim() || "Dokumen",

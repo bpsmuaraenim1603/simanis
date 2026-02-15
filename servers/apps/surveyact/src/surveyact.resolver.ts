@@ -9,6 +9,7 @@ import {
   ResolveField,
   Resolver,
 } from '@nestjs/graphql';
+import { UseGuards } from '@nestjs/common';
 import { SurveyActivityService } from './surveyacts.service';
 import {
   ContentIssueType,
@@ -49,18 +50,24 @@ import {
   UpdateUserProgressDTO,
   GenerateMonthlyStaffDocInput,
   GenerateMonthlyStaffDocsInput,
+  UpdateSubSurveyActivityStatusDTO,
 } from './dto/surveyact.dto';
+
 import {
   IssueStatus,
   JobLetter,
   SubmitSPJ,
   UserProgress,
+  Role,
+  SubSurveyStatus
 } from '@prisma/client';
 import { UserType } from 'apps/users/src/types/users.types';
 import { FileUpload, GraphQLUpload } from 'graphql-upload-ts';
 import { DeleteByIdInput, DeleteResult } from './dto/delete.input';
 import { BulkUserProgressResult } from './dto/bulk-userprogress.dto';
 import { Public } from './decorators/public.decorator';
+import { Roles } from './decorators/roles.decorator';
+import { RolesGuard } from './guards/roles.guard';
 
 @Resolver(() => SurveyActivityType)
 export class SurveyActivityResolver {
@@ -72,7 +79,7 @@ export class SurveyActivityResolver {
   }
 
   @Query(() => [SurveyActivityType], { name: 'allSurveyActivities' })
-  async allSurveyActivities(@Context() ctx: any,) {
+  async allSurveyActivities(@Context() ctx: any) {
     const actor = ctx?.req?.user;
     return this.service.findAll(actor);
   }
@@ -321,7 +328,9 @@ export class SurveyActivityResolver {
   }
 
   @Query(() => [SubSurveyProgressType], { name: 'getAllSubSurveyProgress' })
-  async getAllSubSurveyProgress(@Context() ctx: any): Promise<SubSurveyProgressType[]> {
+  async getAllSubSurveyProgress(
+    @Context() ctx: any,
+  ): Promise<SubSurveyProgressType[]> {
     const actor = ctx?.req?.user;
     return this.service.getAllSubSurveyProgress(actor);
   }
@@ -362,7 +371,6 @@ export class SurveyActivityResolver {
   ) {
     return this.service.generateMonthlyStaffDocs(input);
   }
-
 
   @Query(() => [StaffYearlyExportRowType])
   getStaffYearlyExport(@Args('year', { type: () => Int }) year: number) {
@@ -481,6 +489,18 @@ export class SurveyActivityResolver {
       updatedPengawas: res.updatedPengawas,
       errors: res.errors,
     };
+  }
+
+  @UseGuards(RolesGuard)
+  @Roles(Role.Keuangan)
+  @Mutation(() => SubSurveyActivityType)
+  async updateSubSurveyActivityStatus(
+    @Args('input') input: UpdateSubSurveyActivityStatusDTO,
+  ) {
+    return this.service.updateSubSurveyActivityStatus(
+      input.subSurveyActivityId,
+      input.status,
+    );
   }
 }
 

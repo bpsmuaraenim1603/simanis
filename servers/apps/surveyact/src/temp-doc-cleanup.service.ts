@@ -12,7 +12,6 @@ export class TempDocCleanupService {
     private readonly storage: StorageService,
   ) {}
 
-  // Jalankan berkala. Aman karena operasi idempotent (file yang sudah hilang akan di-skip).
   @Cron('*/10 * * * *')
   async cleanupExpiredTempDocs() {
     const now = new Date();
@@ -26,7 +25,6 @@ export class TempDocCleanupService {
 
     if (expired.length === 0) return;
 
-    // group by bucket supaya delete lebih efisien
     const byBucket = new Map<string, string[]>();
     for (const row of expired) {
       if (!byBucket.has(row.bucket)) byBucket.set(row.bucket, []);

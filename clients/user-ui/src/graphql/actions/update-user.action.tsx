@@ -9,7 +9,9 @@ export const UPDATE_PROFILE = gql`
       phone_number
       address
       job_name
-      village_name
+      nip
+      districtId
+      villageId
       primaryRole
       roles
     }

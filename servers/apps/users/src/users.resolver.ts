@@ -93,7 +93,7 @@ export class UsersResolver {
     @Args('registerDto') registerDto: RegisterDto,
     @Context() context: { res: Response },
   ): Promise<RegisterResponse> {
-    if (!registerDto.name || !registerDto.email || !registerDto.password || !registerDto.phone_number || !registerDto.address || !registerDto.job_name || !registerDto.village_name || !registerDto.signupCode) {
+    if (!registerDto.name || !registerDto.email || !registerDto.password || !registerDto.phone_number || !registerDto.address || !registerDto.job_name || !registerDto.districtId || !registerDto.villageId|| !registerDto.signupCode) {
       throw new BadRequestException('Tolong isi semua kolom yang tersedia!');
     }
 
@@ -261,5 +261,11 @@ export class UsersResolver {
   @UseGuards(AuthGuard)
   async markAllNotificationsRead(@CurrentUser() user: User): Promise<number> {
     return this.usersService.markAllNotificationsRead(user.id);
+  }
+
+  @UseGuards(AuthGuard)
+  @Query(() => [UserType])
+  async ppkOptions() {
+    return this.usersService.ppkOptions();
   }
 }

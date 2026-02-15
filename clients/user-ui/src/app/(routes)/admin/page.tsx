@@ -4,7 +4,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@apollo/client";
 import toast from "react-hot-toast";
 import * as XLSX from "xlsx";
-
 import styles from "@/src/utils/style";
 import HUSelect from "@/src/components/HUSelect";
 import HUComboBox from "@/src/components/HUCombobox";
@@ -21,7 +20,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-
+import useUser from "@/src/hooks/useUser";
 import { GET_ALL_USERS } from "@/src/graphql/actions/find-allusers.action";
 import { GET_ALL_SURVEY_ACTIVITIES } from "@/src/graphql/actions/find-allsurveyact.action";
 import { ADD_SURVEY_ACTIVITY } from "@/src/graphql/actions/add-surveyact.action";
@@ -31,17 +30,16 @@ import {
   DELETE_SUBSURVEY_ACTIVITY,
   DELETE_USER_SURVEY_PROGRESS,
 } from "@/src/graphql/actions/delete";
-
 import { GET_ALL_SUB_SURVEY_ACTIVITIES } from "@/src/graphql/actions/find-allsubsurveyact.action";
 import { ADD_SUBSURVEY_ACTIVITY } from "@/src/graphql/actions/add-subsurveyact.action";
 import { UPDATE_SUB_SURVEY_ACTIVITY } from "@/src/graphql/actions/update-subsurvey.action";
-
 import { GET_USER_PROGRESS_BY_SUBSURVEY_ID } from "@/src/graphql/actions/find-usersurveyprogress.action";
 import { CREATE_USER_PROGRESS } from "@/src/graphql/actions/create-userprogress.action";
 import { UPDATE_USER_PROGRESS } from "@/src/graphql/actions/update-userprogress.action";
 import { BULK_IMPORT_USERPROGRESS_EXCEL } from "@/src/graphql/actions/bulk-import-userprogress.action";
 import { GET_ALL_OF_DISTRICT } from "@/src/graphql/actions/find-alldistrict.action";
 import { GET_ALL_OF_VILLAGE } from "@/src/graphql/actions/find-allvillages.action";
+import UpdateActivityStatusModal from "@/src/components/UpdateActivityStatusModal";
 
 type User = {
   id: string;
@@ -68,6 +66,7 @@ type SubSurveyActivity = {
   targetSample: number;
   sampleType: string;
   activityType: string;
+  status?: string;
 };
 type District = { id: string; city: string; name: string; coderegion?: string };
 type Village = {
@@ -222,6 +221,19 @@ function Pager({
 
 export default function Admin() {
   const router = useRouter();
+  const { user } = useUser();
+  const isKeuangan =
+    user?.primaryRole === "Keuangan" ||
+    (user?.roles ?? []).includes("Keuangan");
+
+  const isAdmin = user?.primaryRole === "Admin";
+  const isSuperAdmin = (user?.roles ?? []).includes("SuperAdmin");
+
+  const [statusModalOpen, setStatusModalOpen] = useState(false);
+  const [pickedStatus, setPickedStatus] = useState<{
+    id: string;
+    status: string;
+  } | null>(null);
   const searchParams = useSearchParams();
   const [tab, setTab] = useState<TabKey>("tim");
 
@@ -246,7 +258,6 @@ export default function Admin() {
   const [petugasPage, setPetugasPage] = useState(1);
   const [petugasPageSize, setPetugasPageSize] = useState(10);
 
-  // global master
   const { data: usersData } = useQuery(GET_ALL_USERS);
   const { data: timData, refetch: refetchTim } = useQuery(
     GET_ALL_SURVEY_ACTIVITIES,
@@ -266,18 +277,15 @@ export default function Admin() {
     return tims.slice(start, start + timPageSize);
   }, [tims, timPage, timPageSize]);
 
-  // Tim mutations
   const [createTim, { loading: creatingTim }] =
     useMutation(ADD_SURVEY_ACTIVITY);
   const [updateTim] = useMutation(UPDATE_SURVEY_ACTIVITY);
   const [deleteTim] = useMutation(DELETE_SURVEY_ACTIVITY);
 
-  // Kegiatan mutations
   const [createKegiatan] = useMutation(ADD_SUBSURVEY_ACTIVITY);
   const [updateKegiatan] = useMutation(UPDATE_SUB_SURVEY_ACTIVITY);
   const [deleteKegiatan] = useMutation(DELETE_SUBSURVEY_ACTIVITY);
 
-  // Petugas mutations
   const [createUserProgress] = useMutation(CREATE_USER_PROGRESS);
   const [updateUserProgress] = useMutation(UPDATE_USER_PROGRESS);
   const [deleteUserProgress] = useMutation(DELETE_USER_SURVEY_PROGRESS);
@@ -416,6 +424,8 @@ export default function Admin() {
     sampleType: "",
     activityType: "",
   });
+  const [draftSampleCount, setDraftSampleCount] = useState<number | null>(null);
+  const [activeBlockOldSampleCount, setActiveBlockOldSampleCount] = useState(0);
 
   const { data: kegiatanData, refetch: refetchKegiatan } = useQuery(
     GET_ALL_SUB_SURVEY_ACTIVITIES,
@@ -601,7 +611,6 @@ export default function Admin() {
   const upList: UserProgress[] = (upData?.userProgressBySubSurveyActivityId ??
     []) as any[];
 
-  // map pengawas blocks by (userId|blockCount)
   const pengawasByKey = useMemo(() => {
     const m = new Map<string, UserProgress>();
     for (const u of upList) {
@@ -662,7 +671,6 @@ export default function Admin() {
   async function handleAddPair() {
     if (!selectedKegiatanId) return toast.error("Pilih kegiatan dulu.");
     if (!addPairPetugasId) return toast.error("Petugas wajib dipilih.");
-    // pengawas boleh kosong jika aturan Anda membolehkan
     try {
       await createUserProgress({
         variables: {
@@ -756,6 +764,17 @@ export default function Admin() {
     return filtered.map((v) => ({ value: v.id, label: v.name }));
   }, [villages.length, blockForm.districtId]);
 
+  useEffect(() => {
+    const perPetugas = toMoney(blockForm.honorDokPetugas);
+    const perPengawas = toMoney(blockForm.honorDokPengawas);
+
+    setBlockForm((p) => ({
+      ...p,
+      honorPetugas: String(perPetugas * samples.length),
+      honorPengawas: String(perPengawas * samples.length),
+    }));
+  }, [samples.length, blockForm.honorDokPetugas, blockForm.honorDokPengawas]);
+
   function safePerSample(total: any, count: number) {
     if (!count || count <= 0) return "0";
     const n = Number(total ?? 0);
@@ -779,6 +798,8 @@ export default function Admin() {
     setSamples([
       { identity: "", cacahStatus: "Belum_Cacah", approvalStatus: "Menunggu" },
     ]);
+    setDraftSampleCount(1);
+    setActiveBlockOldSampleCount(0);
     setBlockModalOpen(true);
   }
 
@@ -817,18 +838,18 @@ export default function Admin() {
             },
           ],
     );
+    setDraftSampleCount(count > 0 ? count : 1);
+    setActiveBlockOldSampleCount(count);
     setBlockModalOpen(true);
   }
 
   async function savePair(pairKey: string) {
     const edit = pairEdits[pairKey];
     if (!edit?.userId) return toast.error("Petugas wajib dipilih.");
-    // pengawas boleh kosong
     const pair = pairs.find((p) => p.key === pairKey);
     if (!pair) return;
 
     try {
-      // update semua blok petugas pada pair ini (ubah userId/superVisorId)
       for (const b of pair.blocks) {
         await updateUserProgress({
           variables: {
@@ -901,7 +922,6 @@ export default function Admin() {
     const docsBillPetugas = String(honorPetugas);
     const docsBillPengawas = String(honorPengawas);
 
-    // validasi limit_bill (per pengguna)
     const petugasUser = users.find((u) => u.id === editPair.userId);
     const petugasLimit = Number(petugasUser?.limit_bill ?? 0);
     const petugasBill = Number(docsBillPetugas);
@@ -973,7 +993,6 @@ export default function Admin() {
           },
         });
 
-        // update honor pengawas pada record PENGAWAS yang matching
         if (activeBlock.pengawasId) {
           await updateUserProgress({
             variables: {
@@ -992,26 +1011,35 @@ export default function Admin() {
       }
 
       setBlockModalOpen(false);
+      setDraftSampleCount(null);
+      setActiveBlockOldSampleCount(0);
       await refetchUP();
     } catch (e: any) {
       toast.error(e?.message ?? "Gagal menyimpan blok.");
     }
   }
 
-  // upload excel
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  function pickUploadPetugasSheet(wb: any) {
+    const target = "UPLOAD_PETUGAS";
+    const sheetName = wb.SheetNames.includes(target)
+      ? target
+      : wb.SheetNames[0];
+    return { sheetName, ws: wb.Sheets[sheetName] };
+  }
 
   async function handleUploadExcel(file: File) {
     try {
-      // Validasi limit_bill (excel). Menolak upload jika honor melebihi limit pengguna.
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf);
-      const ws = wb.Sheets[wb.SheetNames[0]];
+      const { sheetName, ws } = pickUploadPetugasSheet(wb);
+      if (!ws) throw new Error(`Sheet tidak ditemukan: ${sheetName}`);
       const rows = XLSX.utils.sheet_to_json<any>(ws, { defval: "" });
 
       const errors: Array<{ row: number; message: string }> = [];
       rows.forEach((r: any, i: number) => {
-        const rowNo = i + 2; // header di baris 1
+        const rowNo = i + 2;
         const petugasId = String(r["Id Petugas"] ?? "").trim();
         const pengawasId = String(r["Id Pengawas"] ?? "").trim();
         const honorPetugas = Number(r["Honor Petugas"]);
@@ -1357,6 +1385,9 @@ export default function Admin() {
                   <th className="py-2 px-3 sticky top-0 bg-gray-50 z-10 font-semibold text-gray-700">
                     Nama Kegiatan
                   </th>
+                  <th className="py-2 px-3 w-32 sticky top-0 bg-gray-50 z-10 font-semibold text-gray-700">
+                    Status
+                  </th>
                   <th className="py-2 px-3 w-40 sticky top-0 bg-gray-50 z-10 font-semibold text-gray-700">
                     Aksi
                   </th>
@@ -1369,6 +1400,29 @@ export default function Admin() {
                     className="text-left border-b hover:bg-gray-50"
                   >
                     <td className="py-2 px-3">{k.name}</td>
+                    <td className="py-2 px-3">
+                      {isKeuangan ? (
+                        <IconButton
+                          title="Ubah Status"
+                          onClick={() => {
+                            setPickedStatus({
+                              id: k.id,
+                              status: k.status ?? "BERJALAN",
+                            });
+                            setStatusModalOpen(true);
+                          }}
+                          variant="neutral"
+                        >
+                          <span className="text-xs font-semibold">
+                            {k.status ?? "-"}
+                          </span>
+                        </IconButton>
+                      ) : (
+                        <span className="rounded border px-2 py-1 text-xs">
+                          {k.status ?? "-"}
+                        </span>
+                      )}
+                    </td>
                     <td className="py-2 px-3">
                       <div className="flex gap-2">
                         <IconButton
@@ -1558,6 +1612,16 @@ export default function Admin() {
               </div>
             </div>
           )}
+
+          <UpdateActivityStatusModal
+            open={statusModalOpen}
+            onClose={() => {
+              setStatusModalOpen(false);
+              refetchKegiatan();
+            }}
+            activityId={pickedStatus?.id ?? ""}
+            currentStatus={pickedStatus?.status ?? "BERJALAN"}
+          />
         </div>
       )}
 
@@ -1722,6 +1786,20 @@ export default function Admin() {
                       superVisorId: p.superVisorId,
                     };
                     const expanded = !!expandedPairs[p.key];
+                    const serverSampleCount = p.blocks.reduce(
+                      (acc, b) => acc + (b.petugas.samples?.length ?? 0),
+                      0,
+                    );
+
+                    const shownSampleCount =
+                      blockModalOpen &&
+                      activePairKey === p.key &&
+                      draftSampleCount !== null
+                        ? serverSampleCount -
+                          activeBlockOldSampleCount +
+                          draftSampleCount
+                        : serverSampleCount;
+
                     return (
                       <React.Fragment key={p.key}>
                         <tr className="border-b hover:bg-gray-50 py-2">
@@ -1745,12 +1823,7 @@ export default function Admin() {
                                 Blok: {p.blocks.length}
                               </span>
                               <span className="px-2 py-0.5 rounded bg-gray-100">
-                                Sampel:{" "}
-                                {p.blocks.reduce(
-                                  (acc, b) =>
-                                    acc + (b.petugas.samples?.length ?? 0),
-                                  0,
-                                )}
+                                Sampel: {shownSampleCount}
                               </span>
                             </div>
                           </td>
@@ -1903,7 +1976,11 @@ export default function Admin() {
                   </div>
                   <IconButton
                     title="Tutup"
-                    onClick={() => setBlockModalOpen(false)}
+                    onClick={() => {
+                      setBlockModalOpen(false);
+                      setDraftSampleCount(null);
+                      setActiveBlockOldSampleCount(0);
+                    }}
                     variant="neutral"
                   >
                     <X size={16} />
@@ -1934,16 +2011,14 @@ export default function Admin() {
                         inputMode="numeric"
                         pattern="[0-9]*"
                         value={
-                          toMoney(
-                            Number(blockForm.honorDokPetugas),
-                          ).toLocaleString("id-ID") ?? ""
+                          toMoney(blockForm.honorDokPetugas).toLocaleString(
+                            "id-ID",
+                          ) ?? ""
                         }
                         onChange={(e) => {
                           const raw = e.target.value.replace(/[^0-9]/g, "");
-                          const perDoc = raw === "" ? 0 : Number(raw);
                           setBlockForm((p) => ({
                             ...p,
-                            honorPetugas: String(perDoc * samples.length),
                             honorDokPetugas: raw,
                           }));
                         }}
@@ -1957,13 +2032,15 @@ export default function Admin() {
                         className="w-full px-3 py-2 border rounded"
                         inputMode="numeric"
                         pattern="[0-9]*"
-                        value={blockForm.honorDokPengawas ?? ""}
+                        value={
+                          toMoney(blockForm.honorDokPengawas).toLocaleString(
+                            "id-ID",
+                          ) ?? ""
+                        }
                         onChange={(e) => {
                           const raw = e.target.value.replace(/[^0-9]/g, "");
-                          const perDoc = raw === "" ? 0 : Number(raw);
                           setBlockForm((p) => ({
                             ...p,
-                            honorPengawas: String(perDoc * samples.length),
                             honorDokPengawas: raw,
                           }));
                         }}
@@ -2090,9 +2167,23 @@ export default function Admin() {
                               <IconButton
                                 title="Hapus sampel"
                                 onClick={() =>
-                                  setSamples((prev) =>
-                                    prev.filter((_, idx) => idx !== i),
-                                  )
+                                  setSamples((prev) => {
+                                    const next0 = prev.filter(
+                                      (_, idx) => idx !== i,
+                                    );
+                                    const next =
+                                      next0.length > 0
+                                        ? next0
+                                        : [
+                                            {
+                                              identity: "",
+                                              cacahStatus: "Belum_Cacah",
+                                              approvalStatus: "Menunggu",
+                                            },
+                                          ];
+                                    setDraftSampleCount(next.length);
+                                    return next;
+                                  })
                                 }
                                 variant="danger"
                               >
@@ -2108,14 +2199,18 @@ export default function Admin() {
                     <button
                       type="button"
                       onClick={() =>
-                        setSamples((p) => [
-                          ...p,
-                          {
-                            identity: "",
-                            cacahStatus: "Belum_Cacah",
-                            approvalStatus: "Menunggu",
-                          },
-                        ])
+                        setSamples((p) => {
+                          const next = [
+                            ...p,
+                            {
+                              identity: "",
+                              cacahStatus: "Belum_Cacah",
+                              approvalStatus: "Menunggu",
+                            },
+                          ];
+                          setDraftSampleCount(next.length);
+                          return next;
+                        })
                       }
                       className="px-3 py-2 rounded bg-gray-100"
                     >
@@ -2133,7 +2228,11 @@ export default function Admin() {
                 <div className="flex justify-end gap-2">
                   <button
                     type="button"
-                    onClick={() => setBlockModalOpen(false)}
+                    onClick={() => {
+                      setBlockModalOpen(false);
+                      setDraftSampleCount(null);
+                      setActiveBlockOldSampleCount(0);
+                    }}
                     className="px-4 py-2 rounded bg-gray-100"
                   >
                     Batal

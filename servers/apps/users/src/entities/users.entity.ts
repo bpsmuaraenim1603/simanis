@@ -1,4 +1,9 @@
-import { ObjectType, Field, Directive, registerEnumType } from '@nestjs/graphql';
+import {
+  ObjectType,
+  Field,
+  Directive,
+  registerEnumType,
+} from '@nestjs/graphql';
 import { Role } from '@prisma/client';
 import { SubSurveyActivity } from '../../../surveyact/entities/surveyact.entity';
 
@@ -36,14 +41,18 @@ export class User {
   primaryRole: Role;
   @Field(() => [Role])
   roles: Role[];
-@Field()
+  @Field()
   limit_bill: string;
   @Field(() => String, { nullable: true })
   address?: string | null;
   @Field(() => String, { nullable: true })
   job_name?: string | null;
   @Field(() => String, { nullable: true })
-  village_name?: string | null;
+  nip?: string | null;
+  @Field(() => String, { nullable: true })
+  districtId?: string | null;
+  @Field(() => String, { nullable: true })
+  villageId?: string | null;
   @Field({ nullable: true })
   phone_number: string;
   @Field(() => Date)

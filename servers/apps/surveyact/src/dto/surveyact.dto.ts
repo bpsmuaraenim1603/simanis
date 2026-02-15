@@ -8,7 +8,13 @@ import {
   Int,
   Float,
 } from '@nestjs/graphql';
-import { AgreeState, CacahStatus, IssueStatus, StatusST } from '@prisma/client';
+import {
+  AgreeState,
+  CacahStatus,
+  IssueStatus,
+  StatusST,
+  SubSurveyStatus,
+} from '@prisma/client';
 import {
   IsDateString,
   IsNotEmpty,
@@ -23,6 +29,10 @@ registerEnumType(AgreeState, {
 
 registerEnumType(StatusST, {
   name: 'StatusST',
+});
+
+registerEnumType(SubSurveyStatus, {
+  name: 'SubSurveyStatus',
 });
 
 @InputType()
@@ -535,4 +545,13 @@ export class GenerateMonthlyStaffDocsInput {
 
   @Field(() => [MonthlyStaffDocRowInput])
   rows: MonthlyStaffDocRowInput[];
+}
+
+@InputType()
+export class UpdateSubSurveyActivityStatusDTO {
+  @Field(() => String)
+  subSurveyActivityId: string;
+
+  @Field(() => SubSurveyStatus)
+  status: SubSurveyStatus;
 }

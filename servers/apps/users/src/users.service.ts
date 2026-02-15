@@ -31,6 +31,10 @@ interface UserData {
   password: string;
   phone_number: string;
   address: string;
+  job_name: string;
+  nip?: string;
+  districtId: string;
+  villageId: string;
 }
 
 async function saveEvidenceFile(
@@ -149,8 +153,18 @@ export class UsersService {
   // }
 
   async register(registerDto: RegisterDto, response: Response) {
-    const { name, email, phone_number, password, address, job_name, village_name, signupCode } =
-      registerDto;
+    const {
+      name,
+      email,
+      phone_number,
+      password,
+      address,
+      job_name,
+      nip,
+      districtId,
+      villageId,
+      signupCode,
+    } = registerDto;
     const daily = await this.getOrCreateDailySignupCode();
     const inputCode = String(signupCode ?? '')
       .trim()
@@ -177,7 +191,9 @@ export class UsersService {
       password: hashedPassword,
       address,
       job_name,
-      village_name,
+      nip,
+      districtId,
+      villageId,
     };
     const activationToken = await this.createActivationToken(user);
     const activationCode = activationToken.activationCode;
@@ -217,7 +233,17 @@ export class UsersService {
       throw new BadRequestException('Kode Aktivasi tidak sesuai!');
     }
 
-    const { name, email, password, phone_number, address } = newUser.user;
+    const {
+      name,
+      email,
+      password,
+      phone_number,
+      address,
+      job_name,
+      nip,
+      districtId,
+      villageId,
+    } = newUser.user;
     const existUser = await this.prisma.user.findUnique({
       where: {
         email,
@@ -235,6 +261,10 @@ export class UsersService {
         password,
         phone_number,
         address,
+        job_name,
+        nip,
+        districtId,
+        villageId,
         limit_bill: '0',
       },
     });
@@ -422,7 +452,7 @@ export class UsersService {
     if (dto.primaryRole) {
       data.primaryRole = dto.primaryRole;
     }
-    
+
     if (dto.name !== undefined) data.name = dto.name;
 
     if (dto.roles) {
@@ -628,5 +658,22 @@ export class UsersService {
       data: { isRead: true, readAt: new Date() },
     });
     return updated.count;
+  }
+
+  async ppkOptions() {
+    return this.prisma.user.findMany({
+      where: { primaryRole: { not: 'User' as any } },
+      select: {
+        id: true,
+        name: true,
+        nip: true,
+        primaryRole: true,
+        roles: true,
+        limit_bill: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      orderBy: { name: 'asc' },
+    });
   }
 }

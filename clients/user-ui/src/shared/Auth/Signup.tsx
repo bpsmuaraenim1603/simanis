@@ -23,9 +23,13 @@ const formSchema = z
     job_name: z
       .string()
       .min(3, { message: "Nama pekerjaan minimal 3 karakter" }),
-    village_name: z
-      .string()
-      .min(3, { message: "Nama desa minimal 3 karakter" }),
+
+    // NEW
+    nip: z.string().optional(),
+
+    districtId: z.string().min(1, { message: "Kecamatan wajib dipilih" }),
+    villageId: z.string().min(1, { message: "Desa wajib dipilih" }),
+
     signupCode: z
       .string()
       .trim()
@@ -83,7 +87,9 @@ const Signup = ({
           phone: data.phone,
           address: data.address,
           job_name: data.job_name,
-          village_name: data.village_name,
+          nip: data.nip?.trim() ? data.nip.trim() : null,
+          districtId: data.districtId,
+          villageId: data.villageId,
           signupCode: data.signupCode.trim().toUpperCase(),
         },
       });
@@ -177,8 +183,22 @@ const Signup = ({
             </span>
           )}
         </div>
-        {/* Hidden field supaya tetap terkirim ke mutation sebagai village_name */}
-        <input type="hidden" {...register("village_name")} />
+
+        <div className="w-full relative mb-3">
+          <label className="text-[16px] font-Poppins">NIP (opsional)</label>
+          <input
+            {...register("nip")}
+            type="text"
+            placeholder="198xxxxxxxxxxxxx"
+            className={`${styles.input}`}
+          />
+          {errors.nip && (
+            <p className="text-red-500 text-sm mt-1">{errors.nip.message}</p>
+          )}
+        </div>
+
+        <input type="hidden" {...register("districtId")} />
+        <input type="hidden" {...register("villageId")} />
 
         <div>
           <label className="text-[16px] font-Poppins">Kecamatan</label>
@@ -187,10 +207,11 @@ const Signup = ({
             onValueChange={async (v) => {
               const districtId = (v ?? "") as string;
               setSelectedDistrictId(districtId);
-
+              setValue("districtId", districtId, { shouldValidate: true });
+              clearErrors("districtId");
               setSelectedVillageId("");
-              setValue("village_name", "", { shouldValidate: true });
-              clearErrors("village_name");
+              setValue("villageId", "", { shouldValidate: true });
+              clearErrors("villageId");
 
               if (districtId) {
                 const res = await fetchVillages({ variables: { districtId } });
@@ -207,6 +228,12 @@ const Signup = ({
             }
             placeholder="-- Pilih Kecamatan --"
           />
+
+          {errors.districtId && (
+            <p className="text-red-500 text-sm mt-1">
+              {errors.districtId.message}
+            </p>
+          )}
         </div>
 
         <div className="mt-3">
@@ -217,10 +244,8 @@ const Signup = ({
               const villageId = (v ?? "") as string;
               setSelectedVillageId(villageId);
 
-              const picked = villages.find((x) => x.id === villageId);
-              setValue("village_name", picked?.name ?? "", {
-                shouldValidate: true,
-              });
+              setValue("villageId", villageId, { shouldValidate: true });
+              clearErrors("villageId");
             }}
             options={villages.map((v: Village) => ({
               value: v.id,
@@ -231,10 +256,10 @@ const Signup = ({
             }
           />
 
-          {errors.village_name && (
-            <span className="text-red-500 block mt-1">
-              {`${errors.village_name.message}`}
-            </span>
+          {errors.villageId && (
+            <p className="text-red-500 text-sm mt-1">
+              {errors.villageId.message}
+            </p>
           )}
         </div>
 
