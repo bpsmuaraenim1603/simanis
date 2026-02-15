@@ -11,6 +11,8 @@ export const GET_ALL_USERS = gql`
       address
       villageId
       districtId
+      district { id name city }
+      village { id name }
       nip
       job_name
       phone_number

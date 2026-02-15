@@ -1,18 +1,54 @@
 "use client";
 
 import useUser from "@/src/hooks/useUser";
-import { useApolloClient, useMutation } from "@apollo/client";
+import {
+  useApolloClient,
+  useLazyQuery,
+  useMutation,
+  useQuery,
+} from "@apollo/client";
 import { useSession } from "next-auth/react";
 import { UPDATE_PROFILE } from "@/src/graphql/actions/update-user.action";
 import React, { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import styles from "@/src/utils/style";
 import { getRoles } from "@/src/utils/roles";
+import { GET_ALL_OF_DISTRICT } from "@/src/graphql/actions/find-alldistrict.action";
+import { GET_VILLAGES_BY_DISTRICT } from "@/src/graphql/actions/find-villages-by-district.action";
+import HUComboBox from "@/src/components/HUCombobox";
+import HUSelect from "@/src/components/HUSelect";
 
 function Profile() {
   const { user } = useUser();
   const { data } = useSession();
   const [updateProfile, { loading }] = useMutation(UPDATE_PROFILE);
+  const [districtId, setDistrictId] = useState<string>("");
+  const [villageId, setVillageId] = useState<string>("");
+  const [villages, setVillages] = useState<Array<{ id: string; name: string }>>(
+    [],
+  );
+  const { data: districtData } = useQuery(GET_ALL_OF_DISTRICT);
+  const districts = districtData?.allDistricts ?? [];
+
+  const [fetchVillages] = useLazyQuery(GET_VILLAGES_BY_DISTRICT, {
+    fetchPolicy: "no-cache",
+    onCompleted: (res) => setVillages(res?.villagesByDistrict ?? []),
+  });
+
+  useEffect(() => {
+    if (!user) return;
+    setDistrictId(user.districtId ?? "");
+    setVillageId(user.villageId ?? "");
+  }, [user]);
+
+  useEffect(() => {
+    if (!districtId) {
+      setVillages([]);
+      return;
+    }
+    fetchVillages({ variables: { districtId } });
+  }, [districtId, fetchVillages]);
+
   const roles = useMemo(() => getRoles(user), [user]);
   const primaryRole = user?.primaryRole ?? roles[0] ?? user?.role ?? "-";
   const [formState, setFormState] = React.useState({
@@ -22,8 +58,6 @@ function Profile() {
     address: user?.address || "",
     job_name: user?.job_name || "",
     nip: user?.nip || "",
-    district_name: user?.district?.name || "",
-    village_name: user?.village?.name || "",
   });
 
   useEffect(() => {
@@ -35,16 +69,24 @@ function Profile() {
         address: user.address || "",
         job_name: user.job_name || "",
         nip: user.nip || "",
-        district_name: user.district?.name || "",
-        village_name: user.village?.name || "",
       });
     }
   }, [user]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
+    if (!districtId) return toast.error("Kecamatan wajib dipilih.");
+    if (!villageId) return toast.error("Desa wajib dipilih.");
+
     try {
-      const input = { ...formState };
+      const input = {
+        ...formState,
+        nip: formState.nip?.trim() ? formState.nip.trim() : null,
+        districtId,
+        villageId,
+      };
+
       const { data } = await updateProfile({ variables: { input } });
       console.log("✅ Profil diperbarui:", data);
       toast.success("Profil berhasil diperbarui!");
@@ -192,17 +234,47 @@ function Profile() {
             />
           </div>
           <div>
-            <label className="block text-sm font-bold mb-1" htmlFor="village_name">
-              Nama Desa
+            <label className="block text-sm font-bold mb-1" htmlFor="nip">
+              NIP
             </label>
             <input
-              id="village_name"
+              id="nip"
               type="text"
-              value={formState.village_name}
+              value={formState.nip}
               onChange={(e) =>
-                setFormState((prev) => ({ ...prev, village_name: e.target.value }))
+                setFormState((prev) => ({ ...prev, nip: e.target.value }))
               }
               className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold mb-1">
+              Kecamatan
+            </label>
+            <HUComboBox
+              value={districtId || null}
+              onValueChange={(v) => {
+                const next = (v ?? "") as string;
+                setDistrictId(next);
+                setVillageId("");
+              }}
+              options={districts.map((d: any) => ({
+                value: d.id,
+                label: `${d.name}${d.city ? `, ${d.city}` : ""}`,
+              }))}
+              placeholder="Pilih kecamatan"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold mb-1">Desa</label>
+            <HUSelect
+              value={villageId || null}
+              onValueChange={(v) => setVillageId((v ?? "") as string)}
+              options={villages.map((x: any) => ({
+                value: x.id,
+                label: x.name,
+              }))}
+              placeholder={districtId ? "Pilih desa" : "Pilih kecamatan dulu"}
             />
           </div>
           <button

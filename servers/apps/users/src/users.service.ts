@@ -105,28 +105,38 @@ export class UsersService {
   }
 
   async getOrCreateDailySignupCode() {
+    await this.cleanupSignupCodesKeepOnlyToday();
+
     const dateKey = this.todayKey();
     let row = await this.prisma.dailySignupCode.findUnique({
       where: { dateKey },
     });
+
     if (!row) {
       row = await this.prisma.dailySignupCode.create({
-        data: {
-          dateKey,
-          code: this.makeDailySignupCode(10),
-        },
+        data: { dateKey, code: this.makeDailySignupCode(10) },
       });
     }
     return row;
   }
 
   async rotateDailySignupCode() {
+    await this.cleanupSignupCodesKeepOnlyToday();
+
     const dateKey = this.todayKey();
     const code = this.makeDailySignupCode(10);
+
     return this.prisma.dailySignupCode.upsert({
       where: { dateKey },
       create: { dateKey, code },
       update: { code },
+    });
+  }
+
+  private async cleanupSignupCodesKeepOnlyToday() {
+    const today = this.todayKey();
+    await this.prisma.dailySignupCode.deleteMany({
+      where: { dateKey: { not: today } },
     });
   }
 
