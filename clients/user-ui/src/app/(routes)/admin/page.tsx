@@ -1204,7 +1204,7 @@ export default function Admin() {
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2 w-full">
               <input
-                className="w-full px-3 py-2 border rounded-md"
+                className="w-full px-3 py-2 border rounded-md bg-white"
                 placeholder="Nama tim"
                 value={timDraft.name}
                 onChange={(e) =>
@@ -1212,7 +1212,7 @@ export default function Admin() {
                 }
               />
               <input
-                className="w-full px-3 py-2 border rounded-md"
+                className="w-full px-3 py-2 border rounded-md bg-white"
                 placeholder="Slug"
                 value={timDraft.slug}
                 onChange={(e) =>
@@ -1270,7 +1270,7 @@ export default function Admin() {
                     >
                       <td className="py-2 px-3">
                         <input
-                          className="w-full px-2 py-1 border rounded"
+                          className="w-full px-2 py-1 border rounded bg-white"
                           value={row.name}
                           onChange={(e) =>
                             setTimRowEdits((p) => ({
@@ -1282,7 +1282,7 @@ export default function Admin() {
                       </td>
                       <td className="py-2 px-3">
                         <input
-                          className="w-full px-2 py-1 border rounded"
+                          className="w-full px-2 py-1 border rounded bg-white"
                           value={row.slug}
                           onChange={(e) =>
                             setTimRowEdits((p) => ({
@@ -1361,7 +1361,7 @@ export default function Admin() {
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
                 />
                 <input
-                  className="w-full pl-9 pr-3 py-2 border rounded-md"
+                  className="w-full pl-9 pr-3 py-2 border rounded-md bg-white"
                   placeholder="Cari kegiatan"
                   value={kegiatanSearch}
                   onChange={(e) => setKegiatanSearch(e.target.value)}
@@ -1486,7 +1486,7 @@ export default function Admin() {
                       Nama kegiatan
                     </div>
                     <input
-                      className="w-full px-3 py-2 border rounded"
+                      className="w-full px-3 py-2 border rounded bg-white"
                       value={String(kegiatanDraft.name ?? "")}
                       onChange={(e) =>
                         setKegiatanDraft((p) => ({
@@ -1499,7 +1499,7 @@ export default function Admin() {
                   <div>
                     <div className="text-sm font-semibold mb-1">Slug</div>
                     <input
-                      className="w-full px-3 py-2 border rounded"
+                      className="w-full px-3 py-2 border rounded bg-white"
                       value={String(kegiatanDraft.slug ?? "")}
                       onChange={(e) =>
                         setKegiatanDraft((p) => ({
@@ -1515,7 +1515,7 @@ export default function Admin() {
                     </div>
                     <input
                       type="date"
-                      className="w-full px-3 py-2 border rounded"
+                      className="w-full px-3 py-2 border rounded bg-white"
                       value={String(kegiatanDraft.startDate ?? "")}
                       onChange={(e) =>
                         setKegiatanDraft((p) => ({
@@ -1531,7 +1531,7 @@ export default function Admin() {
                     </div>
                     <input
                       type="date"
-                      className="w-full px-3 py-2 border rounded"
+                      className="w-full px-3 py-2 border rounded bg-white"
                       value={String(kegiatanDraft.endDate ?? "")}
                       onChange={(e) =>
                         setKegiatanDraft((p) => ({
@@ -1547,7 +1547,7 @@ export default function Admin() {
                     </div>
                     <input
                       type="number"
-                      className="w-full px-3 py-2 border rounded"
+                      className="w-full px-3 py-2 border rounded bg-white"
                       value={Number(kegiatanDraft.targetSample ?? 0)}
                       onChange={(e) =>
                         setKegiatanDraft((p) => ({
@@ -1562,7 +1562,7 @@ export default function Admin() {
                       Jenis sampel
                     </div>
                     <input
-                      className="w-full px-3 py-2 border rounded"
+                      className="w-full px-3 py-2 border rounded bg-white"
                       value={String(kegiatanDraft.sampleType ?? "")}
                       onChange={(e) =>
                         setKegiatanDraft((p) => ({
@@ -1653,7 +1653,7 @@ export default function Admin() {
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
               />
               <input
-                className="w-full pl-9 pr-3 py-2 border rounded-md"
+                className="w-full pl-9 pr-3 py-2 border rounded-md bg-white"
                 placeholder="Cari petugas/pengawas"
                 value={petugasSearch}
                 onChange={(e) => setPetugasSearch(e.target.value)}
@@ -1991,7 +1991,7 @@ export default function Admin() {
                   <div>
                     <div className="text-sm font-semibold mb-1">Nama blok</div>
                     <input
-                      className="w-full px-3 py-2 border rounded"
+                      className="w-full px-3 py-2 border rounded bg-white"
                       value={blockForm.blockCount}
                       onChange={(e) =>
                         setBlockForm((p) => ({
@@ -2007,7 +2007,7 @@ export default function Admin() {
                         Honor petugas per sampel
                       </div>
                       <input
-                        className="w-full px-3 py-2 border rounded"
+                        className="w-full px-3 py-2 border rounded bg-white"
                         inputMode="numeric"
                         pattern="[0-9]*"
                         value={
@@ -2029,7 +2029,7 @@ export default function Admin() {
                         Honor pengawas per sampel
                       </div>
                       <input
-                        className="w-full px-3 py-2 border rounded"
+                        className="w-full px-3 py-2 border rounded bg-white"
                         inputMode="numeric"
                         pattern="[0-9]*"
                         value={
@@ -2105,7 +2105,7 @@ export default function Admin() {
                           <tr key={i} className="border-b hover:bg-gray-50">
                             <td className="py-2 pr-3">
                               <input
-                                className="w-full px-2 py-1 border rounded"
+                                className="w-full px-2 py-1 border rounded bg-white"
                                 value={s.identity}
                                 onChange={(e) =>
                                   setSamples((prev) =>
