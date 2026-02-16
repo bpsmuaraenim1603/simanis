@@ -14,6 +14,7 @@ import {
   StatusST,
   ProgressRole,
 } from '@prisma/client';
+import { User } from 'apps/users/src/entities/users.entity';
 import { UserType } from 'apps/users/src/types/users.types';
 
 registerEnumType(AgreeState, {
@@ -591,3 +592,27 @@ export class MonthlyStaffDocsOutputType {
   expiresAt?: Date;
 }
 
+@ObjectType()
+export class MonthlyAdminDocRecapType {
+  @Field(() => ID)
+  userId: string;
+
+  @Field()
+  year: number;
+
+  @Field()
+  month: number;
+
+  @Field()
+  spkNumber: string;
+
+  @Field()
+  bastNumber: string;
+
+  @Field(() => ID)
+  ppkUserId: string;
+  
+  @Field(() => User)
+  ppkUser: User;
+
+}

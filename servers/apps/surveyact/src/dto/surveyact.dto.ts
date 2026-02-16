@@ -486,9 +486,11 @@ export class GenerateMonthlyStaffDocInput {
   @Field(() => Int)
   year: number;
 
-  // 'SPK' | 'BAST'
   @Field()
   docType: string;
+
+  @Field(() => ID, { nullable: true })
+  ppkUserId: string;
 
   @Field()
   ppkName: string;
@@ -520,17 +522,18 @@ export class GenerateMonthlyStaffDocsInput {
   @Field(() => Int)
   year: number;
 
+  @Field(() => ID, { nullable: true })
+  ppkUserId: string;
+
   @Field()
   ppkName: string;
 
   @Field()
   ppkNip: string;
 
-  // format full, mis. "12/BPS1603/PPK/SPK/02/2026"
   @Field()
   nomorSPK: string;
 
-  // format full, mis. "7/BPS1603/PPK/BAST/02/2026"
   @Field()
   nomorBAST: string;
 

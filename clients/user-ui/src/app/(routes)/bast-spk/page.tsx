@@ -586,6 +586,7 @@ export default function BastSpkPage() {
                     userId: selectedUserId,
                     month,
                     year,
+                    ppkId: ppkUserId,
                     ppkName,
                     ppkNip,
                     nomorSPK,

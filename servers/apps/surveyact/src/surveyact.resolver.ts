@@ -29,6 +29,7 @@ import {
   UserSampleType,
   ExportUserSamplePhotosResult,
   VillageType,
+  MonthlyAdminDocRecapType,
 } from './types/surveyact.types';
 import {
   CreateContentIssueDto,
@@ -370,6 +371,15 @@ export class SurveyActivityResolver {
     @Args('input') input: GenerateMonthlyStaffDocsInput,
   ) {
     return this.service.generateMonthlyStaffDocs(input);
+  }
+
+  @Query(() => MonthlyAdminDocRecapType, { nullable: true })
+  monthlyAdminDocRecapByUserMonth(
+    @Args('userId') userId: string,
+    @Args('year', { type: () => Int }) year: number,
+    @Args('month', { type: () => Int }) month: number,
+  ) {
+    return this.service.getMonthlyAdminDocRecapByUserMonth(userId, year, month);
   }
 
   @Query(() => [StaffYearlyExportRowType])

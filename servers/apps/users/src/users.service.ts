@@ -426,9 +426,15 @@ export class UsersService {
   }
 
   async getLoggedInUser(req: any) {
-    const user = req.user;
     const accessToken = req.accesstoken;
     const refreshToken = req.refreshtoken;
+    const user = await this.prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: {
+        district: { select: { id: true, name: true } },
+        village: { select: { id: true, name: true } },
+      },
+    });
     return { user, accessToken, refreshToken };
   }
 
@@ -440,7 +446,13 @@ export class UsersService {
   }
 
   async getUsers() {
-    return this.prisma.user.findMany({});
+    return this.prisma.user.findMany({
+      include: {
+        village: { select: { id: true, name: true } },
+        district: { select: { id: true, name: true } },
+      },
+      orderBy: { name: 'asc' },
+    });
   }
 
   async updateUserProfile(
@@ -678,10 +690,6 @@ export class UsersService {
         name: true,
         nip: true,
         primaryRole: true,
-        roles: true,
-        limit_bill: true,
-        createdAt: true,
-        updatedAt: true,
       },
       orderBy: { name: 'asc' },
     });

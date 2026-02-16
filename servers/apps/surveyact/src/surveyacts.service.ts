@@ -15,6 +15,7 @@ import {
   CreateSurveyActivityDTO,
   CreateUserProgressDTO,
   CreateVillageDTO,
+  GenerateMonthlyStaffDocsInput,
   PatchUserSamplesDTO,
   UpdateContentIssueDto,
   updateIssueCommentDto,
@@ -52,7 +53,6 @@ import * as XLSX from 'xlsx';
 import * as JSZip from 'jszip';
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const DocxMerger = require('docx-merger');
 import {
   Document,
@@ -65,7 +65,6 @@ import {
   WidthType,
   PageBreak,
 } from 'docx';
-import { console } from 'node:inspector';
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -2769,6 +2768,20 @@ export class SurveyActivityService {
   async getMonthlyStaffDocPreview(userId: string, month: number, year: number) {
     const { from, to } = this.monthRange(month, year);
 
+    const recap = await this.prisma.monthlyAdminDocRecap.findUnique({
+      where: { userId_year_month: { userId, year, month } },
+      include: {
+        items: { select: { subSurveyActivityId: true, budgetCode: true } },
+      },
+    });
+
+    const recapBudgetMap = new Map<string, string | null>(
+      (recap?.items ?? []).map((it) => [
+        it.subSurveyActivityId,
+        it.budgetCode ?? null,
+      ]),
+    );
+
     const progresses = await this.prisma.userProgress.findMany({
       where: {
         userId,
@@ -2859,6 +2872,7 @@ export class SurveyActivityService {
 
       if (endInMonth < from || startInMonth > to) continue;
 
+      const ssaBudget = recapBudgetMap.get(ssa.id) ?? null;
       const existing = map.get(key);
       if (!existing) {
         map.set(key, {
@@ -2868,7 +2882,7 @@ export class SurveyActivityService {
           endDate: endInMonth,
           totalDocs: docs,
           totalHonor: honor,
-          budgetCode: p.budgetCode ?? null,
+          budgetCode: ssaBudget ?? p.budgetCode ?? null,
         });
       } else {
         existing.totalDocs += docs;
@@ -2878,8 +2892,9 @@ export class SurveyActivityService {
 
         if (endInMonth > existing.endDate) existing.endDate = endInMonth;
 
-        if (!existing.budgetCode && p.budgetCode)
-          existing.budgetCode = p.budgetCode;
+        if (!existing.budgetCode) {
+          existing.budgetCode = ssaBudget ?? p.budgetCode ?? null;
+        }
       }
     }
 
@@ -3079,39 +3094,55 @@ export class SurveyActivityService {
   }
 
   private async uploadMonthlyStaffDoc(buffer: Buffer, filename: string) {
-    const bucket =
-      process.env.SUPABASE_MONTHLY_STAFF_DOC_BUCKET || 'monthly-staff-docs';
-    const objectPath = `${new Date().getFullYear()}/${randomUUID()}-${filename}`;
+    try {
+      const bucket = 'monthly-staff-docs';
+      const objectPath = `${new Date().getFullYear()}/${randomUUID()}-${filename}`;
 
-    const { error } = await supabase.storage
-      .from(bucket)
-      .upload(objectPath, buffer, {
-        upsert: true,
-        contentType:
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      });
+      const res = await supabase.storage
+        .from(bucket)
+        .upload(objectPath, buffer, {
+          upsert: true,
+          contentType:
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        });
 
-    if (error) throw new BadRequestException(error.message);
+      if (res.error) {
+        console.error('SUPABASE UPLOAD ERROR:', res.error);
+        throw new BadRequestException(res.error.message);
+      }
 
-    const ttlHours = this.getMonthlyStaffDocTtlHours();
-    const signed = await supabase.storage
-      .from(bucket)
-      .createSignedUrl(objectPath, Math.floor(ttlHours * 60 * 60));
-    if (!signed?.data?.signedUrl)
-      throw new BadRequestException('Gagal membuat signed url');
+      const ttlHours = this.getMonthlyStaffDocTtlHours();
+      const signed = await supabase.storage
+        .from(bucket)
+        .createSignedUrl(objectPath, Math.floor(ttlHours * 60 * 60));
 
-    return {
-      signedUrl: signed.data.signedUrl,
-      bucket,
-      objectPath,
-      expiresAt: new Date(Date.now() + ttlHours * 60 * 60 * 1000),
-    };
+      if (signed.error) {
+        console.error('SUPABASE SIGN ERROR:', signed.error);
+        throw new BadRequestException(signed.error.message);
+      }
+
+      if (!signed?.data?.signedUrl)
+        throw new BadRequestException('Gagal membuat signed url');
+
+      return {
+        signedUrl: signed.data.signedUrl,
+        bucket,
+        objectPath,
+        expiresAt: new Date(Date.now() + ttlHours * 60 * 60 * 1000),
+      };
+    } catch (e) {
+      console.error('UPLOAD MONTHLY STAFF DOC FAILED:', e);
+      throw e instanceof BadRequestException
+        ? e
+        : new BadRequestException(String((e as any)?.message ?? e));
+    }
   }
 
   async generateMonthlyStaffDocs(input: {
     userId: string;
     month: number;
     year: number;
+    ppkId: string;
     ppkName: string;
     ppkNip: string;
     nomorSPK: string;
@@ -3158,12 +3189,12 @@ export class SurveyActivityService {
           },
         ],
       });
-      
+
       await this.upsertMonthlyAdminDocRecap({
         userId: input.userId,
         year: input.year,
         month: input.month,
-        ppkUserId: null,
+        ppkUserId: input.ppkId,
         ppkName: input.ppkName,
         ppkNip: input.ppkNip,
         nomorSPK: built.nomorSPK,
@@ -3196,6 +3227,7 @@ export class SurveyActivityService {
     userId: string;
     month: number;
     year: number;
+    ppkId: string;
     ppkName: string;
     ppkNip: string;
     nomorSPK: string;
@@ -3404,6 +3436,7 @@ export class SurveyActivityService {
     month: number;
     year: number;
     docType: string;
+    ppkId: string;
     ppkName: string;
     ppkNip?: string;
     nomorSPK: string;
@@ -3441,6 +3474,7 @@ export class SurveyActivityService {
       userId: input.userId,
       month: input.month,
       year: input.year,
+      ppkId: input.ppkId,
       ppkName: input.ppkName,
       ppkNip: input.ppkNip || '-',
       nomorSPK: normalizeSpk(input.nomorSPK),
@@ -3451,6 +3485,24 @@ export class SurveyActivityService {
       rows: input.rows,
     });
     return docType === 'BAST' ? out.bastUrl : out.spkUrl;
+  }
+
+  private async resolvePpkSnapshot(input: GenerateMonthlyStaffDocsInput) {
+    let ppkName = input.ppkName ?? '-';
+    let ppkNip = input.ppkNip ?? '-';
+
+    if (input.ppkUserId) {
+      const ppk = await this.prisma.user.findUnique({
+        where: { id: input.ppkUserId },
+        select: { name: true, nip: true },
+      });
+      if (ppk) {
+        ppkName = ppk.name ?? ppkName;
+        ppkNip = (ppk as any).nip ?? ppkNip;
+      }
+    }
+
+    return { ppkName, ppkNip };
   }
 
   private async upsertMonthlyAdminDocRecap(input: {
@@ -3467,6 +3519,7 @@ export class SurveyActivityService {
       budgetCode?: string;
     }>;
   }) {
+    const { ppkName, ppkNip } = await this.resolvePpkSnapshot(input);
     const recap = await this.prisma.monthlyAdminDocRecap.upsert({
       where: {
         userId_year_month: {
@@ -3480,13 +3533,17 @@ export class SurveyActivityService {
         year: input.year,
         month: input.month,
         ppkUserId: input.ppkUserId ?? null,
-        ppkName: input.ppkName,
-        ppkNip: input.ppkNip,
+        ppkName,
+        ppkNip,
+        spkNumber: input.nomorSPK ?? null,
+        bastNumber: input.nomorBAST ?? null,
       },
       update: {
         ppkUserId: input.ppkUserId ?? null,
-        ppkName: input.ppkName,
-        ppkNip: input.ppkNip,
+        ppkName,
+        ppkNip,
+        spkNumber: input.nomorSPK ?? null,
+        bastNumber: input.nomorBAST ?? null,
       },
     });
 
@@ -3502,18 +3559,27 @@ export class SurveyActivityService {
           recapId: recap.id,
           subSurveyActivityId: r.subSurveyActivityId,
           budgetCode: r.budgetCode ?? null,
-          spkNumber: input.nomorSPK,
-          bastNumber: input.nomorBAST,
         },
         update: {
           budgetCode: r.budgetCode ?? null,
-          spkNumber: input.nomorSPK,
-          bastNumber: input.nomorBAST,
         },
       });
     }
 
     return recap;
+  }
+
+  async getMonthlyAdminDocRecapByUserMonth(
+    userId: string,
+    year: number,
+    month: number,
+  ) {
+    return this.prisma.monthlyAdminDocRecap.findUnique({
+      where: { userId_year_month: { userId, year, month } },
+      include: {
+        ppkUser: { select: { id: true, name: true, nip: true } },
+      },
+    });
   }
 
   async updateSubSurveyActivityStatus(

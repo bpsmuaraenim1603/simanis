@@ -7,6 +7,7 @@ type MonthlyStaffZipBody = {
   userId: string;
   month: number;
   year: number;
+  ppkId: string;
   ppkName: string;
   ppkNip: string;
   nomorSPK: string;
@@ -39,6 +40,7 @@ export class SurveyactDocsController {
       userId: body.userId,
       month: Number(body.month),
       year: Number(body.year),
+      ppkId: String(body.ppkId || ''),
       ppkName: String(body.ppkName || ''),
       ppkNip: String(body.ppkNip || ''),
       nomorSPK: String(body.nomorSPK || ''),

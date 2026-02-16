@@ -6,6 +6,7 @@ import {
 } from '@nestjs/graphql';
 import { Role } from '@prisma/client';
 import { SubSurveyActivity } from '../../../surveyact/entities/surveyact.entity';
+import { DistrictType, VillageType } from 'apps/surveyact/src/types/surveyact.types';
 
 registerEnumType(Role, {
   name: 'Role',
@@ -51,8 +52,12 @@ export class User {
   nip?: string | null;
   @Field(() => String, { nullable: true })
   districtId?: string | null;
+  @Field(() => DistrictType, { nullable: true })
+  district?: DistrictType | null;
   @Field(() => String, { nullable: true })
   villageId?: string | null;
+  @Field(() => VillageType, { nullable: true })
+  village?: VillageType | null;
   @Field({ nullable: true })
   phone_number: string;
   @Field(() => Date)

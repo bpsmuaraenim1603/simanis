@@ -174,3 +174,18 @@ export class DailySignupCodeResponse {
   @Field()
   code: string;
 }
+
+@ObjectType()
+export class PpkOptionResponse {
+  @Field(() => String)
+  id: string;
+
+  @Field(() => String)
+  name: string;
+
+  @Field(() => String, { nullable: true })
+  nip?: string;
+
+  @Field(() => String)
+  primaryRole: string;
+}

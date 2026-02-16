@@ -12,15 +12,6 @@ export const UPDATE_PROFILE = gql`
       nip
       districtId
       villageId
-      district {
-        id
-        name
-        city
-      }
-      village {
-        id
-        name
-      }
       primaryRole
       roles
     }

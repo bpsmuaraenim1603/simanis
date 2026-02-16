@@ -18,7 +18,6 @@ export const GET_USER: DocumentNode = gql`
         district {
           id
           name
-          city
         }
         village {
           id

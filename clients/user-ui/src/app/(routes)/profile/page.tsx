@@ -260,7 +260,7 @@ function Profile() {
               }}
               options={districts.map((d: any) => ({
                 value: d.id,
-                label: `${d.name}${d.city ? `, ${d.city}` : ""}`,
+                label: `${d.name}`,
               }))}
               placeholder="Pilih kecamatan"
             />

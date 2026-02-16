@@ -8,6 +8,7 @@ import {
   LoginResponse,
   LogoutResponse,
   NotificationListResponse,
+  PpkOptionResponse,
   RegisterResponse,
   ResetPasswordResponse,
   UnreadCountResponse,
@@ -264,7 +265,7 @@ export class UsersResolver {
   }
 
   @UseGuards(AuthGuard)
-  @Query(() => [UserType])
+  @Query(() => [PpkOptionResponse])
   async ppkOptions() {
     return this.usersService.ppkOptions();
   }
