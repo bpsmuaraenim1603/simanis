@@ -603,16 +603,16 @@ export class MonthlyAdminDocRecapType {
   @Field()
   month: number;
 
-  @Field()
-  spkNumber: string;
+  @Field({ nullable: true })
+  spkNumber?: string;
 
-  @Field()
-  bastNumber: string;
+  @Field({ nullable: true })
+  bastNumber?: string;
 
-  @Field(() => ID)
-  ppkUserId: string;
+  @Field(() => ID, { nullable: true })
+  ppkUserId?: string;
   
-  @Field(() => User)
-  ppkUser: User;
+  @Field(() => User, { nullable: true })
+  ppkUser?: User;
 
 }

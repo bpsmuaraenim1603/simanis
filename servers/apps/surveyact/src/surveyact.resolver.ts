@@ -60,7 +60,7 @@ import {
   SubmitSPJ,
   UserProgress,
   Role,
-  SubSurveyStatus
+  SubSurveyStatus,
 } from '@prisma/client';
 import { UserType } from 'apps/users/src/types/users.types';
 import { FileUpload, GraphQLUpload } from 'graphql-upload-ts';
@@ -363,14 +363,20 @@ export class SurveyActivityResolver {
 
   @Mutation(() => String)
   generateMonthlyStaffDoc(@Args('input') input: GenerateMonthlyStaffDocInput) {
-    return this.service.generateMonthlyStaffDoc(input);
+    return this.service.generateMonthlyStaffDoc({
+      ...input,
+      ppkId: (input as any).ppkUserId ?? (input as any).ppkId,
+    } as any);
   }
 
   @Mutation(() => MonthlyStaffDocsOutputType)
   generateMonthlyStaffDocs(
     @Args('input') input: GenerateMonthlyStaffDocsInput,
   ) {
-    return this.service.generateMonthlyStaffDocs(input);
+    return this.service.generateMonthlyStaffDocs({
+    ...input,
+    ppkId: (input as any).ppkUserId ?? (input as any).ppkId,
+  } as any);
   }
 
   @Query(() => MonthlyAdminDocRecapType, { nullable: true })

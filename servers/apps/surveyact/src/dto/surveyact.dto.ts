@@ -490,19 +490,19 @@ export class GenerateMonthlyStaffDocInput {
   docType: string;
 
   @Field(() => ID, { nullable: true })
-  ppkUserId: string;
+  ppkUserId?: string;
 
-  @Field()
-  ppkName: string;
+  @Field({ nullable: true })
+  ppkName?: string;
 
   @Field({ nullable: true })
   ppkNip?: string;
 
-  @Field()
-  nomorBAST: string;
+  @Field({ nullable: true })
+  nomorBAST?: string;
 
-  @Field()
-  nomorSPK: string;
+  @Field({ nullable: true })
+  nomorSPK?: string;
 
   @Field(() => GraphQLISODateTime)
   docDate: Date;
@@ -523,19 +523,19 @@ export class GenerateMonthlyStaffDocsInput {
   year: number;
 
   @Field(() => ID, { nullable: true })
-  ppkUserId: string;
+  ppkUserId?: string;
 
-  @Field()
-  ppkName: string;
+  @Field({ nullable: true })
+  ppkName?: string;
 
-  @Field()
-  ppkNip: string;
+  @Field({ nullable: true })
+  ppkNip?: string;
 
-  @Field()
-  nomorSPK: string;
+  @Field({ nullable: true })
+  nomorSPK?: string;
 
-  @Field()
-  nomorBAST: string;
+  @Field({ nullable: true })
+  nomorBAST?: string;
 
   @Field(() => GraphQLISODateTime)
   docDate: Date;

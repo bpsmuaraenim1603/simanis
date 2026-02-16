@@ -71,6 +71,12 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
+type PpkSnapshotInput = {
+  ppkUserId?: string | null;
+  ppkName?: string | null;
+  ppkNip?: string | null;
+};
+
 function getExtLower(name?: string | null) {
   if (!name) return '';
   const i = name.lastIndexOf('.');
@@ -3487,7 +3493,7 @@ export class SurveyActivityService {
     return docType === 'BAST' ? out.bastUrl : out.spkUrl;
   }
 
-  private async resolvePpkSnapshot(input: GenerateMonthlyStaffDocsInput) {
+  private async resolvePpkSnapshot(input: PpkSnapshotInput) {
     let ppkName = input.ppkName ?? '-';
     let ppkNip = input.ppkNip ?? '-';
 
@@ -3519,7 +3525,11 @@ export class SurveyActivityService {
       budgetCode?: string;
     }>;
   }) {
-    const { ppkName, ppkNip } = await this.resolvePpkSnapshot(input);
+    const { ppkName, ppkNip } = await this.resolvePpkSnapshot({
+      ppkUserId: input.ppkUserId ?? null,
+      ppkName: input.ppkName ?? null,
+      ppkNip: input.ppkNip ?? null,
+    });
     const recap = await this.prisma.monthlyAdminDocRecap.upsert({
       where: {
         userId_year_month: {

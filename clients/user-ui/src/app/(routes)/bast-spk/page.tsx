@@ -11,6 +11,7 @@ import { GET_ALL_USERS } from "@/src/graphql/actions/find-allusers.action";
 import { GET_MONTHLY_STAFF_DOC_PREVIEW } from "@/src/graphql/actions/get-monthly-staff-doc-preview.action";
 import { GENERATE_MONTHLY_STAFF_DOCS } from "@/src/graphql/actions/generate-monthly-staff-docs.action";
 import { PPK_OPTIONS } from "@/src/graphql/actions/users.ppkOptions.gql";
+import { GET_MONTHLY_ADMIN_DOC_RECAP_BY_USER_MONTH } from "@/src/graphql/actions/get-monthly-admin-doc-recap-by-user-month.action";
 
 type PreviewRow = {
   subSurveyActivityId: string;
@@ -150,6 +151,38 @@ export default function BastSpkPage() {
     },
   );
 
+  const [loadRecap] = useLazyQuery(GET_MONTHLY_ADMIN_DOC_RECAP_BY_USER_MONTH, {
+    fetchPolicy: "no-cache",
+    onCompleted: (res) => {
+      const recap = res?.monthlyAdminDocRecapByUserMonth;
+
+      if (!recap) {
+        setPpkUserId("");
+        setPpkName("");
+        setPpkNip("");
+        setNomorSPK("");
+        setNomorBAST("");
+        return;
+      }
+
+      const nextPpkId = recap.ppkUserId ?? recap.ppkUser?.id ?? "";
+      setPpkUserId(nextPpkId);
+
+      setPpkName(recap.ppkUser?.name ?? recap.ppkName ?? "");
+      setPpkNip(recap.ppkUser?.nip ?? recap.ppkNip ?? "");
+
+      setNomorSPK(recap.spkNumber ?? "");
+      setNomorBAST(recap.bastNumber ?? "");
+    },
+    onError: () => {
+      setPpkUserId("");
+      setPpkName("");
+      setPpkNip("");
+      setNomorSPK("");
+      setNomorBAST("");
+    },
+  });
+
   const ppkOptions: HUOption[] = useMemo(() => {
     return (ppkData?.ppkOptions ?? []).map((p: any) => ({
       value: p.id,
@@ -198,6 +231,21 @@ export default function BastSpkPage() {
     setNomorSPK((prev) => formatNomorSPK(prev, month, year));
     setNomorBAST((prev) => formatNomorBAST(prev, month, year));
   }, [month, year]);
+
+  useEffect(() => {
+    if (!selectedUserId) return;
+    loadRecap({ variables: { userId: selectedUserId, year, month } });
+  }, [selectedUserId, year, month, loadRecap]);
+
+  useEffect(() => {
+    if (!selectedUserId) return;
+
+    setSpkUrl(null);
+    setBastUrl(null);
+    setExpiresAtInfo("");
+
+    loadRecap({ variables: { userId: selectedUserId, year, month } });
+  }, [selectedUserId, year, month, loadRecap]);
 
   const onRecalcRow = (idx: number, next: Partial<EditableRow>) => {
     setRows((prev) => {
@@ -347,6 +395,7 @@ export default function BastSpkPage() {
               }
               placeholder="Contoh: 001"
             />
+            <span className="text-sm text-gray-600">nomor spk diambil dari nomor surat</span>
           </div>
 
           <div>
@@ -362,6 +411,7 @@ export default function BastSpkPage() {
               }
               placeholder="Contoh: 001"
             />
+            <span className="text-sm text-gray-600">nomor bast diambil dari nomor surat</span>
           </div>
         </div>
 
@@ -553,8 +603,7 @@ export default function BastSpkPage() {
             disabled={genLoading || !selectedUserId || eligibleCount === 0}
             onClick={() => {
               if (!selectedUserId) return toast.error("Pilih petugas dulu.");
-              if (!ppkName.trim()) return toast.error("Nama PPK wajib diisi.");
-              if (!ppkNip.trim()) return toast.error("NIP PPK wajib diisi.");
+              if (!ppkUserId.trim()) return toast.error("PPK wajib dipilih.");
               if (!docDate) return toast.error("Tanggal dokumen wajib diisi.");
               if (!petugasJobName.trim())
                 return toast.error("Nama pekerjaan petugas wajib diisi.");
@@ -586,7 +635,7 @@ export default function BastSpkPage() {
                     userId: selectedUserId,
                     month,
                     year,
-                    ppkId: ppkUserId,
+                    ppkUserId,
                     ppkName,
                     ppkNip,
                     nomorSPK,
