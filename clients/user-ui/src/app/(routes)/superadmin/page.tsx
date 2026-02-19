@@ -141,6 +141,219 @@ function formatDateShort(iso: string) {
   return `${dd}/${mm}/${yy}`;
 }
 
+function SingleMonthMitraTable({
+  year,
+  activeMonth,
+  setActiveMonth,
+  rowsByMonth,
+}: {
+  year: number;
+  activeMonth: number;
+  setActiveMonth: (m: number) => void;
+  rowsByMonth: Map<number, any[]>;
+}) {
+  const monthNames = [
+    "JANUARI",
+    "FEBRUARI",
+    "MARET",
+    "APRIL",
+    "MEI",
+    "JUNI",
+    "JULI",
+    "AGUSTUS",
+    "SEPTEMBER",
+    "OKTOBER",
+    "NOVEMBER",
+    "DESEMBER",
+  ];
+
+  const availableMonths = useMemo(() => {
+    return Array.from(rowsByMonth.entries())
+      .filter(([, v]) => (v ?? []).length > 0)
+      .map(([k]) => k)
+      .sort((a, b) => a - b);
+  }, [rowsByMonth]);
+
+  useEffect(() => {
+    if (!availableMonths.length) return;
+    if (availableMonths.includes(activeMonth)) return;
+    setActiveMonth(availableMonths[0]);
+  }, [availableMonths, activeMonth, setActiveMonth]);
+
+  const rowsMonth = rowsByMonth.get(activeMonth) ?? [];
+
+  const jumpMonth = (dir: -1 | 1) => {
+    if (!availableMonths.length) return;
+    const idx = availableMonths.indexOf(activeMonth);
+    const safeIdx = idx === -1 ? 0 : idx;
+    const next =
+      (safeIdx + dir + availableMonths.length) % availableMonths.length;
+    setActiveMonth(availableMonths[next]);
+  };
+
+  const groups = useMemo(() => {
+    const byUser = new Map<string, any[]>();
+    for (const r of rowsMonth) {
+      const k = String(r?.userId ?? r?.name ?? "-");
+      if (!byUser.has(k)) byUser.set(k, []);
+      byUser.get(k)!.push(r);
+    }
+    const ordered = Array.from(byUser.values()).map((list) => {
+      return list.slice().sort((a, b) => {
+        const da = new Date(a?.startDate ?? 0).getTime();
+        const db = new Date(b?.startDate ?? 0).getTime();
+        if (da !== db) return da - db;
+        return String(a?.subsurveyactivity ?? "").localeCompare(
+          String(b?.subsurveyactivity ?? ""),
+          "id",
+        );
+      });
+    });
+    ordered.sort((a, b) =>
+      String(a?.[0]?.name ?? "").localeCompare(String(b?.[0]?.name ?? ""), "id"),
+    );
+    return ordered;
+  }, [rowsMonth]);
+
+  const fmtDateId = (d: any) => {
+    if (!d) return "";
+    const dt = new Date(d);
+    const dd = String(dt.getDate()).padStart(2, "0");
+    const mm = String(dt.getMonth() + 1).padStart(2, "0");
+    const yy = dt.getFullYear();
+    return `${dd}/${mm}/${yy}`;
+  };
+
+  if (!availableMonths.length) {
+    return (
+      <div className="mt-3 text-sm text-gray-600">
+        Tidak ada data mitra pada tahun {year}.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex items-center gap-2">
+          <IconButton
+            label="Bulan sebelumnya"
+            onClick={() => jumpMonth(-1)}
+            className="bg-gray-700"
+          >
+            <span className="text-lg">‹</span>
+          </IconButton>
+          <div className="text-sm font-semibold">
+            {monthNames[activeMonth - 1]} {year}
+          </div>
+          <IconButton
+            label="Bulan berikutnya"
+            onClick={() => jumpMonth(1)}
+            className="bg-gray-700"
+          >
+            <span className="text-lg">›</span>
+          </IconButton>
+        </div>
+        <div className="text-xs text-gray-500">Baris: {rowsMonth.length}</div>
+      </div>
+
+      <div className="w-full overflow-auto max-h-[1000px] border rounded-md">
+        <table className="min-w-[1150px] w-full text-[11px]">
+          <thead className="bg-gray-50 sticky top-0">
+            <tr className="border-b">
+              <th className="px-2 py-2 text-left w-[40px]">No</th>
+              <th className="px-2 py-2 text-left">Nama</th>
+              <th className="px-2 py-2 text-left">Pekerjaan</th>
+              <th className="px-2 py-2 text-left">Kecamatan</th>
+              <th className="px-2 py-2 text-left">Kabupaten</th>
+              <th className="px-2 py-2 text-left">Kegiatan</th>
+              <th className="px-2 py-2 text-left">Jangka Waktu</th>
+              <th className="px-2 py-2 text-right">Vol</th>
+              <th className="px-2 py-2 text-left">Satuan</th>
+              <th className="px-2 py-2 text-right">Harga</th>
+              <th className="px-2 py-2 text-right">Nilai</th>
+              <th className="px-2 py-2 text-left">Anggaran</th>
+              <th className="px-2 py-2 text-right">Jumlah</th>
+              <th className="px-2 py-2 text-right">SBML</th>
+              <th className="px-2 py-2 text-right">Selisih</th>
+              <th className="px-2 py-2 text-left">Ketua Tim</th>
+              <th className="px-2 py-2 text-left">DIPA</th>
+            </tr>
+          </thead>
+          <tbody>
+            {groups.map((list, gi) => {
+              const span = list.length;
+              return list.map((r: any, ri: number) => {
+                const vol = Number(r?.totalAssigned ?? 0) || 0;
+                const unit = Number(r?.unitWorkPrice ?? 0) || 0;
+                const nilai = vol * unit;
+                const jumlah = Number(r?.docsBill ?? 0) || 0;
+                const sbml = Number(r?.limit_bill ?? 0) || 0;
+                const selisih = sbml - jumlah;
+                const jangka = `${fmtDateId(r?.startDate)} - ${fmtDateId(r?.endDate)}`;
+
+                return (
+                  <tr
+                    key={`${gi}-${ri}-${r?.subsurveyactivity ?? "k"}`}
+                    className="border-b hover:bg-gray-50"
+                  >
+                    {ri === 0 ? (
+                      <>
+                        <td rowSpan={span} className="px-2 py-2 align-top">
+                          {gi + 1}
+                        </td>
+                        <td rowSpan={span} className="px-2 py-2 align-top">
+                          {r?.name ?? "-"}
+                        </td>
+                        <td rowSpan={span} className="px-2 py-2 align-top">
+                          {r?.job_name ?? "-"}
+                        </td>
+                        <td rowSpan={span} className="px-2 py-2 align-top">
+                          {r?.district ?? "-"}
+                        </td>
+                        <td rowSpan={span} className="px-2 py-2 align-top">
+                          {r?.city ?? "-"}
+                        </td>
+                      </>
+                    ) : null}
+
+                    <td className="px-2 py-2">{r?.subsurveyactivity ?? "-"}</td>
+                    <td className="px-2 py-2">{jangka}</td>
+                    <td className="px-2 py-2 text-right">{vol}</td>
+                    <td className="px-2 py-2">{r?.sampleType ?? "-"}</td>
+                    <td className="px-2 py-2 text-right">
+                      {unit ? unit.toLocaleString("id-ID") : "-"}
+                    </td>
+                    <td className="px-2 py-2 text-right">
+                      {nilai ? nilai.toLocaleString("id-ID") : "-"}
+                    </td>
+                    <td className="px-2 py-2">{r?.budgetCode ?? "-"}</td>
+                    <td className="px-2 py-2 text-right">
+                      {jumlah ? jumlah.toLocaleString("id-ID") : "-"}
+                    </td>
+                    <td className="px-2 py-2 text-right">
+                      {sbml ? sbml.toLocaleString("id-ID") : "-"}
+                    </td>
+                    <td className="px-2 py-2 text-right">
+                      {selisih ? selisih.toLocaleString("id-ID") : "-"}
+                    </td>
+                    <td className="px-2 py-2">{r?.chiefName ?? "-"}</td>
+                    <td className="px-2 py-2">{r?.dipa ?? "DIPA BPS Kabupaten Muara Enim"}</td>
+                  </tr>
+                );
+              });
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mt-2 text-[11px] text-gray-500">
+        Pindah bulan: tekan tombol kiri atau kanan.
+      </div>
+    </div>
+  );
+}
+
 const isActiveInThisMonth = (sub: any, now = new Date()) => {
   if (!sub?.startDate || !sub?.endDate) return false;
 
@@ -170,7 +383,31 @@ function MonthlyStaffUsagePanel({
       variables: { year },
       fetchPolicy: "cache-and-network",
     },
-  );
+  
+);
+
+  const {
+    data: exportPreviewData,
+    loading: exportPreviewLoading,
+    error: exportPreviewError,
+    refetch: refetchExportPreview,
+  } = useQuery(GET_MITRA_BULANAN_EXPORT, {
+    variables: { year },
+    fetchPolicy: "network-only",
+  });
+
+  const exportPreviewRows = (exportPreviewData?.getMitraBulananExport ?? []) as any[];
+
+  const [activeMonth, setActiveMonth] = useState<number>(() => {
+    const now = new Date();
+    return now.getFullYear() === year ? now.getMonth() + 1 : 1;
+  });
+
+  useEffect(() => {
+    // reset to current month when year changes
+    const now = new Date();
+    setActiveMonth(now.getFullYear() === year ? now.getMonth() + 1 : 1);
+  }, [year]);
 
   const [fetchExport, { loading: exporting }] = useLazyQuery(
     GET_MITRA_BULANAN_EXPORT,
@@ -234,6 +471,28 @@ function MonthlyStaffUsagePanel({
   }, [rows]);
 
   const totalActivities = rows.length;
+
+  const mitraRowsByMonth = useMemo(() => {
+    const map = new Map<number, any[]>();
+    for (const r of exportPreviewRows) {
+      const m = Number(r?.month);
+      if (!m || m < 1 || m > 12) continue;
+      if (!map.has(m)) map.set(m, []);
+      map.get(m)!.push(r);
+    }
+    // sort each month by activity then name
+    for (const [m, arr] of map.entries()) {
+      arr.sort((a, b) => {
+        const aa = String(a?.subsurveyactivity ?? "");
+        const bb = String(b?.subsurveyactivity ?? "");
+        if (aa !== bb) return aa.localeCompare(bb);
+        return String(a?.name ?? "").localeCompare(String(b?.name ?? ""));
+      });
+    }
+    return map;
+  }, [exportPreviewRows]);
+
+
 
   const uniqueUsersYear = useMemo(() => {
     const set = new Set<string>();
@@ -299,7 +558,17 @@ function MonthlyStaffUsagePanel({
     return `${dd}/${mm}/${yy}`;
   };
 
-  const handleExportExcel = async () => {
+  
+  const fmtDateId = (d: any) => {
+    if (!d) return "";
+    const dt = new Date(d);
+    const dd = String(dt.getDate()).padStart(2, "0");
+    const mm = String(dt.getMonth() + 1).padStart(2, "0");
+    const yy = dt.getFullYear();
+    return `${dd}/${mm}/${yy}`;
+  };
+
+const handleExportExcel = async () => {
     try {
       const res = await fetchExport({ variables: { year } });
       if ((res as any)?.error) throw (res as any).error;
@@ -387,42 +656,80 @@ function MonthlyStaffUsagePanel({
           "",
         ];
 
-        const body = data.map((r: any, i: number) => {
-          const vol = Number(r.totalAssigned ?? 0);
-          const price = Number(r.unitWorkPrice ?? 0);
-          const nilaiPerjanjian = vol * price;
-          const docsBill = Number(r.docsBill ?? 0);
-          const limit = Number(r.limit_bill ?? 0);
-          const selisih = limit - docsBill;
+        // Format seperti contoh: nama tidak diulang, hanya 1 kali lalu banyak baris kegiatan.
+        // Kita lakukan merge vertikal untuk kolom identitas (No, Nama, Pekerjaan, Kecamatan, Kabupaten).
+        const byUser = new Map<string, any[]>();
+        for (const r of data) {
+          const k = String(r?.userId ?? r?.name ?? "-");
+          if (!byUser.has(k)) byUser.set(k, []);
+          byUser.get(k)!.push(r);
+        }
 
-          const jangkaWaktu = `${fmtDate(r.startDate)}-${fmtDate(r.endDate)}`;
+        const body: any[][] = [];
+        const merges: any[] = [{ s: { r: 0, c: 7 }, e: { r: 0, c: 8 } }]; // TARGET PEKERJAAN
+        let no = 1;
+        let excelRow = 2; // header1 row=0, header2 row=1
 
-          return [
-            i + 1,
-            r.name ?? "",
-            r.job_name ?? "",
-            r.district ?? "",
-            r.city ?? "",
-            r.subsurveyactivity ?? "",
-            jangkaWaktu,
-            vol,
-            r.sampleType ?? "",
-            price || "",
-            nilaiPerjanjian || "",
-            r.budgetCode ?? "",
-            docsBill || "",
-            limit || "",
-            selisih || "",
-            r.chiefName ?? "",
-            r.dipa ?? "DIPA BPS Kabupaten Muara Enim",
-          ];
-        });
+        const userGroups = Array.from(byUser.values()).sort((a, b) =>
+          String(a?.[0]?.name ?? "").localeCompare(String(b?.[0]?.name ?? ""), "id"),
+        );
 
-        // jika kosong, tetap buat sheet dengan header saja
+        for (const list of userGroups) {
+          const sorted = list.slice().sort((a, b) => {
+            const da = new Date(a?.startDate ?? 0).getTime();
+            const db = new Date(b?.startDate ?? 0).getTime();
+            if (da !== db) return da - db;
+            return String(a?.subsurveyactivity ?? "").localeCompare(
+              String(b?.subsurveyactivity ?? ""),
+              "id",
+            );
+          });
+
+          const span = sorted.length;
+
+          sorted.forEach((r: any, idx: number) => {
+            const vol = Number(r.totalAssigned ?? 0);
+            const price = Number(r.unitWorkPrice ?? 0);
+            const nilaiPerjanjian = vol * price;
+            const docsBill = Number(r.docsBill ?? 0);
+            const limit = Number(r.limit_bill ?? 0);
+            const selisih = limit - docsBill;
+            const jangkaWaktu = `${fmtDate(r.startDate)}-${fmtDate(r.endDate)}`;
+
+            body.push([
+              idx === 0 ? no : "",
+              idx === 0 ? r.name ?? "" : "",
+              idx === 0 ? r.job_name ?? "" : "",
+              idx === 0 ? r.district ?? "" : "",
+              idx === 0 ? r.city ?? "" : "",
+              r.subsurveyactivity ?? "",
+              jangkaWaktu,
+              vol,
+              r.sampleType ?? "",
+              price || "",
+              nilaiPerjanjian || "",
+              r.budgetCode ?? "",
+              docsBill || "",
+              limit || "",
+              selisih || "",
+              r.chiefName ?? "",
+              r.dipa ?? "DIPA BPS Kabupaten Muara Enim",
+            ]);
+          });
+
+          if (span > 1) {
+            for (const c of [0, 1, 2, 3, 4]) {
+              merges.push({ s: { r: excelRow, c }, e: { r: excelRow + span - 1, c } });
+            }
+          }
+          excelRow += span;
+          no += 1;
+        }
+
         const aoa = [header1, header2, ...body];
         const ws = XLSX.utils.aoa_to_sheet(aoa);
 
-        ws["!merges"] = [{ s: { r: 0, c: 7 }, e: { r: 0, c: 8 } }];
+        ws["!merges"] = merges;
 
         ws["!cols"] = [
           { wch: 5 },  // NO
@@ -544,6 +851,39 @@ function MonthlyStaffUsagePanel({
           </div>
         </div>
       )}
+
+
+      {/* detail mitra bulanan */}
+      <div className="border rounded-lg p-3 sm:p-4">
+        <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
+          <div>
+            <div className="font-semibold text-sm">Pemakaian Mitra Bulanan</div>
+            <div className="text-xs text-gray-500">
+              Data diambil dari progress mitra per kegiatan. Tabel dibagi per bulan berdasarkan tanggal mulai kegiatan.
+            </div>
+          </div>
+          <div className="text-xs text-gray-500">
+            {exportPreviewLoading ? "Memuat..." : `Total baris: ${exportPreviewRows.length}`}
+          </div>
+        </div>
+
+        {exportPreviewError ? (
+          <div className="mt-3 text-sm text-red-600">
+            Gagal memuat data mitra bulanan: {(exportPreviewError as any)?.message ?? "unknown error"}
+          </div>
+        ) : exportPreviewRows.length === 0 ? (
+          <div className="mt-3 text-sm text-gray-600">
+            Data kosong untuk tahun {year}. Cek apakah ada kegiatan yang tanggalnya overlap dengan tahun ini, atau sudah ada progress mitra.
+          </div>
+        ) : (
+          <SingleMonthMitraTable
+            year={year}
+            activeMonth={activeMonth}
+            setActiveMonth={setActiveMonth}
+            rowsByMonth={mitraRowsByMonth}
+          />
+        )}
+      </div>
 
       {/* ringkasan */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

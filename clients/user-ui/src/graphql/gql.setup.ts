@@ -46,7 +46,8 @@ const splitLink = split(
         definition.name.value.toLowerCase().includes("district") ||
         definition.name.value.toLowerCase().includes("village") ||
         definition.name.value.toLowerCase().includes("usersamplephotos") ||
-        definition.name.value.toLowerCase().includes("staffdoc")
+        definition.name.value.toLowerCase().includes("staffdoc") ||
+        definition.name.value.toLowerCase().includes("mitrabulanan")
       );
     }
     return false;

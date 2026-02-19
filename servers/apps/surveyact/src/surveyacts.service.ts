@@ -1857,7 +1857,9 @@ export class SurveyActivityService {
     const ups = await this.prisma.userProgress.findMany({
       where: {
         subSurveyActivity: {
-          startDate: { gte: from, lte: to },
+          // include activities that overlap the given year (not only those starting within the year)
+          startDate: { lte: to },
+          endDate: { gte: from },
         },
       },
       select: {
@@ -2606,7 +2608,9 @@ export class SurveyActivityService {
     const rows = await this.prisma.userProgress.findMany({
       where: {
         subSurveyActivity: {
-          startDate: { gte: from, lte: to },
+          // include activities that overlap the given year (not only those starting within the year)
+          startDate: { lte: to },
+          endDate: { gte: from },
         },
       },
       select: {
@@ -2684,6 +2688,7 @@ export class SurveyActivityService {
 
 
     return rows.flatMap((r) => {
+      if ((r.user as any)?.primaryRole === 'Supervisor' || (r.user as any)?.primaryRole === 'Admin') return [];
       const ssa = r.subSurveyActivity;
       if (!ssa?.startDate) return [];
       const sd = ssa.startDate;
