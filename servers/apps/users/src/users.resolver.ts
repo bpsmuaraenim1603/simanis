@@ -269,4 +269,13 @@ export class UsersResolver {
   async ppkOptions() {
     return this.usersService.ppkOptions();
   }
+
+  @UseGuards(AuthGuard)
+  @Mutation(() => Boolean)
+  async setDefaultPpkUser(
+    @CurrentUser() user: User,
+    @Args('userId', { type: () => String }) userId: string,
+  ) {
+    return this.usersService.setDefaultPpkUser(user as any, userId);
+  }
 }

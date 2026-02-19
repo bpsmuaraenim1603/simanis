@@ -21,6 +21,7 @@ import {
   MonthlyStaffDocsOutputType,
   MonthlyStatsType,
   StaffYearlyExportRowType,
+  MitraBulananExportRowType,
   SubmitSPJType,
   SubSurveyActivityType,
   SubSurveyProgressType,
@@ -392,6 +393,12 @@ export class SurveyActivityResolver {
   getStaffYearlyExport(@Args('year', { type: () => Int }) year: number) {
     return this.service.getStaffYearlyExport(year);
   }
+
+  @Query(() => [MitraBulananExportRowType])
+  getMitraBulananExport(@Args('year', { type: () => Int }) year: number) {
+    return this.service.getMitraBulananExport(year);
+  }
+
 
   @Mutation(() => ContentIssueType)
   async createContentIssue(@Args('input') input: CreateContentIssueDto) {

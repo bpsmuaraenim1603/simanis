@@ -11,7 +11,9 @@ import { GET_USER_PROGRESS_BY_USER_ID } from "@/src/graphql/actions/find-usersur
 import useUser from "@/src/hooks/useUser";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { GET_MONTHLY_ACTIVITY_STAFF_USAGE } from "@/src/graphql/actions/get-monthly-activity-staff-usage.action";
-import { GET_STAFF_YEARLY_EXPORT } from "@/src/graphql/actions/get-staff-yearly-export.action";
+import { GET_MITRA_BULANAN_EXPORT } from "@/src/graphql/actions/get-mitra-bulanan-export.action";
+import { PPK_OPTIONS } from "@/src/graphql/actions/users.ppkOptions.gql";
+import { SET_DEFAULT_PPK_USER } from "@/src/graphql/actions/set-default-ppk-user.action";
 import HUSelect, { HUSelectOption } from "@/src/components/HUSelect";
 import { GET_DAILY_SIGNUP_CODE } from "@/src/graphql/actions/get-daily-signup-code.action";
 import { ROTATE_DAILY_SIGNUP_CODE } from "@/src/graphql/actions/rotate-daily-signup-code.action";
@@ -171,7 +173,7 @@ function MonthlyStaffUsagePanel({
   );
 
   const [fetchExport, { loading: exporting }] = useLazyQuery(
-    GET_STAFF_YEARLY_EXPORT,
+    GET_MITRA_BULANAN_EXPORT,
     {
       fetchPolicy: "network-only",
     },
@@ -276,96 +278,150 @@ function MonthlyStaffUsagePanel({
   const handleExportExcel = async () => {
     try {
       const res = await fetchExport({ variables: { year } });
-      const rows = res.data?.getStaffYearlyExport ?? [];
-
-      const detail = rows.map((r: any, i: number) => ({
-        No: i + 1,
-        UserID: r.userId,
-        Nama: r.userName,
-        Email_Limit: r.userLimitBill ?? "",
-        Kegiatan: r.subSurveyName,
-        TipeKegiatan: r.activityType ?? "",
-        Bulan: r.month,
-        Kecamatan: r.districtName ?? "",
-        BlockCount: r.blockCount ?? 0,
-        TotalAssigned: r.totalAssigned ?? 0,
-        Submit: r.submitCount ?? 0,
-        Approved: r.approvedCount ?? 0,
-        Rejected: r.rejectedCount ?? 0,
-        StartDate: excelDate(r.startDate),
-        Honor_docsBill: Number(r.docsBill ?? 0),
-      }));
-
-      const byUser = new Map<string, any>();
-
-      for (const r of rows) {
-        const key = r.userId;
-        if (!byUser.has(key)) {
-          byUser.set(key, {
-            userId: r.userId,
-            name: r.userName,
-            limit: r.userLimitBill ?? "",
-            months: new Set<string>(),
-            activities: new Set<string>(),
-            totalHonor: 0,
-          });
-        }
-        const u = byUser.get(key);
-        u.months.add(r.month);
-        u.activities.add(r.subSurveyName);
-        u.totalHonor += Number(r.docsBill ?? 0);
-      }
-
-      const summary = Array.from(byUser.values())
-        .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "", "id"))
-        .map((u: any, i: number) => ({
-          No: i + 1,
-          UserID: u.userId,
-          Nama: u.name,
-          LimitBill: u.limit,
-          TotalKegiatan: u.activities.size,
-          DaftarKegiatan: Array.from(u.activities).sort().join("; "),
-          BulanTerlibat: Array.from(u.months).sort().join(", "),
-          TotalHonor: u.totalHonor,
-        }));
+      const rows = (res.data?.getMitraBulananExport ?? []) as any[];
 
       const wb = XLSX.utils.book_new();
-      const wsSummary = XLSX.utils.json_to_sheet(summary);
-      const wsDetail = XLSX.utils.json_to_sheet(detail);
 
-      wsSummary["!cols"] = [
-        { wch: 4 }, // No
-        { wch: 20 }, // UserID
-        { wch: 28 }, // Nama
-        { wch: 12 }, // Limit
-        { wch: 12 }, // TotalKegiatan
-        { wch: 60 }, // DaftarKegiatan
-        { wch: 20 }, // BulanTerlibat
-        { wch: 16 }, // TotalHonor
+      const monthNames = [
+        "JANUARI",
+        "FEBRUARI",
+        "MARET",
+        "APRIL",
+        "MEI",
+        "JUNI",
+        "JULI",
+        "AGUSTUS",
+        "SEPTEMBER",
+        "OKTOBER",
+        "NOVEMBER",
+        "DESEMBER",
       ];
 
-      wsDetail["!cols"] = [
-        { wch: 4 }, // No
-        { wch: 20 }, // UserID
-        { wch: 28 }, // Nama
-        { wch: 12 }, // Limit
-        { wch: 40 }, // Kegiatan
-        { wch: 14 }, // Tipe
-        { wch: 10 }, // Bulan
-        { wch: 20 }, // Kecamatan
-        { wch: 10 }, // BlockCount
-        { wch: 14 }, // TotalAssigned
-        { wch: 8 }, // Submit
-        { wch: 10 }, // Approved
-        { wch: 10 }, // Rejected
-        { wch: 12 }, // StartDate
-        { wch: 16 }, // Honor
-      ];
+      const fmtDate = (d: any) => {
+        if (!d) return "";
+        const dt = new Date(d);
+        const dd = String(dt.getDate()).padStart(2, "0");
+        const mm = String(dt.getMonth() + 1).padStart(2, "0");
+        const yy = String(dt.getFullYear());
+        return `${dd}/${mm}/${yy}`;
+      };
 
-      XLSX.utils.book_append_sheet(wb, wsSummary, "RINGKASAN_PETUGAS");
-      XLSX.utils.book_append_sheet(wb, wsDetail, "DETAIL_PROGRESS");
+      const groups = new Map<number, any[]>();
+      for (const r of rows) {
+        const m = Number(r.month ?? 1);
+        if (!groups.has(m)) groups.set(m, []);
+        groups.get(m)!.push(r);
+      }
 
-      XLSX.writeFile(wb, `Export_Petugas_${year}.xlsx`);
+      // buat sheet per bulan (1..12)
+      for (let m = 1; m <= 12; m++) {
+        const data = (groups.get(m) ?? [])
+          .slice()
+          .sort((a, b) => (a?.name ?? "").localeCompare(b?.name ?? "", "id"));
+
+        const sheetName = `${monthNames[m - 1]} HONOR ${year}`;
+
+        const header1 = [
+          "NO",
+          "NAMA",
+          "PEKERJAAN",
+          "KECAMATAN",
+          "KABUPATEN",
+          "KEGIATAN",
+          "JANGKA WAKTU",
+          "TARGET PEKERJAAN",
+          "",
+          "HARGA SATUAN",
+          "NILAI PERJANJIAN",
+          "BEBAN ANGGARAN",
+          "JUMLAH",
+          "SBML",
+          "SELISIH",
+          "NAMA KETUA TIM/PENANGGUNG JAWAB",
+          "KETERANGAN ASAL DIPA",
+        ];
+
+        const header2 = [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "VOL",
+          "SATUAN",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+        ];
+
+        const body = data.map((r: any, i: number) => {
+          const vol = Number(r.totalAssigned ?? 0);
+          const price = Number(r.unitWorkPrice ?? 0);
+          const nilaiPerjanjian = vol * price;
+          const docsBill = Number(r.docsBill ?? 0);
+          const limit = Number(r.limit_bill ?? 0);
+          const selisih = limit - docsBill;
+
+          const jangkaWaktu = `${fmtDate(r.startDate)}-${fmtDate(r.endDate)}`;
+
+          return [
+            i + 1,
+            r.name ?? "",
+            r.job_name ?? "",
+            r.district ?? "",
+            r.city ?? "",
+            r.subsurveyactivity ?? "",
+            jangkaWaktu,
+            vol,
+            r.sampleType ?? "",
+            price || "",
+            nilaiPerjanjian || "",
+            r.budgetCode ?? "",
+            docsBill || "",
+            limit || "",
+            selisih || "",
+            r.chiefName ?? "",
+            r.dipa ?? "DIPA BPS Kabupaten Muara Enim",
+          ];
+        });
+
+        // jika kosong, tetap buat sheet dengan header saja
+        const aoa = [header1, header2, ...body];
+        const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+        ws["!merges"] = [{ s: { r: 0, c: 7 }, e: { r: 0, c: 8 } }];
+
+        ws["!cols"] = [
+          { wch: 5 },  // NO
+          { wch: 28 }, // NAMA
+          { wch: 24 }, // PEKERJAAN
+          { wch: 18 }, // KECAMATAN
+          { wch: 18 }, // KABUPATEN
+          { wch: 42 }, // KEGIATAN
+          { wch: 24 }, // JANGKA WAKTU
+          { wch: 10 }, // VOL
+          { wch: 12 }, // SATUAN
+          { wch: 14 }, // HARGA SATUAN
+          { wch: 18 }, // NILAI PERJANJIAN
+          { wch: 18 }, // BEBAN ANGGARAN
+          { wch: 14 }, // JUMLAH
+          { wch: 12 }, // SBML
+          { wch: 12 }, // SELISIH
+          { wch: 32 }, // KETUA TIM
+          { wch: 26 }, // DIPA
+        ];
+
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      }
+
+      XLSX.writeFile(wb, `Ekspor_Mitra_Bulanan_${year}.xlsx`);
     } catch (e: any) {
       console.error(e);
       alert(`Gagal export: ${e?.message ?? "unknown error"}`);
@@ -386,7 +442,7 @@ function MonthlyStaffUsagePanel({
       <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
         <div>
           <div className="font-bold text-base">
-            Pemakaian Petugas per Kegiatan (Bulanan)
+            Pemakaian Mitra per Kegiatan (Bulanan)
           </div>
         </div>
 
@@ -412,7 +468,7 @@ function MonthlyStaffUsagePanel({
                 : "bg-green-600 text-white hover:bg-green-700"
             }`}
           >
-            {exporting ? "Sedang Ekspor..." : "Ekspor Data Petugas"}
+            {exporting ? "Sedang Ekspor..." : "Ekspor Mitra Bulanan"}
           </button>
         </div>
       </div>

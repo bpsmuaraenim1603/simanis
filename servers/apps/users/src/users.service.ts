@@ -682,6 +682,39 @@ export class UsersService {
     return updated.count;
   }
 
+  
+  private readonly DEFAULT_PPK_SETTING_KEY = 'DEFAULT_PPK_USER_ID';
+
+  private isEligibleDefaultPpkRole(role: any): boolean {
+    // eligible roles for being selected as default PPK
+    return ['Keuangan', 'Admin', 'Supervisor', 'Superadmin'].includes(String(role));
+  }
+
+  async setDefaultPpkUser(currentUser: User, userId: string) {
+    if (String((currentUser as any)?.primaryRole) !== 'Superadmin') {
+      throw new BadRequestException('Hanya Superadmin yang dapat mengubah default PPK.');
+    }
+
+    const target = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, primaryRole: true },
+    });
+
+    if (!target) throw new BadRequestException('User PPK tidak ditemukan.');
+
+    if (!this.isEligibleDefaultPpkRole((target as any).primaryRole)) {
+      throw new BadRequestException('Role user tersebut tidak memenuhi syarat sebagai default PPK.');
+    }
+
+    await this.prisma.systemSetting.upsert({
+      where: { key: this.DEFAULT_PPK_SETTING_KEY },
+      create: { key: this.DEFAULT_PPK_SETTING_KEY, value: target.id },
+      update: { value: target.id },
+    });
+
+    return true;
+  }
+
   async ppkOptions() {
     const users = await this.prisma.user.findMany({
       where: { primaryRole: { not: 'User' as any } },
@@ -694,7 +727,13 @@ export class UsersService {
       orderBy: { name: 'asc' },
     });
 
-    const defaultId = String(process.env.DEFAULT_PPK_USER_ID || '').trim();
+    const setting = await this.prisma.systemSetting.findUnique({
+      where: { key: this.DEFAULT_PPK_SETTING_KEY },
+      select: { value: true },
+    });
+
+    const defaultId = String(setting?.value ?? '').trim();
+
     return users.map((u) => ({
       ...u,
       isDefault: defaultId ? u.id === defaultId : false,

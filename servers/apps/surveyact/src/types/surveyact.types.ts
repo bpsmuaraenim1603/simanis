@@ -526,6 +526,64 @@ export class StaffYearlyExportRowType {
   docsBill?: number | null;
 }
 
+
+@ObjectType()
+export class MitraBulananExportRowType {
+  @Field(() => Int)
+  month!: number; // 1-12
+
+  @Field(() => Int)
+  year!: number;
+
+  @Field(() => String)
+  userId!: string;
+
+  @Field(() => String)
+  name!: string;
+
+  @Field(() => String, { nullable: true })
+  job_name?: string | null;
+
+  @Field(() => String, { nullable: true })
+  district?: string | null;
+
+  @Field(() => String, { nullable: true })
+  city?: string | null;
+
+  @Field(() => String)
+  subsurveyactivity!: string;
+
+  @Field(() => GraphQLISODateTime)
+  startDate!: Date;
+
+  @Field(() => GraphQLISODateTime)
+  endDate!: Date;
+
+  @Field(() => Int)
+  totalAssigned!: number;
+
+  @Field(() => String)
+  sampleType!: string;
+
+  @Field(() => Int, { nullable: true })
+  unitWorkPrice?: number | null;
+
+  @Field(() => Float, { nullable: true })
+  docsBill?: number | null;
+
+  @Field(() => String, { nullable: true })
+  budgetCode?: string | null;
+
+  @Field(() => Float, { nullable: true })
+  limit_bill?: number | null;
+
+  @Field(() => String, { nullable: true })
+  chiefName?: string | null;
+
+  @Field(() => String)
+  dipa!: string;
+}
+
 @ObjectType()
 export class ExportUserSamplePhotosResult {
   @Field()

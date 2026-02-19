@@ -2598,6 +2598,84 @@ export class SurveyActivityService {
     };
   }
 
+  
+  async getMitraBulananExport(year: number) {
+    const from = new Date(year, 0, 1);
+    const to = new Date(year, 11, 31, 23, 59, 59, 999);
+
+    const rows = await this.prisma.userProgress.findMany({
+      where: {
+        subSurveyActivity: {
+          startDate: { gte: from, lte: to },
+        },
+      },
+      select: {
+        userId: true,
+        totalAssigned: true,
+        docsBill: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            job_name: true,
+            limit_bill: true,
+            district: { select: { name: true, city: true } },
+            primaryRole: true,
+          },
+        },
+        subSurveyActivity: {
+          select: {
+            name: true,
+            startDate: true,
+            endDate: true,
+            sampleType: true,
+            unitWorkPrice: true,
+            budgetCode: true,
+            surveyActivity: {
+              select: {
+                chief: { select: { name: true } },
+              },
+            },
+          },
+        },
+      },
+      orderBy: [{ subSurveyActivity: { startDate: 'asc' } }, { user: { name: 'asc' } }],
+    });
+
+    const dipa = 'DIPA BPS Kabupaten Muara Enim';
+
+    return rows.flatMap((r) => {
+      const ssa = r.subSurveyActivity;
+      if (!ssa?.startDate) return [];
+      const sd = ssa.startDate;
+      const month = sd.getMonth() + 1;
+
+      return [
+        {
+          year,
+          month,
+          userId: r.userId,
+          name: r.user?.name ?? '-',
+          job_name: (r.user as any)?.job_name ?? null,
+          district: (r.user as any)?.district?.name ?? null,
+          city: (r.user as any)?.district?.city ?? null,
+          subsurveyactivity: ssa?.name ?? '-',
+          startDate: ssa.startDate,
+          endDate: ssa.endDate ?? ssa.startDate,
+          totalAssigned: r.totalAssigned ?? 0,
+          sampleType: ssa?.sampleType ?? '',
+          unitWorkPrice: ssa?.unitWorkPrice ?? null,
+          docsBill: r.docsBill ?? null,
+          budgetCode: ssa?.budgetCode ?? null,
+          limit_bill: (r.user as any)?.limit_bill ?? null,
+          chiefName: ssa?.surveyActivity?.chief?.name ?? null,
+          dipa,
+        },
+      ];
+    });
+  }
+
+
   async exportUserSamplePhotos(
     userProgressId: string,
     actorId?: string,
