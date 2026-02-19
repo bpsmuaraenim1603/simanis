@@ -2777,17 +2777,9 @@ export class SurveyActivityService {
     const recap = await this.prisma.monthlyAdminDocRecap.findUnique({
       where: { userId_year_month: { userId, year, month } },
       include: {
-        items: { select: { subSurveyActivityId: true, budgetCode: true } },
+        items: { select: { subSurveyActivityId: true } },
       },
     });
-
-    const recapBudgetMap = new Map<string, string | null>(
-      (recap?.items ?? []).map((it) => [
-        it.subSurveyActivityId,
-        it.budgetCode ?? null,
-      ]),
-    );
-
     const progresses = await this.prisma.userProgress.findMany({
       where: {
         userId,
@@ -2867,7 +2859,7 @@ export class SurveyActivityService {
 
       if (endInMonth < from || startInMonth > to) continue;
 
-      const ssaBudget = recapBudgetMap.get(ssa.id) ?? null;
+      const ssaBudget = ssa.budgetCode ?? null;
       const existing = map.get(key);
       if (!existing) {
         map.set(key, {

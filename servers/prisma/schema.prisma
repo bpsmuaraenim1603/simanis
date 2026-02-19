@@ -118,8 +118,8 @@ model SubSurveyActivity {
   targetSample     Int
   sampleType       String
   activityType     String
-  unitWorkPrice    Int?
   budgetCode       String?
+  unitWorkPrice    Int?
 
   UserProgress UserProgress[]
   SuratTugas   JobLetter[]
