@@ -7,6 +7,7 @@ export const PPK_OPTIONS = gql`
       name
       nip
       primaryRole
+      isDefault
     }
   }
 `;

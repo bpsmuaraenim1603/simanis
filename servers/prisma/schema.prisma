@@ -118,6 +118,8 @@ model SubSurveyActivity {
   targetSample     Int
   sampleType       String
   activityType     String
+  unitWorkPrice    Int?
+  budgetCode       String?
 
   UserProgress UserProgress[]
   SuratTugas   JobLetter[]
@@ -206,7 +208,6 @@ model UserProgress {
   villageId           String?
   village             Village?           @relation(fields: [villageId], references: [id])
   docsBill            String?
-  budgetCode          String?
 
   samples UserSample[]
 }
@@ -360,8 +361,6 @@ model MonthlyAdminDocRecapItem {
 
   subSurveyActivityId String
   subSurveyActivity   SubSurveyActivity @relation(fields: [subSurveyActivityId], references: [id], onDelete: Cascade)
-
-  budgetCode String?
 
   spkNumber  String?
   bastNumber String?

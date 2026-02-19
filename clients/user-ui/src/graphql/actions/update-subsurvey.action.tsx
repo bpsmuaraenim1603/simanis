@@ -11,6 +11,8 @@ export const UPDATE_SUB_SURVEY_ACTIVITY = gql`
       targetSample
       sampleType
       activityType
+      budgetCode
+      unitWorkPrice
     }
   }
 `;

@@ -2801,9 +2801,8 @@ export class SurveyActivityService {
         subSurveyActivityId: true,
         progressRole: true,
         docsBill: true,
-        budgetCode: true,
         subSurveyActivity: {
-          select: { id: true, name: true, startDate: true, endDate: true },
+          select: { id: true, name: true, startDate: true, endDate: true, budgetCode: true, unitWorkPrice: true },
         },
         _count: { select: { samples: true } },
       },
@@ -2837,16 +2836,6 @@ export class SurveyActivityService {
     const clipStart = (d: Date) => (d < from ? from : d);
     const clipEnd = (d: Date) => (d > to ? to : d);
 
-    const lastSamples = await this.prisma.userSample.groupBy({
-      by: ['userProgressId'],
-      where: { userProgressId: { in: upIds } },
-      _max: { updatedAt: true },
-    });
-
-    const lastByUp = new Map(
-      lastSamples.map((x) => [x.userProgressId, x._max.updatedAt]),
-    );
-
     const map = new Map<
       string,
       {
@@ -2856,6 +2845,7 @@ export class SurveyActivityService {
         endDate: Date;
         totalDocs: number;
         totalHonor: number;
+        unitCost: number;
         budgetCode?: string | null;
       }
     >();
@@ -2869,12 +2859,11 @@ export class SurveyActivityService {
         p.progressRole === 'PENGAWAS'
           ? (supervisedDocsBySSA.get(ssa.id) ?? 0)
           : (p._count?.samples ?? 0);
-      const honor = this.parseMoney(p.docsBill);
-      const last = lastByUp.get(p.id);
-      const effectiveEnd = last && ssa.endDate < last ? last : ssa.endDate;
+      const unitCost = Number((ssa as any).unitWorkPrice ?? 0);
+      const honor = unitCost * docs;
 
       const startInMonth = clipStart(new Date(ssa.startDate));
-      const endInMonth = clipEnd(new Date(effectiveEnd));
+      const endInMonth = clipEnd(new Date(ssa.endDate));
 
       if (endInMonth < from || startInMonth > to) continue;
 
@@ -2888,7 +2877,8 @@ export class SurveyActivityService {
           endDate: endInMonth,
           totalDocs: docs,
           totalHonor: honor,
-          budgetCode: ssaBudget ?? p.budgetCode ?? null,
+          unitCost,
+          budgetCode: ssaBudget ?? (ssa as any).budgetCode ?? null,
         });
       } else {
         existing.totalDocs += docs;
@@ -2899,7 +2889,7 @@ export class SurveyActivityService {
         if (endInMonth > existing.endDate) existing.endDate = endInMonth;
 
         if (!existing.budgetCode) {
-          existing.budgetCode = ssaBudget ?? p.budgetCode ?? null;
+          existing.budgetCode = ssaBudget ?? (ssa as any).budgetCode ?? null;
         }
       }
     }
@@ -3153,15 +3143,15 @@ export class SurveyActivityService {
     ppkNip: string;
     nomorSPK: string;
     nomorBAST: string;
-    docDate: Date;
+    spkDocDate: Date;
+    bastDocDate: Date;
     pekerjaanPetugas?: string;
     desaTinggalPetugas?: string;
     rows: Array<{
       subSurveyActivityId: string;
       totalDocs: number;
-      unitCost: number;
-      totalCost: number;
-      budgetCode?: string;
+      unitName?: string;
+      included?: boolean;
     }>;
   }) {
     const built = await this.generateMonthlyStaffDocsBuffers(input);
@@ -3238,15 +3228,15 @@ export class SurveyActivityService {
     ppkNip: string;
     nomorSPK: string;
     nomorBAST: string;
-    docDate: Date;
+    spkDocDate: Date;
+    bastDocDate: Date;
     pekerjaanPetugas?: string;
     desaTinggalPetugas?: string;
     rows: Array<{
       subSurveyActivityId: string;
       totalDocs: number;
-      unitCost: number;
-      totalCost: number;
-      budgetCode?: string;
+      unitName?: string;
+      included?: boolean;
     }>;
   }) {
     const user = await this.prisma.user.findUnique({
@@ -3282,8 +3272,8 @@ export class SurveyActivityService {
         const unitName =
           String((r as any).unitName ?? 'Dokumen').trim() || 'Dokumen';
         const totalDocs = Number(r.totalDocs ?? base.totalDocs);
-        const unitCost = Number(r.unitCost ?? base.unitCost);
-        const totalCost = Number(r.totalCost ?? unitCost * totalDocs);
+        const unitCost = Number(base.unitCost ?? 0);
+        const totalCost = Number(unitCost * totalDocs);
         return {
           subSurveyActivityId: base.subSurveyActivityId,
           activityName: base.activityName,
@@ -3292,7 +3282,7 @@ export class SurveyActivityService {
           totalDocs,
           unitCost,
           totalCost,
-          budgetCode: (r.budgetCode ?? base.budgetCode ?? '') as string,
+          budgetCode: (base.budgetCode ?? '') as string,
           unitName,
         };
       })
@@ -3328,12 +3318,17 @@ export class SurveyActivityService {
       );
     }
 
-    const hari = this.dayNameId(input.docDate);
-    const namaBulan = this.monthNameId(input.month);
-    const bulanCaps = (namaBulan || '').toUpperCase();
-    const tanggalFormat = this.formatDateId(input.docDate);
-    const tanggal = input.docDate.getDate();
-    const tanggalTerbilang = this.terbilang(tanggal);
+    const hariSpk = this.dayNameId(input.spkDocDate);
+    const hariBast = this.dayNameId(input.bastDocDate);
+    const namaBulanSpk = this.monthNameId(input.spkDocDate.getMonth() + 1);
+    const namaBulanBast = this.monthNameId(input.bastDocDate.getMonth() + 1);
+    const tanggalFormatSpk = this.formatDateId(input.spkDocDate);
+    const tanggalSpk = input.spkDocDate.getDate();
+    const tanggalTerbilangSpk = this.terbilang(tanggalSpk);
+
+    const tanggalFormatBast = this.formatDateId(input.bastDocDate);
+    const tanggalBast = input.bastDocDate.getDate();
+    const tanggalTerbilangBast = this.terbilang(tanggalBast);
     const tahunTerbilang = this.terbilang(input.year);
 
     const tanggalMulai = minStart.getDate();
@@ -3380,29 +3375,43 @@ export class SurveyActivityService {
       bebanAnggaran: r.budgetCode || '',
     }));
 
-    const common = {
+    const commonBase = {
       namaPPK: input.ppkName,
       nipPPK: input.ppkNip,
       namaPetugas: petugasName,
       pekerjaanPetugas,
       desaTinggalPetugas,
-      hariDokumen: hari,
-      tanggal,
-      tanggalTerbilang,
-      bulan: namaBulan,
-      bulanCaps,
       tahun: String(input.year),
       tahunTerbilang,
-      tanggalDokumen: tanggalFormat,
       tanggalMulai,
       tanggalSelesai,
+    };
+
+    const commonSpk = {
+      ...commonBase,
+      hariDokumen: hariSpk,
+      tanggal: tanggalSpk,
+      tanggalTerbilang: tanggalTerbilangSpk,
+      bulan: namaBulanSpk,
+      bulanCaps: String(namaBulanSpk || '').toUpperCase(),
+      tanggalDokumen: tanggalFormatSpk,
+    };
+
+    const commonBast = {
+      ...commonBase,
+      hariDokumen: hariBast,
+      tanggal: tanggalBast,
+      tanggalTerbilang: tanggalTerbilangBast,
+      bulan: namaBulanBast,
+      bulanCaps: String(namaBulanBast || '').toUpperCase(),
+      tanggalDokumen: tanggalFormatBast,
     };
 
     const spkTemplateRel = path.join('bast-spk', 'template-spk.docx');
     const bastTemplateRel = path.join('bast-spk', 'template-bast.docx');
 
     const spkBuffer = this.renderDocxTemplate(spkTemplateRel, {
-      ...common,
+      ...commonSpk,
       nomorLampiran: nomorSPK,
       nomorSPK,
       honorTotalAll,
@@ -3412,7 +3421,7 @@ export class SurveyActivityService {
     });
 
     const bastBuffer = this.renderDocxTemplate(bastTemplateRel, {
-      ...common,
+      ...commonBast,
       nomorSPK,
       nomorBAST,
       nomorDokBAST: nomorBAST,
@@ -3447,15 +3456,15 @@ export class SurveyActivityService {
     ppkNip?: string;
     nomorSPK: string;
     nomorBAST: string;
-    docDate: Date;
+    spkDocDate: Date;
+    bastDocDate: Date;
     pekerjaanPetugas?: string;
     desaTinggalPetugas?: string;
     rows: Array<{
       subSurveyActivityId: string;
       totalDocs: number;
-      unitCost: number;
-      totalCost: number;
-      budgetCode?: string;
+      unitName?: string;
+      included?: boolean;
     }>;
   }) {
     const docType = String(input.docType || '').toUpperCase();
@@ -3485,7 +3494,8 @@ export class SurveyActivityService {
       ppkNip: input.ppkNip || '-',
       nomorSPK: normalizeSpk(input.nomorSPK),
       nomorBAST: normalizeBast(input.nomorBAST),
-      docDate: input.docDate,
+      spkDocDate: input.spkDocDate,
+      bastDocDate: input.bastDocDate,
       pekerjaanPetugas: input.pekerjaanPetugas,
       desaTinggalPetugas: input.desaTinggalPetugas,
       rows: input.rows,

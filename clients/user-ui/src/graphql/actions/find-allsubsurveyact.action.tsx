@@ -15,6 +15,8 @@ export const GET_ALL_SUB_SURVEY_ACTIVITIES: DocumentNode = gql`
       sampleType
       activityType
       status
+      budgetCode
+      unitWorkPrice
     }
   }
 `;

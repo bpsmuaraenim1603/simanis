@@ -188,4 +188,7 @@ export class PpkOptionResponse {
 
   @Field(() => String)
   primaryRole: string;
+
+  @Field(() => Boolean, { nullable: true })
+  isDefault?: boolean;
 }

@@ -13,6 +13,8 @@ mutation AddSubSurveyActivity($input: CreateSubSurveyActivityDTO!) {
     targetSample
     sampleType
     activityType
+    budgetCode
+    unitWorkPrice
   }
 }
 `;

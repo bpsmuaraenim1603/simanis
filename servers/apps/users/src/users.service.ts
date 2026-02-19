@@ -683,7 +683,7 @@ export class UsersService {
   }
 
   async ppkOptions() {
-    return this.prisma.user.findMany({
+    const users = await this.prisma.user.findMany({
       where: { primaryRole: { not: 'User' as any } },
       select: {
         id: true,
@@ -693,5 +693,11 @@ export class UsersService {
       },
       orderBy: { name: 'asc' },
     });
+
+    const defaultId = String(process.env.DEFAULT_PPK_USER_ID || '').trim();
+    return users.map((u) => ({
+      ...u,
+      isDefault: defaultId ? u.id === defaultId : false,
+    }));
   }
 }

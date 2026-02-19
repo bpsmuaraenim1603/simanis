@@ -67,6 +67,8 @@ type SubSurveyActivity = {
   sampleType: string;
   activityType: string;
   status?: string;
+  budgetCode?: string | null;
+  unitWorkPrice?: number | null;
 };
 type District = { id: string; city: string; name: string; coderegion?: string };
 type Village = {
@@ -437,6 +439,12 @@ export default function Admin() {
 
   const kegiatanList: SubSurveyActivity[] =
     (kegiatanData?.subSurveyActivityById ?? []) as any[];
+
+  const selectedKegiatan = useMemo(
+    () => kegiatanList.find((k) => k.id === selectedKegiatanId) ?? null,
+    [kegiatanList, selectedKegiatanId],
+  );
+  const defaultUnitWorkPrice = Number(selectedKegiatan?.unitWorkPrice ?? 0);
   const filteredKegiatan = useMemo(() => {
     const q = kegiatanSearch.trim().toLowerCase();
     if (!q) return kegiatanList;
@@ -467,6 +475,8 @@ export default function Admin() {
       targetSample: 0,
       sampleType: "",
       activityType: "",
+      budgetCode: "",
+      unitWorkPrice: 0,
     });
     setKegiatanModalOpen(true);
   }
@@ -491,6 +501,8 @@ export default function Admin() {
     const targetSample = Number(kegiatanDraft.targetSample ?? 0);
     const sampleType = String(kegiatanDraft.sampleType ?? "").trim();
     const activityType = String(kegiatanDraft.activityType ?? "").trim();
+    const budgetCode = String(kegiatanDraft.budgetCode ?? "").trim();
+    const unitWorkPrice = Number(kegiatanDraft.unitWorkPrice ?? 0);
 
     if (!selectedTimId) return toast.error("Pilih tim dulu.");
     if (
@@ -516,6 +528,8 @@ export default function Admin() {
               targetSample: Number.isFinite(targetSample) ? targetSample : 0,
               sampleType,
               activityType,
+              budgetCode: budgetCode || null,
+              unitWorkPrice: Number.isFinite(unitWorkPrice) ? unitWorkPrice : 0,
             },
           },
         });
@@ -534,6 +548,8 @@ export default function Admin() {
               targetSample: Number.isFinite(targetSample) ? targetSample : 0,
               sampleType,
               activityType,
+              budgetCode: budgetCode || null,
+              unitWorkPrice: Number.isFinite(unitWorkPrice) ? unitWorkPrice : 0,
             },
           },
         });
@@ -792,8 +808,8 @@ export default function Admin() {
       villageId: "",
       honorPetugas: "",
       honorPengawas: "",
-      honorDokPetugas: "",
-      honorDokPengawas: "",
+      honorDokPetugas: String(defaultUnitWorkPrice),
+      honorDokPengawas: String(defaultUnitWorkPrice),
     });
     setSamples([
       { identity: "", cacahStatus: "Belum_Cacah", approvalStatus: "Menunggu" },
@@ -823,8 +839,8 @@ export default function Admin() {
       villageId: String(petugas.villageId ?? ""),
       honorPetugas: String(petugas.docsBill ?? ""),
       honorPengawas: String(pengawas?.docsBill ?? ""),
-      honorDokPetugas: safePerSample(petugas.docsBill, list.length),
-      honorDokPengawas: safePerSample(pengawas?.docsBill, list.length),
+      honorDokPetugas: String(defaultUnitWorkPrice),
+      honorDokPengawas: String(defaultUnitWorkPrice),
     });
 
     setSamples(
@@ -1591,6 +1607,40 @@ export default function Admin() {
                       placeholder="Pilih"
                     />
                   </div>
+
+                  <div>
+                    <div className="text-sm font-semibold mb-1">
+                      Kode beban anggaran (opsional)
+                    </div>
+                    <input
+                      className="w-full px-3 py-2 border rounded bg-white"
+                      value={String(kegiatanDraft.budgetCode ?? "")}
+                      onChange={(e) =>
+                        setKegiatanDraft((p) => ({
+                          ...p,
+                          budgetCode: e.target.value,
+                        }))
+                      }
+                      placeholder="Contoh: 123.45.678"
+                    />
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold mb-1">
+                      Harga satuan pekerjaan
+                    </div>
+                    <input
+                      type="number"
+                      className="w-full px-3 py-2 border rounded bg-white"
+                      value={Number(kegiatanDraft.unitWorkPrice ?? 0)}
+                      onChange={(e) =>
+                        setKegiatanDraft((p) => ({
+                          ...p,
+                          unitWorkPrice: Number(e.target.value),
+                        }))
+                      }
+                      placeholder="0"
+                    />
+                  </div>
                 </div>
 
                 <div className="flex justify-end gap-2">
@@ -2001,226 +2051,17 @@ export default function Admin() {
                       }
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <div className="text-sm font-semibold mb-1">
-                        Honor petugas per sampel
-                      </div>
-                      <input
-                        className="w-full px-3 py-2 border rounded bg-white"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        value={
-                          toMoney(blockForm.honorDokPetugas).toLocaleString(
-                            "id-ID",
-                          ) ?? ""
-                        }
-                        onChange={(e) => {
-                          const raw = e.target.value.replace(/[^0-9]/g, "");
-                          setBlockForm((p) => ({
-                            ...p,
-                            honorDokPetugas: raw,
-                          }));
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <div className="text-sm font-semibold mb-1">
-                        Honor pengawas per sampel
-                      </div>
-                      <input
-                        className="w-full px-3 py-2 border rounded bg-white"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        value={
-                          toMoney(blockForm.honorDokPengawas).toLocaleString(
-                            "id-ID",
-                          ) ?? ""
-                        }
-                        onChange={(e) => {
-                          const raw = e.target.value.replace(/[^0-9]/g, "");
-                          setBlockForm((p) => ({
-                            ...p,
-                            honorDokPengawas: raw,
-                          }));
-                        }}
-                      />
-                    </div>
-                  </div>
                   <div>
-                    <div className="text-sm font-semibold mb-1">Kecamatan</div>
-                    <HUSelect
-                      value={blockForm.districtId || null}
-                      onValueChange={(v) =>
-                        setBlockForm((p) => ({
-                          ...p,
-                          districtId: (v ?? "") as string,
-                          villageId: "",
-                        }))
-                      }
-                      options={districtOptions}
-                      placeholder="Pilih kecamatan"
+                    <div className="text-sm font-semibold mb-1">
+                      Harga satuan pekerjaan
+                    </div>
+                    <input
+                      className="w-full px-3 py-2 border rounded bg-white"
+                      value={toMoney(String(defaultUnitWorkPrice)).toLocaleString("id-ID")}
+                      disabled
                     />
-                  </div>
-                  <div>
-                    <div className="text-sm font-semibold mb-1">Desa</div>
-                    <HUSelect
-                      value={blockForm.villageId || null}
-                      onValueChange={(v) =>
-                        setBlockForm((p) => ({
-                          ...p,
-                          villageId: (v ?? "") as string,
-                        }))
-                      }
-                      options={villageOptions}
-                      placeholder="Pilih desa"
-                    />
-                  </div>
-                </div>
-
-                <div className="border rounded p-3">
-                  <div className="font-semibold mb-2">
-                    Tabel sampel (disimpan di petugas saja)
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full text-sm">
-                      <thead>
-                        <tr className="text-left border-b bg-gray-50">
-                          <th className="py-2 pr-3 sticky top-0 bg-gray-50 z-10 font-semibold text-gray-700">
-                            Identity
-                          </th>
-                          <th className="py-2 pr-3 sticky top-0 bg-gray-50 z-10 font-semibold text-gray-700">
-                            Cacah
-                          </th>
-                          <th className="py-2 pr-3 sticky top-0 bg-gray-50 z-10 font-semibold text-gray-700">
-                            Approval
-                          </th>
-                          <th className="py-2 pr-3 w-20 sticky top-0 bg-gray-50 z-10 font-semibold text-gray-700">
-                            Aksi
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {samples.map((s, i) => (
-                          <tr key={i} className="border-b hover:bg-gray-50">
-                            <td className="py-2 pr-3">
-                              <input
-                                className="w-full px-2 py-1 border rounded bg-white"
-                                value={s.identity}
-                                onChange={(e) =>
-                                  setSamples((prev) =>
-                                    prev.map((x, idx) =>
-                                      idx === i
-                                        ? { ...x, identity: e.target.value }
-                                        : x,
-                                    ),
-                                  )
-                                }
-                              />
-                            </td>
-                            <td className="py-2 pr-3">
-                              <HUSelect
-                                value={s.cacahStatus || null}
-                                onValueChange={(v) =>
-                                  setSamples((prev) =>
-                                    prev.map((x, idx) =>
-                                      idx === i
-                                        ? {
-                                            ...x,
-                                            cacahStatus: (v ?? "") as string,
-                                          }
-                                        : x,
-                                    ),
-                                  )
-                                }
-                                options={[
-                                  { value: "Belum_Cacah", label: "Belum" },
-                                  { value: "Selesai", label: "Selesai" },
-                                ]}
-                                placeholder="Pilih"
-                              />
-                            </td>
-                            <td className="py-2 pr-3">
-                              <HUSelect
-                                value={s.approvalStatus || null}
-                                onValueChange={(v) =>
-                                  setSamples((prev) =>
-                                    prev.map((x, idx) =>
-                                      idx === i
-                                        ? {
-                                            ...x,
-                                            approvalStatus: (v ?? "") as string,
-                                          }
-                                        : x,
-                                    ),
-                                  )
-                                }
-                                options={[
-                                  { value: "Menunggu", label: "Menunggu" },
-                                  { value: "Disetujui", label: "Disetujui" },
-                                  { value: "Ditolak", label: "Ditolak" },
-                                ]}
-                                placeholder="Pilih"
-                              />
-                            </td>
-                            <td className="py-2 pr-3">
-                              <IconButton
-                                title="Hapus sampel"
-                                onClick={() =>
-                                  setSamples((prev) => {
-                                    const next0 = prev.filter(
-                                      (_, idx) => idx !== i,
-                                    );
-                                    const next =
-                                      next0.length > 0
-                                        ? next0
-                                        : [
-                                            {
-                                              identity: "",
-                                              cacahStatus: "Belum_Cacah",
-                                              approvalStatus: "Menunggu",
-                                            },
-                                          ];
-                                    setDraftSampleCount(next.length);
-                                    return next;
-                                  })
-                                }
-                                variant="danger"
-                              >
-                                <Trash2 size={16} />
-                              </IconButton>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="flex justify-between items-center mt-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setSamples((p) => {
-                          const next = [
-                            ...p,
-                            {
-                              identity: "",
-                              cacahStatus: "Belum_Cacah",
-                              approvalStatus: "Menunggu",
-                            },
-                          ];
-                          setDraftSampleCount(next.length);
-                          return next;
-                        })
-                      }
-                      className="px-3 py-2 rounded bg-gray-100"
-                    >
-                      Tambah baris
-                    </button>
-                    <div className="text-sm text-gray-600">
-                      Jumlah sampel : {samples.length} • Honor petugas:{" "}
-                      {toMoney(blockForm.honorPetugas).toLocaleString("id-ID")}{" "}
-                      • Honor pengawas:{" "}
-                      {toMoney(blockForm.honorPengawas).toLocaleString("id-ID")}
+                    <div className="text-xs text-gray-500 mt-1">
+                      Otomatis dari kegiatan. Dipakai untuk hitung honor petugas dan pengawas.
                     </div>
                   </div>
                 </div>

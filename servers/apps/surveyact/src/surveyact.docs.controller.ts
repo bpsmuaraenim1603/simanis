@@ -12,13 +12,12 @@ type MonthlyStaffZipBody = {
   ppkNip: string;
   nomorSPK: string;
   nomorBAST: string;
-  docDate: string | Date;
+  spkDocDate: string | Date;
+  bastDocDate: string | Date;
   rows: Array<{
     subSurveyActivityId: string;
     totalDocs: number;
-    unitCost: number;
-    totalCost: number;
-    budgetCode?: string;
+    included?: boolean;
   }>;
 };
 
@@ -34,7 +33,8 @@ export class SurveyactDocsController {
     @Body() body: MonthlyStaffZipBody,
     @Res() res: Response,
   ) {
-    const docDate = body.docDate instanceof Date ? body.docDate : new Date(body.docDate);
+    const spkDocDate = body.spkDocDate instanceof Date ? body.spkDocDate : new Date(body.spkDocDate);
+    const bastDocDate = body.bastDocDate instanceof Date ? body.bastDocDate : new Date(body.bastDocDate);
 
     const built = await this.service.generateMonthlyStaffDocsBuffers({
       userId: body.userId,
@@ -45,7 +45,8 @@ export class SurveyactDocsController {
       ppkNip: String(body.ppkNip || ''),
       nomorSPK: String(body.nomorSPK || ''),
       nomorBAST: String(body.nomorBAST || ''),
-      docDate,
+      spkDocDate,
+      bastDocDate,
       rows: Array.isArray(body.rows) ? body.rows : [],
     });
 

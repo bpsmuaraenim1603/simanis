@@ -141,6 +141,13 @@ export class CreateSubSurveyActivityDTO {
 
   @Field()
   activityType: string;
+
+
+  @Field({ nullable: true })
+  budgetCode?: string;
+
+  @Field({ nullable: true })
+  unitWorkPrice?: number;
 }
 
 @InputType()
@@ -168,6 +175,13 @@ export class UpdateSubSurveyActivityDTO {
 
   @Field()
   activityType: string;
+
+
+  @Field({ nullable: true })
+  budgetCode?: string;
+
+  @Field({ nullable: true })
+  unitWorkPrice?: number;
 
   @Field({ nullable: true })
   status?: 'BERJALAN' | 'SELESAI';
@@ -215,9 +229,6 @@ export class CreateUserProgressDTO {
   // pada subSurveyActivityId + blockCount yang sama.
   @Field({ nullable: true })
   docsBillPengawas?: string;
-
-  @Field({ nullable: true })
-  budgetCode?: string;
 
   @Field(() => [UserSampleInput], { nullable: true })
   samples?: UserSampleInput[];
@@ -273,9 +284,6 @@ export class UpdateUserProgressDTO {
 
   @Field({ nullable: true })
   docsBill?: string;
-
-  @Field({ nullable: true })
-  budgetCode?: string;
 
   @Field({ nullable: true })
   totalAssigned?: number;
@@ -466,9 +474,6 @@ export class MonthlyStaffDocRowInput {
   totalCost: number;
 
   @Field({ nullable: true })
-  budgetCode?: string;
-
-  @Field({ nullable: true })
   unitName?: string;
 
   @Field({ nullable: true })
@@ -505,7 +510,10 @@ export class GenerateMonthlyStaffDocInput {
   nomorSPK?: string;
 
   @Field(() => GraphQLISODateTime)
-  docDate: Date;
+  spkDocDate: Date;
+
+  @Field(() => GraphQLISODateTime)
+  bastDocDate: Date;
 
   @Field(() => [MonthlyStaffDocRowInput])
   rows: MonthlyStaffDocRowInput[];
@@ -538,7 +546,10 @@ export class GenerateMonthlyStaffDocsInput {
   nomorBAST?: string;
 
   @Field(() => GraphQLISODateTime)
-  docDate: Date;
+  spkDocDate: Date;
+
+  @Field(() => GraphQLISODateTime)
+  bastDocDate: Date;
 
   @Field({ nullable: true })
   pekerjaanPetugas?: string;

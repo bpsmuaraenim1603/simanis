@@ -28,9 +28,7 @@ type PreviewRow = {
 type EditableRow = PreviewRow & {
   // editable values for eligible rows
   editTotalDocs: number;
-  editUnitCost: number;
   editTotalCost: number;
-  editBudgetCode: string;
   unitName: string;
   editUnitName: string;
   included: boolean;
@@ -85,7 +83,10 @@ export default function BastSpkPage() {
   const [month, setMonth] = useState<number>(now.getMonth() + 1);
   const [year, setYear] = useState<number>(now.getFullYear());
 
-  const [docDate, setDocDate] = useState<string>(
+  const [spkDocDate, setSpkDocDate] = useState<string>(
+    now.toISOString().slice(0, 10),
+  );
+  const [bastDocDate, setBastDocDate] = useState<string>(
     now.toISOString().slice(0, 10),
   );
   const [ppkName, setPpkName] = useState<string>("");
@@ -105,18 +106,14 @@ export default function BastSpkPage() {
       fetchPolicy: "no-cache",
       onCompleted: (res) => {
         const data: PreviewRow[] = res?.getMonthlyStaffDocPreview ?? [];
-        const mapped: EditableRow[] = data.map((r) => {
+                const mapped: EditableRow[] = data.map((r) => {
           const editTotalDocs = toNumber(r.totalDocs);
-          const editUnitCost = toNumber(r.unitCost);
-          const editTotalCost = Number(
-            (editTotalDocs * editUnitCost).toFixed(2),
-          );
+          const unitCost = toNumber(r.unitCost);
+          const editTotalCost = Number((editTotalDocs * unitCost).toFixed(2));
           return {
             ...r,
             editTotalDocs,
-            editUnitCost,
             editTotalCost,
-            editBudgetCode: String(r.budgetCode ?? ""),
             editUnitName: "Dokumen",
             unitName: "Dokumen",
             included: r.eligible,
@@ -191,6 +188,19 @@ export default function BastSpkPage() {
     }));
   }, [ppkData]);
 
+
+  useEffect(() => {
+    if (ppkUserId) return;
+    const opts = (ppkData?.ppkOptions ?? []) as any[];
+    if (!opts.length) return;
+    const def = opts.find((x) => x?.isDefault) ?? opts[0];
+    if (!def?.id) return;
+    setPpkUserId(def.id);
+    setPpkName(def.name ?? "");
+    setPpkNip(def.nip ?? "");
+  }, [ppkData, ppkUserId]);
+
+
   const selectedUser = useMemo(() => {
     if (!selectedUserId) return null;
     return users.find((u: any) => u.id === selectedUserId) ?? null;
@@ -255,7 +265,7 @@ export default function BastSpkPage() {
 
       // auto-calc total cost
       const td = toNumber(merged.editTotalDocs);
-      const uc = toNumber(merged.editUnitCost);
+      const uc = toNumber(merged.unitCost);
       merged.editTotalCost = Number((td * uc).toFixed(2));
 
       clone[idx] = merged;
@@ -358,8 +368,8 @@ export default function BastSpkPage() {
             <input
               className="w-full rounded-md border px-3 py-2 bg-white"
               type="date"
-              value={docDate}
-              onChange={(e) => setDocDate(e.target.value)}
+              value={spkDocDate}
+              onChange={(e) => setSpkDocDate(e.target.value)}
             />
           </div>
 
@@ -462,9 +472,8 @@ export default function BastSpkPage() {
                 <th className="border p-2">Status</th>
                 <th className="border p-2">Satuan</th>
                 <th className="border p-2">Jumlah Satuan</th>
+                <th className="border p-2">Harga Satuan Pekerjaan</th>
                 <th className="border p-2">Total Honor</th>
-                <th className="border p-2">Biaya/Dok</th>
-                <th className="border p-2">Total Biaya</th>
                 <th className="border p-2">Kode Beban</th>
                 <th className="border p-2">Masukkan</th>
               </tr>
@@ -526,52 +535,14 @@ export default function BastSpkPage() {
                         />
                       </td>
                       <td className="border p-2 text-right">
-                        {toNumber(r.totalHonor).toLocaleString("id-ID")}
-                      </td>
-                      <td className="border p-2 text-center">
-                        <input
-                          className="w-28 border rounded px-2 py-1 bg-white text-right"
-                          type="number"
-                          disabled={disabled}
-                          value={r.editUnitCost}
-                          onChange={(e) =>
-                            onRecalcRow(idx, {
-                              editUnitCost: toNumber(e.target.value),
-                            })
-                          }
-                        />
-                      </td>
-                      <td className="border p-2 text-center">
-                        <input
-                          className="w-32 border rounded px-2 py-1 bg-white text-right"
-                          type="number"
-                          disabled={disabled}
-                          value={r.editTotalCost}
-                          onChange={(e) =>
-                            onRecalcRow(idx, {
-                              editTotalCost: toNumber(e.target.value),
-                            })
-                          }
-                        />
-                      </td>
-                      <td className="border p-2">
-                        <input
-                          className="w-full border rounded px-2 py-1 bg-white"
-                          disabled={disabled}
-                          value={r.editBudgetCode}
-                          onChange={(e) =>
-                            setRows((prev) => {
-                              const clone = [...prev];
-                              clone[idx] = {
-                                ...clone[idx],
-                                editBudgetCode: e.target.value,
-                              };
-                              return clone;
-                            })
-                          }
-                          placeholder="Kode beban anggaran"
-                        />
-                      </td>
+                         {toNumber(r.unitCost).toLocaleString("id-ID")}
+                       </td>
+                       <td className="border p-2 text-right">
+                         {toNumber(r.editTotalCost).toLocaleString("id-ID")}
+                       </td>
+                       <td className="border p-2">
+                         {r.budgetCode ? String(r.budgetCode) : "-"}
+                       </td>
                       <td className="border p-2 text-center">
                         <input
                           type="checkbox"
@@ -604,7 +575,8 @@ export default function BastSpkPage() {
             onClick={() => {
               if (!selectedUserId) return toast.error("Pilih petugas dulu.");
               if (!ppkUserId.trim()) return toast.error("PPK wajib dipilih.");
-              if (!docDate) return toast.error("Tanggal dokumen wajib diisi.");
+              if (!spkDocDate) return toast.error("Tanggal dokumen SPK wajib diisi.");
+              if (!bastDocDate) return toast.error("Tanggal dokumen BAST wajib diisi.");
               if (!petugasJobName.trim())
                 return toast.error("Nama pekerjaan petugas wajib diisi.");
               if (!petugasVillageName.trim())
@@ -620,9 +592,6 @@ export default function BastSpkPage() {
                   subSurveyActivityId: r.subSurveyActivityId,
                   unitName: (r.editUnitName || "Dokumen").trim() || "Dokumen",
                   totalDocs: toNumber(r.editTotalDocs),
-                  unitCost: toNumber(r.editUnitCost),
-                  totalCost: toNumber(r.editTotalCost),
-                  budgetCode: r.editBudgetCode,
                   included: !!r.included,
                 }));
 
@@ -640,7 +609,8 @@ export default function BastSpkPage() {
                     ppkNip,
                     nomorSPK,
                     nomorBAST,
-                    docDate: new Date(docDate),
+                    spkDocDate: new Date(spkDocDate),
+                    bastDocDate: new Date(bastDocDate),
                     pekerjaanPetugas: petugasJobName,
                     desaTinggalPetugas: petugasVillageName,
                     rows: payloadRows,
