@@ -179,6 +179,29 @@ function MonthlyStaffUsagePanel({
     },
   );
 
+  // ===== Default PPK (ditentukan Superadmin) =====
+  const { data: ppkData } = useQuery(PPK_OPTIONS, {
+    fetchPolicy: "cache-and-network",
+  });
+
+  const [setDefaultPpkUser, { loading: savingDefaultPpk }] = useMutation(
+    SET_DEFAULT_PPK_USER,
+    {
+      refetchQueries: [{ query: PPK_OPTIONS }],
+    },
+  );
+
+  const defaultPpkId =
+    (ppkData?.ppkOptions ?? []).find((x: any) => x?.isDefault)?.id ?? "";
+  const [selectedDefaultPpkId, setSelectedDefaultPpkId] = useState<string>("");
+
+  useEffect(() => {
+    if (!selectedDefaultPpkId && defaultPpkId) {
+      setSelectedDefaultPpkId(defaultPpkId);
+    }
+  }, [defaultPpkId, selectedDefaultPpkId]);
+
+
   const rows = (data?.getMonthlyActivityStaffUsage ?? []) as Array<{
     month: string;
     subSurveyActivityId: string;
@@ -254,6 +277,7 @@ function MonthlyStaffUsagePanel({
 
   const openStaffModal = (row: any) => setSelectedActivity(row);
   const closeStaffModal = () => setSelectedActivity(null);
+  const { user: currentUser } = useUser();
 
   const yearOptions: HUSelectOption[] = useMemo(() => {
     const current = new Date().getFullYear();
@@ -278,6 +302,8 @@ function MonthlyStaffUsagePanel({
   const handleExportExcel = async () => {
     try {
       const res = await fetchExport({ variables: { year } });
+      if ((res as any)?.error) throw (res as any).error;
+      if ((res as any)?.errors?.length) throw new Error((res as any).errors[0]?.message || "Query export gagal");
       const rows = (res.data?.getMitraBulananExport ?? []) as any[];
 
       const wb = XLSX.utils.book_new();
@@ -449,7 +475,7 @@ function MonthlyStaffUsagePanel({
         <div className="flex gap-2 items-center">
           <HUSelect
             value={String(year)}
-            onValueChange={(v) => {
+            onValueChange={(v: string | null) => {
               if (!v) return;
               setYear(Number(v));
             }}
@@ -472,6 +498,52 @@ function MonthlyStaffUsagePanel({
           </button>
         </div>
       </div>
+
+
+      {/* Default PPK */}
+      {String((currentUser as any)?.primaryRole) === "Superadmin" && (
+        <div className="border rounded-lg p-3 sm:p-4">
+          <div className="text-sm font-semibold mb-2">Default PPK</div>
+          <div className="text-xs text-gray-500 mb-3">
+            Pilih 1 pengguna sebagai default PPK. Pengguna lain tetap bisa dipilih saat input PPK di BAST/SPK.
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+            <div className="w-full sm:max-w-md">
+              <HUSelect
+                value={selectedDefaultPpkId || null}
+                onValueChange={(v: string | null) => setSelectedDefaultPpkId(String(v ?? ""))}
+                placeholder="Pilih default PPK"
+                options={((ppkData?.ppkOptions ?? []) as any[]).map((u) => ({
+                  label: `${u?.name ?? "-"}${u?.nip ? ` (${u.nip})` : ""}`,
+                  value: u?.id,
+                })) as HUSelectOption[]}
+              />
+            </div>
+
+            <button
+              type="button"
+              disabled={!selectedDefaultPpkId || savingDefaultPpk}
+              onClick={async () => {
+                try {
+                  await setDefaultPpkUser({ variables: { userId: selectedDefaultPpkId } });
+                  toast.success("Default PPK berhasil disimpan");
+                } catch (e: any) {
+                  toast.error(e?.message ?? "Gagal menyimpan default PPK");
+                }
+              }}
+              className={[
+                "px-3 py-2 rounded-md text-sm font-semibold",
+                !selectedDefaultPpkId || savingDefaultPpk
+                  ? "bg-gray-300 text-gray-700 cursor-not-allowed"
+                  : "bg-blue-600 text-white hover:bg-blue-700",
+              ].join(" ")}
+            >
+              {savingDefaultPpk ? "Menyimpan..." : "Simpan"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ringkasan */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

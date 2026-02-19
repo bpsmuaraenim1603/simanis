@@ -2643,6 +2643,45 @@ export class SurveyActivityService {
     });
 
     const dipa = 'DIPA BPS Kabupaten Muara Enim';
+    const toNumber = (v: any): number | null => {
+      if (v === null || v === undefined) return null;
+      if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+      if (typeof v !== 'string') return null;
+      let s = v.trim();
+      if (!s) return null;
+      // keep digits, dot, comma, minus
+      s = s.replace(/[^0-9.,-]/g, '');
+      if (!s) return null;
+
+      const lastDot = s.lastIndexOf('.');
+      const lastComma = s.lastIndexOf(',');
+      // decide decimal separator by last occurrence
+      if (lastDot !== -1 && lastComma !== -1) {
+        if (lastDot > lastComma) {
+          // decimal '.', remove commas (thousand)
+          s = s.replace(/,/g, '');
+        } else {
+          // decimal ',', remove dots (thousand), replace comma to dot
+          s = s.replace(/\./g, '').replace(/,/g, '.');
+        }
+      } else if (lastComma !== -1) {
+        // assume decimal ','
+        s = s.replace(/\./g, '').replace(/,/g, '.');
+      } else {
+        // only dot or digits
+        // if multiple dots, treat them as thousand separators except last
+        const parts = s.split('.');
+        if (parts.length > 2) {
+          const dec = parts.pop();
+          s = parts.join('') + '.' + dec;
+        }
+      }
+
+      const n = Number.parseFloat(s);
+      return Number.isFinite(n) ? n : null;
+    };
+
+
 
     return rows.flatMap((r) => {
       const ssa = r.subSurveyActivity;
@@ -2665,9 +2704,9 @@ export class SurveyActivityService {
           totalAssigned: r.totalAssigned ?? 0,
           sampleType: ssa?.sampleType ?? '',
           unitWorkPrice: ssa?.unitWorkPrice ?? null,
-          docsBill: r.docsBill ?? null,
+          docsBill: toNumber(r.docsBill) ?? null,
           budgetCode: ssa?.budgetCode ?? null,
-          limit_bill: (r.user as any)?.limit_bill ?? null,
+          limit_bill: toNumber((r.user as any)?.limit_bill) ?? null,
           chiefName: ssa?.surveyActivity?.chief?.name ?? null,
           dipa,
         },
