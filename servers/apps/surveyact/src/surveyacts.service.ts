@@ -3189,7 +3189,6 @@ export class SurveyActivityService {
         nomorBAST: built.nomorBAST,
         rows: input.rows.map((r) => ({
           subSurveyActivityId: r.subSurveyActivityId,
-          budgetCode: r.budgetCode,
         })),
       });
     } catch (e) {
@@ -3570,10 +3569,8 @@ export class SurveyActivityService {
         create: {
           recapId: recap.id,
           subSurveyActivityId: r.subSurveyActivityId,
-          budgetCode: r.budgetCode ?? null,
         },
         update: {
-          budgetCode: r.budgetCode ?? null,
         },
       });
     }

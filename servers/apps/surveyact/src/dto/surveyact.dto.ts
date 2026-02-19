@@ -467,12 +467,6 @@ export class MonthlyStaffDocRowInput {
   @Field(() => Int)
   totalDocs: number;
 
-  @Field(() => Float)
-  unitCost: number;
-
-  @Field(() => Float)
-  totalCost: number;
-
   @Field({ nullable: true })
   unitName?: string;
 

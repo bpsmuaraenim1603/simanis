@@ -113,10 +113,10 @@ export class SubSurveyActivityType {
   status: string;
 
   @Field(() => String, { nullable: true })
-  budgetCode?: string;
+  budgetCode?: string | null;
 
   @Field(() => Number, { nullable: true })
-  unitWorkPrice?: number;
+  unitWorkPrice?: number | null;
 }
 
 @ObjectType()
