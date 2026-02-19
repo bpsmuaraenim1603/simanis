@@ -440,6 +440,8 @@ export default function Admin() {
   const kegiatanList: SubSurveyActivity[] =
     (kegiatanData?.subSurveyActivityById ?? []) as any[];
 
+  const [selectedKegiatanId, setSelectedKegiatanId] = useState<string>("");
+
   const selectedKegiatan = useMemo(
     () => kegiatanList.find((k) => k.id === selectedKegiatanId) ?? null,
     [kegiatanList, selectedKegiatanId],
@@ -610,7 +612,6 @@ export default function Admin() {
   // =========================
   // TAB: PETUGAS
   // =========================
-  const [selectedKegiatanId, setSelectedKegiatanId] = useState<string>("");
   const [petugasSearch, setPetugasSearch] = useState("");
   const [expandedPairs, setExpandedPairs] = useState<Record<string, boolean>>(
     {},
