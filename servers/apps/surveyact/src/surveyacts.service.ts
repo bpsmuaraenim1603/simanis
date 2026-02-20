@@ -107,6 +107,28 @@ function isAllowedImage(ext: string, mime?: string | null) {
   return allowedExt.has(ext) || allowedMime.has(m);
 }
 
+function normalizeBlockCount(
+  raw?: string | null,
+  fallback?: string,
+): string | null {
+  const v = String(raw ?? '').trim();
+  if (!v) return fallback ?? null;
+  if (v.toUpperCase() === 'DRAFT') return fallback ?? 'DRAFT';
+  return v;
+}
+
+function toNumberLoose(v: any): number {
+  if (v == null) return 0;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  const s = String(v).trim();
+  if (!s) return 0;
+  // buang semua non-digit kecuali minus
+  const digits = s.replace(/[^\d-]/g, '');
+  if (!digits || digits === '-') return 0;
+  const n = Number(digits);
+  return Number.isFinite(n) ? n : 0;
+}
+
 @Injectable()
 export class SurveyActivityService {
   constructor(
@@ -415,7 +437,7 @@ export class SurveyActivityService {
     const subSurveyActivityId = params.subSurveyActivityId ?? null;
     const superVisorId = params.superVisorId ?? null;
     const districtId = params.districtId ?? null;
-    const blockCount = params.blockCount ?? null;
+    const blockCount = normalizeBlockCount(params.blockCount ?? null);
     const villageId = params.villageId ?? null;
     const docsBillPengawas = params.docsBillPengawas ?? null;
     if (!subSurveyActivityId || !superVisorId) return;
@@ -425,7 +447,7 @@ export class SurveyActivityService {
         userId: superVisorId,
         subSurveyActivityId,
         progressRole: 'PENGAWAS',
-        blockCount: blockCount ?? null,
+        blockCount: blockCount,
       },
       select: { id: true },
     });
@@ -451,7 +473,7 @@ export class SurveyActivityService {
         submitCount: 0,
         approvedCount: 0,
         rejectedCount: 0,
-        blockCount: blockCount ?? null,
+        blockCount: blockCount,
         districtId: districtId ?? null,
         villageId: villageId ?? null,
         docsBill:
@@ -468,6 +490,12 @@ export class SurveyActivityService {
     actorId?: string,
   ) {
     const { samples, docsBillPengawas, ...rest } = input;
+
+    const draftBlock = `DRAFT-${randomUUID().slice(0, 8)}`;
+    (rest as any).blockCount = normalizeBlockCount(
+      (rest as any).blockCount,
+      draftBlock,
+    );
     let totalAssigned = rest.totalAssigned ?? 0;
     let submitCount = rest.submitCount ?? 0;
     let approvedCount = rest.approvedCount ?? 0;
@@ -767,7 +795,16 @@ export class SurveyActivityService {
   }
 
   async updateUserProgress(input: UpdateUserProgressDTO, actorId?: string) {
-    const { id, samples, deleteSampleIds, ...rest } = input;
+    const { id, samples, deleteSampleIds, docsBillPengawas, ...rest } =
+      input as any;
+
+    if (Object.prototype.hasOwnProperty.call(rest as any, 'blockCount')) {
+      const draftBlock = `DRAFT-${String(id).slice(0, 8)}`;
+      (rest as any).blockCount = normalizeBlockCount(
+        (rest as any).blockCount,
+        draftBlock,
+      );
+    }
 
     return this.prisma.$transaction(async (tx) => {
       const upBefore = await tx.userProgress.findUnique({
@@ -909,6 +946,54 @@ export class SurveyActivityService {
               villageId: upAfter.villageId ?? null,
               docsBill: '0',
               superVisorId: null,
+            },
+          });
+        }
+
+        if (
+          docsBillPengawas !== undefined &&
+          upAfter.subSurveyActivityId &&
+          upAfter.superVisorId
+        ) {
+          const targetSup = await tx.userProgress.findFirst({
+            where: {
+              userId: upAfter.superVisorId,
+              subSurveyActivityId: upAfter.subSurveyActivityId,
+              progressRole: 'PENGAWAS',
+              blockCount: upAfter.blockCount ?? null,
+            },
+            select: { id: true, docsBill: true },
+          });
+
+          if (!targetSup) {
+            throw new NotFoundException(
+              'UserProgress pengawas tidak ditemukan',
+            );
+          }
+
+          const nextSup = this.parseMoney(docsBillPengawas ?? null);
+          const prevSup = this.parseMoney(targetSup.docsBill ?? null);
+
+          const delta = Math.max(0, nextSup - prevSup);
+          if (delta > 0) {
+            await this.assertMonthlyBillLimit({
+              userId: upAfter.superVisorId,
+              subSurveyActivityId: upAfter.subSurveyActivityId,
+              addAmount: delta,
+              excludeProgressIds: [targetSup.id],
+            });
+          }
+
+          await tx.userProgress.update({
+            where: { id: targetSup.id },
+            data: {
+              docsBill:
+                docsBillPengawas !== null && docsBillPengawas !== undefined
+                  ? String(docsBillPengawas).trim()
+                  : '0',
+              districtId: upAfter.districtId ?? null,
+              villageId: upAfter.villageId ?? null,
+              blockCount: upAfter.blockCount ?? null,
             },
           });
         }
@@ -2600,13 +2685,13 @@ export class SurveyActivityService {
     };
   }
 
-  
   async getMitraBulananExport(year: number) {
     const from = new Date(year, 0, 1);
     const to = new Date(year, 11, 31, 23, 59, 59, 999);
 
     const rows = await this.prisma.userProgress.findMany({
       where: {
+        progressRole: 'PETUGAS',
         subSurveyActivity: {
           startDate: { lte: to },
           endDate: { gte: from },
@@ -2614,6 +2699,7 @@ export class SurveyActivityService {
       },
       select: {
         userId: true,
+        subSurveyActivityId: true,
         totalAssigned: true,
         docsBill: true,
         user: {
@@ -2642,7 +2728,10 @@ export class SurveyActivityService {
           },
         },
       },
-      orderBy: [{ subSurveyActivity: { startDate: 'asc' } }, { user: { name: 'asc' } }],
+      orderBy: [
+        { subSurveyActivity: { startDate: 'asc' } },
+        { user: { name: 'asc' } },
+      ],
     });
 
     const dipa = 'DIPA BPS Kabupaten Muara Enim';
@@ -2677,40 +2766,74 @@ export class SurveyActivityService {
       return Number.isFinite(n) ? n : null;
     };
 
+    const out: any[] = [];
+    const map = new Map<string, any>();
 
-
-    return rows.flatMap((r) => {
-      if ((r.user as any)?.primaryRole === 'Supervisor' || (r.user as any)?.primaryRole === 'Admin') return [];
+    for (const r of rows) {
       const ssa = r.subSurveyActivity;
-      if (!ssa?.startDate) return [];
-      const sd = ssa.startDate;
-      const month = sd.getMonth() + 1;
+      if (!ssa?.startDate) continue;
 
-      return [
-        {
+      const month = ssa.startDate.getMonth() + 1;
+      const key = `${year}||${month}||${r.userId}||${r.subSurveyActivityId}`;
+
+      const vol = Number(r.totalAssigned ?? 0) || 0;
+      const bill = toNumberLoose(r.docsBill); // 0 tetap 0
+
+      const existing = map.get(key);
+      if (!existing) {
+        const row = {
           year,
           month,
           userId: r.userId,
+          subSurveyActivityId: r.subSurveyActivityId,
+
           name: r.user?.name ?? '-',
-          job_name: (r.user as any)?.job_name ?? null,
-          district: (r.user as any)?.district?.name ?? null,
-          city: (r.user as any)?.district?.city ?? null,
+          job_name: r.user?.job_name ?? null,
+          district: r.user?.district?.name ?? null,
+          city: r.user?.district?.city ?? null,
+
           subsurveyactivity: ssa?.name ?? '-',
           startDate: ssa.startDate,
           endDate: ssa.endDate ?? ssa.startDate,
-          totalAssigned: r.totalAssigned ?? 0,
+
+          totalAssigned: vol,
+          docsBill: bill, // 0 tetap 0
+
           sampleType: ssa?.sampleType ?? '',
           unitWorkPrice: ssa?.unitWorkPrice ?? null,
-          docsBill: toNumber(r.docsBill) ?? null,
           budgetCode: ssa?.budgetCode ?? null,
-          limit_bill: toNumber((r.user as any)?.limit_bill) ?? null,
+          limit_bill: toNumberLoose(r.user?.limit_bill),
           chiefName: ssa?.surveyActivity?.chief?.name ?? null,
           dipa,
-        },
-      ];
-    });
-  }
+        };
 
+        map.set(key, row);
+        out.push(row);
+      } else {
+        existing.totalAssigned += vol;
+        existing.docsBill = toNumberLoose(existing.docsBill) + bill; // 0 tetap 0
+
+        const end = (ssa.endDate ?? ssa.startDate).getTime();
+        const curEnd = new Date(
+          existing.endDate ?? existing.startDate,
+        ).getTime();
+        if (end > curEnd) existing.endDate = ssa.endDate ?? ssa.startDate;
+      }
+    }
+
+    out.sort((a, b) => {
+      if (a.month !== b.month) return a.month - b.month;
+      const an = String(a.name ?? '');
+      const bn = String(b.name ?? '');
+      if (an !== bn) return an.localeCompare(bn, 'id');
+      return String(a.subsurveyactivity ?? '').localeCompare(
+        String(b.subsurveyactivity ?? ''),
+        'id',
+      );
+    });
+
+    return out;
+  }
 
   async exportUserSamplePhotos(
     userProgressId: string,
@@ -2908,7 +3031,14 @@ export class SurveyActivityService {
         progressRole: true,
         docsBill: true,
         subSurveyActivity: {
-          select: { id: true, name: true, startDate: true, endDate: true, budgetCode: true, unitWorkPrice: true },
+          select: {
+            id: true,
+            name: true,
+            startDate: true,
+            endDate: true,
+            budgetCode: true,
+            unitWorkPrice: true,
+          },
         },
         _count: { select: { samples: true } },
       },
@@ -3684,8 +3814,7 @@ export class SurveyActivityService {
           recapId: recap.id,
           subSurveyActivityId: r.subSurveyActivityId,
         },
-        update: {
-        },
+        update: {},
       });
     }
 

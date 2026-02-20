@@ -282,6 +282,12 @@ export class UpdateUserProgressDTO {
   @Field({ nullable: true })
   docsBill?: string;
 
+  // Honor pengawas untuk blok yang sama. Backend akan memastikan/menemukan
+  // UserProgress(PENGAWAS) yang tepat berdasarkan superVisorId + subSurveyActivityId + blockCount.
+  // Tujuan: update blok cukup 1 kali (hindari update pengawas terpisah yang rawan race/NotFound).
+  @Field({ nullable: true })
+  docsBillPengawas?: string;
+
   @Field({ nullable: true })
   totalAssigned?: number;
 

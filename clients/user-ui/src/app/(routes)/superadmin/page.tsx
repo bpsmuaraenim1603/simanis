@@ -3,7 +3,7 @@
 import React, { useMemo, useState, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useLazyQuery } from "@apollo/client";
 import toast from "react-hot-toast";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { GET_ALL_USERS } from "@/src/graphql/actions/find-allusers.action";
 import { UPDATE_ROLE } from "@/src/graphql/actions/update-role.action";
 import { UPDATE_BILL_LIMIT } from "@/src/graphql/actions/update-limitbill.action";
@@ -210,10 +210,48 @@ function SingleMonthMitraTable({
       });
     });
     ordered.sort((a, b) =>
-      String(a?.[0]?.name ?? "").localeCompare(String(b?.[0]?.name ?? ""), "id"),
+      String(a?.[0]?.name ?? "").localeCompare(
+        String(b?.[0]?.name ?? ""),
+        "id",
+      ),
     );
     return ordered;
   }, [rowsMonth]);
+
+  const [q, setQ] = useState("");
+
+  const toSearchText = (row: any) => {
+    const parts: string[] = [];
+
+    const walk = (v: any) => {
+      if (v == null) return;
+      if (
+        typeof v === "string" ||
+        typeof v === "number" ||
+        typeof v === "boolean"
+      ) {
+        parts.push(String(v));
+        return;
+      }
+      if (Array.isArray(v)) {
+        v.forEach(walk);
+        return;
+      }
+      if (typeof v === "object") {
+        Object.values(v).forEach(walk);
+        return;
+      }
+    };
+
+    walk(row);
+    return parts.join(" ").toLowerCase();
+  };
+
+  const filteredRows = useMemo(() => {
+    const key = q.trim().toLowerCase();
+    if (!key) return groups;
+    return groups.filter((r) => toSearchText(r).includes(key));
+  }, [groups, q]);
 
   const fmtDateId = (d: any) => {
     if (!d) return "";
@@ -235,13 +273,13 @@ function SingleMonthMitraTable({
   return (
     <div className="mt-3">
       <div className="flex items-center justify-between gap-2 mb-2">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 border rounded-md">
           <IconButton
             label="Bulan sebelumnya"
             onClick={() => jumpMonth(-1)}
-            className="bg-gray-700"
+            className="border-0"
           >
-            <span className="text-lg">‹</span>
+            <span className="text-xl text-gray-700">‹</span>
           </IconButton>
           <div className="text-sm font-semibold">
             {monthNames[activeMonth - 1]} {year}
@@ -249,12 +287,19 @@ function SingleMonthMitraTable({
           <IconButton
             label="Bulan berikutnya"
             onClick={() => jumpMonth(1)}
-            className="bg-gray-700"
+            className="border-0"
           >
-            <span className="text-lg">›</span>
+            <span className="text-xl text-gray-700">›</span>
           </IconButton>
         </div>
-        <div className="text-xs text-gray-500">Baris: {rowsMonth.length}</div>
+        <div className="flex items-center">
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Pencarian"
+            className="w-full max-w-md rounded-md border border-gray-200 px-3 py-2 text-sm outline-none"
+          />
+        </div>
       </div>
 
       <div className="w-full overflow-auto max-h-[1000px] border rounded-md">
@@ -281,7 +326,7 @@ function SingleMonthMitraTable({
             </tr>
           </thead>
           <tbody>
-            {groups.map((list, gi) => {
+            {filteredRows.map((list, gi) => {
               const span = list.length;
               return list.map((r: any, ri: number) => {
                 const vol = Number(r?.totalAssigned ?? 0) || 0;
@@ -338,7 +383,9 @@ function SingleMonthMitraTable({
                       {selisih ? selisih.toLocaleString("id-ID") : "-"}
                     </td>
                     <td className="px-2 py-2">{r?.chiefName ?? "-"}</td>
-                    <td className="px-2 py-2">{r?.dipa ?? "DIPA BPS Kabupaten Muara Enim"}</td>
+                    <td className="px-2 py-2">
+                      {r?.dipa ?? "DIPA BPS Kabupaten Muara Enim"}
+                    </td>
                   </tr>
                 );
               });
@@ -383,8 +430,7 @@ function MonthlyStaffUsagePanel({
       variables: { year },
       fetchPolicy: "cache-and-network",
     },
-  
-);
+  );
 
   const {
     data: exportPreviewData,
@@ -396,7 +442,8 @@ function MonthlyStaffUsagePanel({
     fetchPolicy: "network-only",
   });
 
-  const exportPreviewRows = (exportPreviewData?.getMitraBulananExport ?? []) as any[];
+  const exportPreviewRows = (exportPreviewData?.getMitraBulananExport ??
+    []) as any[];
 
   const [activeMonth, setActiveMonth] = useState<number>(() => {
     const now = new Date();
@@ -437,7 +484,6 @@ function MonthlyStaffUsagePanel({
       setSelectedDefaultPpkId(defaultPpkId);
     }
   }, [defaultPpkId, selectedDefaultPpkId]);
-
 
   const rows = (data?.getMonthlyActivityStaffUsage ?? []) as Array<{
     month: string;
@@ -491,8 +537,6 @@ function MonthlyStaffUsagePanel({
     }
     return map;
   }, [exportPreviewRows]);
-
-
 
   const uniqueUsersYear = useMemo(() => {
     const set = new Set<string>();
@@ -558,7 +602,6 @@ function MonthlyStaffUsagePanel({
     return `${dd}/${mm}/${yy}`;
   };
 
-  
   const fmtDateId = (d: any) => {
     if (!d) return "";
     const dt = new Date(d);
@@ -568,14 +611,16 @@ function MonthlyStaffUsagePanel({
     return `${dd}/${mm}/${yy}`;
   };
 
-const handleExportExcel = async () => {
+  const handleExportExcel = async () => {
     try {
       const res = await fetchExport({ variables: { year } });
       if ((res as any)?.error) throw (res as any).error;
-      if ((res as any)?.errors?.length) throw new Error((res as any).errors[0]?.message || "Query export gagal");
-      const rows = (res.data?.getMitraBulananExport ?? []) as any[];
+      if ((res as any)?.errors?.length)
+        throw new Error(
+          (res as any).errors[0]?.message || "Query export gagal",
+        );
 
-      const wb = XLSX.utils.book_new();
+      const rows = (res.data?.getMitraBulananExport ?? []) as any[];
 
       const monthNames = [
         "JANUARI",
@@ -608,14 +653,62 @@ const handleExportExcel = async () => {
         groups.get(m)!.push(r);
       }
 
+      const wb = new ExcelJS.Workbook();
+      wb.created = new Date();
+
+      const headerGreen = {
+        type: "pattern" as const,
+        pattern: "solid" as const,
+        fgColor: { argb: "FF6AA84F" },
+      };
+
+      const sepPink = {
+        type: "pattern" as const,
+        pattern: "solid" as const,
+        fgColor: { argb: "FFF4CCCC" },
+      };
+
+      const thinBorder = {
+        top: { style: "thin" as const },
+        left: { style: "thin" as const },
+        bottom: { style: "thin" as const },
+        right: { style: "thin" as const },
+      };
+
+      const columns = [
+        { header: "NO", width: 5 },
+        { header: "NAMA", width: 28 },
+        { header: "PEKERJAAN", width: 24 },
+        { header: "KECAMATAN", width: 18 },
+        { header: "KABUPATEN", width: 18 },
+        { header: "KEGIATAN", width: 42 },
+        { header: "JANGKA WAKTU", width: 24 },
+        { header: "VOL", width: 10 },
+        { header: "SATUAN", width: 12 },
+        { header: "HARGA SATUAN", width: 14 },
+        { header: "NILAI PERJANJIAN", width: 18 },
+        { header: "BEBAN ANGGARAN", width: 18 },
+        { header: "JUMLAH", width: 14 },
+        { header: "SBML", width: 12 },
+        { header: "SELISIH", width: 12 },
+        { header: "NAMA KETUA TIM/PENANGGUNG JAWAB", width: 32 },
+        { header: "KETERANGAN ASAL DIPA", width: 26 },
+      ];
+
       for (let m = 1; m <= 12; m++) {
         const data = (groups.get(m) ?? [])
           .slice()
           .sort((a, b) => (a?.name ?? "").localeCompare(b?.name ?? "", "id"));
 
         const sheetName = `${monthNames[m - 1]} HONOR ${year}`;
+        const ws = wb.addWorksheet(sheetName, {
+          views: [{ state: "frozen", ySplit: 2 }],
+        });
 
-        const header1 = [
+        ws.columns = columns as any;
+
+        // ===== Header baris 1 & 2 =====
+        ws.getRow(1).values = [
           "NO",
           "NAMA",
           "PEKERJAAN",
@@ -635,7 +728,7 @@ const handleExportExcel = async () => {
           "KETERANGAN ASAL DIPA",
         ];
 
-        const header2 = [
+        ws.getRow(2).values = [
           "",
           "",
           "",
@@ -655,6 +748,31 @@ const handleExportExcel = async () => {
           "",
         ];
 
+        const mergeDownCols = [
+          1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 13, 14, 15, 16, 17,
+        ];
+        for (const c of mergeDownCols) {
+          ws.mergeCells(1, c, 2, c);
+        }
+
+        ws.mergeCells(1, 8, 1, 9);
+
+        for (let r = 1; r <= 2; r++) {
+          const row = ws.getRow(r);
+          row.height = 20;
+          row.eachCell((cell) => {
+            cell.fill = headerGreen;
+            cell.font = { bold: true, color: { argb: "FF000000" } };
+            cell.alignment = {
+              horizontal: "center",
+              vertical: "middle",
+              wrapText: true,
+            };
+            cell.border = thinBorder;
+          });
+        }
+
+        // ===== Group per user =====
         const byUser = new Map<string, any[]>();
         for (const r of data) {
           const k = String(r?.userId ?? r?.name ?? "-");
@@ -662,14 +780,15 @@ const handleExportExcel = async () => {
           byUser.get(k)!.push(r);
         }
 
-        const body: any[][] = [];
-        const merges: any[] = [{ s: { r: 0, c: 7 }, e: { r: 0, c: 8 } }];
-        let no = 1;
-        let excelRow = 2;
-
         const userGroups = Array.from(byUser.values()).sort((a, b) =>
-          String(a?.[0]?.name ?? "").localeCompare(String(b?.[0]?.name ?? ""), "id"),
+          String(a?.[0]?.name ?? "").localeCompare(
+            String(b?.[0]?.name ?? ""),
+            "id",
+          ),
         );
+
+        let no = 1;
+        let currentRow = 3;
 
         for (const list of userGroups) {
           const sorted = list.slice().sort((a, b) => {
@@ -682,9 +801,9 @@ const handleExportExcel = async () => {
             );
           });
 
-          const span = sorted.length;
+          const startUserRow = currentRow;
 
-          sorted.forEach((r: any, idx: number) => {
+          sorted.forEach((r: any) => {
             const vol = Number(r.totalAssigned ?? 0);
             const price = Number(r.unitWorkPrice ?? 0);
             const nilaiPerjanjian = vol * price;
@@ -693,12 +812,12 @@ const handleExportExcel = async () => {
             const selisih = limit - docsBill;
             const jangkaWaktu = `${fmtDate(r.startDate)}-${fmtDate(r.endDate)}`;
 
-            body.push([
-              idx === 0 ? no : "",
-              idx === 0 ? r.name ?? "" : "",
-              idx === 0 ? r.job_name ?? "" : "",
-              idx === 0 ? r.district ?? "" : "",
-              idx === 0 ? r.city ?? "" : "",
+            ws.getRow(currentRow).values = [
+              no,
+              r.name ?? "",
+              r.job_name ?? "",
+              r.district ?? "",
+              r.city ?? "",
               r.subsurveyactivity ?? "",
               jangkaWaktu,
               vol,
@@ -706,52 +825,76 @@ const handleExportExcel = async () => {
               price || "",
               nilaiPerjanjian || "",
               r.budgetCode ?? "",
-              docsBill || "",
-              limit || "",
-              selisih || "",
+              docsBill || 0,
+              limit || 0,
+              selisih || 0,
               r.chiefName ?? "",
               r.dipa ?? "DIPA BPS Kabupaten Muara Enim",
-            ]);
+            ];
+
+            ws.getRow(currentRow).eachCell((cell) => {
+              cell.border = thinBorder;
+              cell.alignment = {
+                vertical: "middle",
+                horizontal: "left",
+                wrapText: true,
+              };
+            });
+
+            [8, 10, 11, 13, 14, 15].forEach((c) => {
+              ws.getCell(currentRow, c).alignment = {
+                vertical: "middle",
+                horizontal: "right",
+              };
+            });
+
+            currentRow++;
           });
 
+          const endUserRow = currentRow - 1;
+          const span = endUserRow - startUserRow + 1;
+
           if (span > 1) {
-            for (const c of [0, 1, 2, 3, 4]) {
-              merges.push({ s: { r: excelRow, c }, e: { r: excelRow + span - 1, c } });
-            }
+            [1, 2, 3, 4, 5].forEach((c) => {
+              ws.mergeCells(startUserRow, c, endUserRow, c);
+              ws.getCell(startUserRow, c).alignment = {
+                vertical: "middle",
+                horizontal: "left",
+                wrapText: true,
+              };
+            });
+            ws.getCell(startUserRow, 1).alignment = {
+              vertical: "middle",
+              horizontal: "center",
+            };
           }
-          excelRow += span;
-          no += 1;
+
+          // ===== Baris pemisah (pink) =====
+          const sepRow = ws.getRow(currentRow);
+          sepRow.height = 10;
+          for (let c = 1; c <= columns.length; c++) {
+            const cell = ws.getCell(currentRow, c);
+            cell.value = "";
+            cell.fill = sepPink;
+            cell.border = thinBorder;
+          }
+          currentRow++;
+          no++;
         }
-
-        const aoa = [header1, header2, ...body];
-        const ws = XLSX.utils.aoa_to_sheet(aoa);
-
-        ws["!merges"] = merges;
-
-        ws["!cols"] = [
-          { wch: 5 },  // NO
-          { wch: 28 }, // NAMA
-          { wch: 24 }, // PEKERJAAN
-          { wch: 18 }, // KECAMATAN
-          { wch: 18 }, // KABUPATEN
-          { wch: 42 }, // KEGIATAN
-          { wch: 24 }, // JANGKA WAKTU
-          { wch: 10 }, // VOL
-          { wch: 12 }, // SATUAN
-          { wch: 14 }, // HARGA SATUAN
-          { wch: 18 }, // NILAI PERJANJIAN
-          { wch: 18 }, // BEBAN ANGGARAN
-          { wch: 14 }, // JUMLAH
-          { wch: 12 }, // SBML
-          { wch: 12 }, // SELISIH
-          { wch: 32 }, // KETUA TIM
-          { wch: 26 }, // DIPA
-        ];
-
-        XLSX.utils.book_append_sheet(wb, ws, sheetName);
       }
 
-      XLSX.writeFile(wb, `Ekspor_Mitra_Bulanan_${year}.xlsx`);
+      const filename = `Ekspor_Mitra_Bulanan_${year}.xlsx`;
+      const buffer = await wb.xlsx.writeBuffer();
+
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
     } catch (e: any) {
       console.error(e);
       alert(`Gagal export: ${e?.message ?? "unknown error"}`);
@@ -803,25 +946,29 @@ const handleExportExcel = async () => {
         </div>
       </div>
 
-
       {/* Default PPK */}
       {String((currentUser as any)?.primaryRole) === "Superadmin" && (
         <div className="border rounded-lg p-3 sm:p-4">
           <div className="text-sm font-semibold mb-2">Default PPK</div>
           <div className="text-xs text-gray-500 mb-3">
-            Pilih 1 pengguna sebagai default PPK. Pengguna lain tetap bisa dipilih saat input PPK di BAST/SPK.
+            Pilih 1 pengguna sebagai default PPK. Pengguna lain tetap bisa
+            dipilih saat input PPK di BAST/SPK.
           </div>
 
           <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
             <div className="w-full sm:max-w-md">
               <HUSelect
                 value={selectedDefaultPpkId || null}
-                onValueChange={(v: string | null) => setSelectedDefaultPpkId(String(v ?? ""))}
+                onValueChange={(v: string | null) =>
+                  setSelectedDefaultPpkId(String(v ?? ""))
+                }
                 placeholder="Pilih default PPK"
-                options={((ppkData?.ppkOptions ?? []) as any[]).map((u) => ({
-                  label: `${u?.name ?? "-"}${u?.nip ? ` (${u.nip})` : ""}`,
-                  value: u?.id,
-                })) as HUSelectOption[]}
+                options={
+                  ((ppkData?.ppkOptions ?? []) as any[]).map((u) => ({
+                    label: `${u?.name ?? "-"}${u?.nip ? ` (${u.nip})` : ""}`,
+                    value: u?.id,
+                  })) as HUSelectOption[]
+                }
               />
             </div>
 
@@ -830,7 +977,9 @@ const handleExportExcel = async () => {
               disabled={!selectedDefaultPpkId || savingDefaultPpk}
               onClick={async () => {
                 try {
-                  await setDefaultPpkUser({ variables: { userId: selectedDefaultPpkId } });
+                  await setDefaultPpkUser({
+                    variables: { userId: selectedDefaultPpkId },
+                  });
                   toast.success("Default PPK berhasil disimpan");
                 } catch (e: any) {
                   toast.error(e?.message ?? "Gagal menyimpan default PPK");
@@ -849,28 +998,28 @@ const handleExportExcel = async () => {
         </div>
       )}
 
-
       {/* detail mitra bulanan */}
       <div className="border rounded-lg p-3 sm:p-4">
         <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
           <div>
-            <div className="font-semibold text-sm">Pemakaian Mitra Bulanan</div>
-            <div className="text-xs text-gray-500">
-              Data diambil dari progress mitra per kegiatan. Tabel dibagi per bulan berdasarkan tanggal mulai kegiatan.
-            </div>
+            <div className="font-semibold">Pemakaian Mitra Bulanan</div>
           </div>
-          <div className="text-xs text-gray-500">
-            {exportPreviewLoading ? "Memuat..." : `Total baris: ${exportPreviewRows.length}`}
-          </div>
+          {/* <div className="text-xs text-gray-500">
+            {exportPreviewLoading
+              ? "Memuat..."
+              : `Total baris: ${exportPreviewRows.length}`}
+          </div> */}
         </div>
 
         {exportPreviewError ? (
           <div className="mt-3 text-sm text-red-600">
-            Gagal memuat data mitra bulanan: {(exportPreviewError as any)?.message ?? "unknown error"}
+            Gagal memuat data mitra bulanan:{" "}
+            {(exportPreviewError as any)?.message ?? "unknown error"}
           </div>
         ) : exportPreviewRows.length === 0 ? (
           <div className="mt-3 text-sm text-gray-600">
-            Data kosong untuk tahun {year}. Cek apakah ada kegiatan yang tanggalnya overlap dengan tahun ini, atau sudah ada progress mitra.
+            Data kosong untuk tahun {year}. Cek apakah ada kegiatan yang
+            tanggalnya overlap dengan tahun ini, atau sudah ada progress mitra.
           </div>
         ) : (
           <SingleMonthMitraTable
@@ -2106,12 +2255,8 @@ export default function SuperAdminManagePage() {
                               <tr>
                                 <th className="px-4 py-2">Kegiatan</th>
                                 <th className="px-4 py-2">Jenis</th>
-                                <th className="px-4 py-2 text-right">
-                                  Blok
-                                </th>
-                                <th className="px-4 py-2 text-right">
-                                  Honor
-                                </th>
+                                <th className="px-4 py-2 text-right">Blok</th>
+                                <th className="px-4 py-2 text-right">Honor</th>
                               </tr>
                             </thead>
                             <tbody className="bg-white">

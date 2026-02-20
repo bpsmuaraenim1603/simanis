@@ -288,8 +288,8 @@ export default function Admin() {
   const [updateKegiatan] = useMutation(UPDATE_SUB_SURVEY_ACTIVITY);
   const [deleteKegiatan] = useMutation(DELETE_SUBSURVEY_ACTIVITY);
 
-  const [createUserProgress] = useMutation(CREATE_USER_PROGRESS);
-  const [updateUserProgress] = useMutation(UPDATE_USER_PROGRESS);
+  const [createUserProgress, { loading: creatingUserProgress }] = useMutation(CREATE_USER_PROGRESS);
+  const [updateUserProgress, { loading: updatingUserProgress }] = useMutation(UPDATE_USER_PROGRESS);
   const [deleteUserProgress] = useMutation(DELETE_USER_SURVEY_PROGRESS);
   const [bulkImportExcel, { loading: uploadingExcel }] = useMutation(
     BULK_IMPORT_USERPROGRESS_EXCEL,
@@ -689,13 +689,14 @@ export default function Admin() {
     if (!selectedKegiatanId) return toast.error("Pilih kegiatan dulu.");
     if (!addPairPetugasId) return toast.error("Petugas wajib dipilih.");
     try {
+      const draftBlock = `DRAFT-${(globalThis.crypto?.randomUUID?.() ?? Math.random().toString(16).slice(2)).slice(0, 8)}`;
       await createUserProgress({
         variables: {
           input: {
             userId: addPairPetugasId,
             superVisorId: addPairPengawasId || "",
             subSurveyActivityId: selectedKegiatanId,
-            blockCount: "DRAFT",
+            blockCount: draftBlock,
             districtId: null,
             villageId: null,
             docsBill: "0",
@@ -708,10 +709,8 @@ export default function Admin() {
           },
         },
       });
-      toast.success("Pair petugas–pengawas ditambahkan.");
-      setAddPairOpen(false);
+      toast.success("Blok petugas–pengawas ditambahkan.");
       setAddPairPetugasId("");
-      setAddPairPengawasId("");
       await refetchUP();
     } catch (e: any) {
       toast.error(e?.message ?? "Gagal menambahkan pair.");
@@ -753,6 +752,10 @@ export default function Admin() {
     petugasId?: string;
     pengawasId?: string;
   } | null>(null);
+  const [identityBlock, setIdentityBlock] = useState({
+    petugasName: "",
+    pengawasName: "",
+  });
   const [blockForm, setBlockForm] = useState({
     blockCount: "",
     districtId: "",
@@ -782,6 +785,7 @@ export default function Admin() {
   }, [villages.length, blockForm.districtId]);
 
   useEffect(() => {
+    if (!blockModalOpen) return;
     const perPetugas = toMoney(blockForm.honorDokPetugas);
     const perPengawas = toMoney(blockForm.honorDokPengawas);
 
@@ -790,7 +794,7 @@ export default function Admin() {
       honorPetugas: String(perPetugas * samples.length),
       honorPengawas: String(perPengawas * samples.length),
     }));
-  }, [samples.length, blockForm.honorDokPetugas, blockForm.honorDokPengawas]);
+  }, [blockModalOpen, samples.length, blockForm.honorDokPetugas, blockForm.honorDokPengawas]);
 
   function safePerSample(total: any, count: number) {
     if (!count || count <= 0) return "0";
@@ -827,21 +831,27 @@ export default function Admin() {
   ) {
     setActivePairKey(pairKey);
     setActiveBlock({ petugasId: petugas.id, pengawasId: pengawas?.id });
+    setIdentityBlock({
+      petugasName: petugas.user?.name ?? "",
+      pengawasName: pengawas?.user?.name ?? "",
+    })
     setBlockModalMode("edit");
     const list = (petugas.samples ?? []).map((s) => ({
       identity: s.identity,
       cacahStatus: (s.cacahStatus as any) ?? "Belum_Cacah",
       approvalStatus: (s.approvalStatus as any) ?? "Menunggu",
     }));
-    const count = list.length;
+    const count = list.length || 0;
+    const unitPetugas = count > 0 && toMoney(petugas.docsBill) > 0 ? safePerSample(petugas.docsBill, count) : String(defaultUnitWorkPrice);
+    const unitPengawas = count > 0 && pengawas && toMoney(pengawas.docsBill) > 0 ? safePerSample(pengawas?.docsBill, count) : String(defaultUnitWorkPrice);
     setBlockForm({
       blockCount: String(petugas.blockCount ?? ""),
       districtId: String(petugas.districtId ?? ""),
       villageId: String(petugas.villageId ?? ""),
-      honorPetugas: String(petugas.docsBill ?? ""),
-      honorPengawas: String(pengawas?.docsBill ?? ""),
-      honorDokPetugas: String(defaultUnitWorkPrice),
-      honorDokPengawas: String(defaultUnitWorkPrice),
+      honorPetugas: String(toMoney(unitPetugas) * count),
+      honorPengawas: String(toMoney(unitPengawas) * count),
+      honorDokPetugas: String(toMoney(unitPetugas)),
+      honorDokPengawas: String(toMoney(unitPengawas)),
     });
 
     setSamples(
@@ -998,6 +1008,8 @@ export default function Admin() {
               villageId,
               blockCount,
               docsBill: docsBillPetugas,
+              docsBillPengawas: editPair.superVisorId ? docsBillPengawas : null,
+              superVisorId: editPair.superVisorId || null,
               samples: samples.map((s, idx) => ({
                 nus: String(idx + 1).padStart(3, "0"),
                 identity: s.identity,
@@ -1009,20 +1021,6 @@ export default function Admin() {
             },
           },
         });
-
-        if (activeBlock.pengawasId) {
-          await updateUserProgress({
-            variables: {
-              input: {
-                id: activeBlock.pengawasId,
-                districtId,
-                villageId,
-                blockCount,
-                docsBill: docsBillPengawas,
-              },
-            },
-          });
-        }
 
         toast.success("Blok diupdate.");
       }
@@ -1947,6 +1945,11 @@ export default function Admin() {
                                   const vName = b.petugas.village?.name ?? "-";
                                   const pengawasDocs =
                                     b.pengawas?.docsBill ?? "0";
+                                  const blockLabel = (() => {
+                                    const bc = String(b.petugas.blockCount ?? "");
+                                    if (!bc) return "(tanpa nama blok)";
+                                    return bc.startsWith("DRAFT-") ? "DRAFT" : bc;
+                                  })();
                                   return (
                                     <div
                                       key={b.petugas.id}
@@ -1954,8 +1957,7 @@ export default function Admin() {
                                     >
                                       <div className="text-sm">
                                         <div className="font-semibold">
-                                          {b.petugas.blockCount ??
-                                            "(tanpa nama blok)"}
+                                          {blockLabel}
                                         </div>
                                         <div className="text-xs text-gray-600">
                                           {dName} • {vName} • Honor petugas:{" "}
@@ -2023,7 +2025,7 @@ export default function Admin() {
               <div className="bg-white w-full max-w-4xl rounded-lg p-4 space-y-3 max-h-[90vh] overflow-auto">
                 <div className="flex items-center justify-between">
                   <div className="font-bold">
-                    {blockModalMode === "add" ? "Tambah Blok" : "Update Blok"}
+                    {blockModalMode === "add" ? "Tambah Blok" : `Update Blok (${identityBlock.petugasName}-${identityBlock.pengawasName})` }
                   </div>
                   <IconButton
                     title="Tutup"
@@ -2121,7 +2123,7 @@ export default function Admin() {
 
                 <div className="border rounded p-3">
                   <div className="font-semibold mb-2">
-                    Tabel sampel (disimpan di petugas saja)
+                    Tabel sampel
                   </div>
                   <div className="overflow-x-auto">
                     <table className="min-w-full text-sm">
@@ -2281,9 +2283,10 @@ export default function Admin() {
                   <button
                     type="button"
                     onClick={saveBlock}
+                    disabled={creatingUserProgress || updatingUserProgress}
                     className={`${styles.button} text-white`}
                   >
-                    Simpan
+                    {creatingUserProgress || updatingUserProgress ? "Menyimpan..." : "Simpan"}
                   </button>
                 </div>
               </div>

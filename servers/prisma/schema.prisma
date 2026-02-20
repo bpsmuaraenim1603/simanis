@@ -210,6 +210,8 @@ model UserProgress {
   docsBill            String?
 
   samples UserSample[]
+
+  @@unique([subSurveyActivityId, userId, progressRole, blockCount])
 }
 
 model UserSample {

@@ -361,13 +361,25 @@ export default function BastSpkPage() {
 
           <div>
             <label className="block text-sm font-semibold mb-1">
-              Tanggal Dokumen
+              Tanggal Dokumen SPK
             </label>
             <input
               className="w-full rounded-md border px-3 py-2 bg-white"
               type="date"
               value={spkDocDate}
               onChange={(e) => setSpkDocDate(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold mb-1">
+              Tanggal Dokumen BAST
+            </label>
+            <input
+              className="w-full rounded-md border px-3 py-2 bg-white"
+              type="date"
+              value={bastDocDate}
+              onChange={(e) => setBastDocDate(e.target.value)}
             />
           </div>
 
