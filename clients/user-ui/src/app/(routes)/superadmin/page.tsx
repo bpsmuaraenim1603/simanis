@@ -608,7 +608,6 @@ const handleExportExcel = async () => {
         groups.get(m)!.push(r);
       }
 
-      // buat sheet per bulan (1..12)
       for (let m = 1; m <= 12; m++) {
         const data = (groups.get(m) ?? [])
           .slice()
@@ -656,8 +655,6 @@ const handleExportExcel = async () => {
           "",
         ];
 
-        // Format seperti contoh: nama tidak diulang, hanya 1 kali lalu banyak baris kegiatan.
-        // Kita lakukan merge vertikal untuk kolom identitas (No, Nama, Pekerjaan, Kecamatan, Kabupaten).
         const byUser = new Map<string, any[]>();
         for (const r of data) {
           const k = String(r?.userId ?? r?.name ?? "-");
@@ -666,9 +663,9 @@ const handleExportExcel = async () => {
         }
 
         const body: any[][] = [];
-        const merges: any[] = [{ s: { r: 0, c: 7 }, e: { r: 0, c: 8 } }]; // TARGET PEKERJAAN
+        const merges: any[] = [{ s: { r: 0, c: 7 }, e: { r: 0, c: 8 } }];
         let no = 1;
-        let excelRow = 2; // header1 row=0, header2 row=1
+        let excelRow = 2;
 
         const userGroups = Array.from(byUser.values()).sort((a, b) =>
           String(a?.[0]?.name ?? "").localeCompare(String(b?.[0]?.name ?? ""), "id"),
@@ -1363,7 +1360,6 @@ export default function SuperAdminManagePage() {
       return rest;
     });
 
-    // reset drafts (multi-role)
     setRoleDraft((p) => {
       const { [id]: _, ...rest } = p;
       return rest;
@@ -1448,7 +1444,6 @@ export default function SuperAdminManagePage() {
 
           okRole = true;
 
-          // clear drafts after save
           setRoleDraft((p) => {
             const { [user.id]: _, ...rest } = p;
             return rest;
@@ -1844,7 +1839,6 @@ export default function SuperAdminManagePage() {
                                     ? baseRoles.filter((x) => x !== r)
                                     : [...baseRoles, r];
 
-                                  // minimal 1 role biar aman
                                   const safeNext = next.length
                                     ? next
                                     : ["User"];
@@ -1854,7 +1848,6 @@ export default function SuperAdminManagePage() {
                                     [user.id]: safeNext,
                                   }));
 
-                                  // kalau primaryRole kehapus, set ke role pertama
                                   if (!safeNext.includes(basePrimary)) {
                                     setPrimaryDraft((p) => ({
                                       ...p,

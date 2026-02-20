@@ -26,7 +26,6 @@ type PreviewRow = {
 };
 
 type EditableRow = PreviewRow & {
-  // editable values for eligible rows
   editTotalDocs: number;
   editTotalCost: number;
   unitName: string;
@@ -263,7 +262,6 @@ export default function BastSpkPage() {
       const cur = clone[idx];
       const merged = { ...cur, ...next };
 
-      // auto-calc total cost
       const td = toNumber(merged.editTotalDocs);
       const uc = toNumber(merged.unitCost);
       merged.editTotalCost = Number((td * uc).toFixed(2));

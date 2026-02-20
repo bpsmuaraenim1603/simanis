@@ -2608,7 +2608,6 @@ export class SurveyActivityService {
     const rows = await this.prisma.userProgress.findMany({
       where: {
         subSurveyActivity: {
-          // include activities that overlap the given year (not only those starting within the year)
           startDate: { lte: to },
           endDate: { gte: from },
         },
@@ -2653,27 +2652,20 @@ export class SurveyActivityService {
       if (typeof v !== 'string') return null;
       let s = v.trim();
       if (!s) return null;
-      // keep digits, dot, comma, minus
       s = s.replace(/[^0-9.,-]/g, '');
       if (!s) return null;
 
       const lastDot = s.lastIndexOf('.');
       const lastComma = s.lastIndexOf(',');
-      // decide decimal separator by last occurrence
       if (lastDot !== -1 && lastComma !== -1) {
         if (lastDot > lastComma) {
-          // decimal '.', remove commas (thousand)
           s = s.replace(/,/g, '');
         } else {
-          // decimal ',', remove dots (thousand), replace comma to dot
           s = s.replace(/\./g, '').replace(/,/g, '.');
         }
       } else if (lastComma !== -1) {
-        // assume decimal ','
         s = s.replace(/\./g, '').replace(/,/g, '.');
       } else {
-        // only dot or digits
-        // if multiple dots, treat them as thousand separators except last
         const parts = s.split('.');
         if (parts.length > 2) {
           const dec = parts.pop();

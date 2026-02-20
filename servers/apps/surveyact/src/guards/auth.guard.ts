@@ -28,7 +28,6 @@ export class AuthGuard implements CanActivate {
     ]);
     if (isPublic) return true;
 
-    // Support both GraphQL and REST.
     let req: any;
     try {
       const gqlContext = GqlExecutionContext.create(context);

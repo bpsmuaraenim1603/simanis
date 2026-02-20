@@ -1562,7 +1562,7 @@ export default function UserPage() {
                             onChange={(e) => {
                               const f = e.target.files?.[0] ?? null;
                               onPickPhoto(f);
-                              e.currentTarget.value = ""; // biar bisa pilih file yang sama lagi
+                              e.currentTarget.value = "";
                             }}
                             className="hidden"
                             disabled={

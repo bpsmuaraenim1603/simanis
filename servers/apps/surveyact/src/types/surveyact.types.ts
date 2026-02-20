@@ -530,7 +530,7 @@ export class StaffYearlyExportRowType {
 @ObjectType()
 export class MitraBulananExportRowType {
   @Field(() => Int)
-  month!: number; // 1-12
+  month!: number;
 
   @Field(() => Int)
   year!: number;
@@ -651,7 +651,6 @@ export class MonthlyStaffDocsOutputType {
   @Field()
   nomorBAST: string;
 
-  // Waktu kedaluwarsa file di storage (setelah ini file akan dihapus otomatis)
   @Field(() => GraphQLISODateTime, { nullable: true })
   expiresAt?: Date;
 }

@@ -16,7 +16,6 @@ export function useSampleDrafts(userProgressId: string | undefined) {
   const [drafts, setDrafts] = useState<DraftSample[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // load awal
   useEffect(() => {
     if (!userProgressId) {
       setDrafts([]);
@@ -40,7 +39,6 @@ export function useSampleDrafts(userProgressId: string | undefined) {
     };
   }, [userProgressId]);
 
-  // helper untuk sync ke IndexedDB
   const syncToDb = useCallback(
     async (next: DraftSample[]) => {
       if (!userProgressId) return;
@@ -50,7 +48,6 @@ export function useSampleDrafts(userProgressId: string | undefined) {
     [userProgressId],
   );
 
-  // tambah atau update satu draft
   const upsertDraft = useCallback(
     async (
       draft: Omit<DraftSample, 'tempId' | 'createdAt' | 'updatedAt'> & {
@@ -79,7 +76,6 @@ export function useSampleDrafts(userProgressId: string | undefined) {
           };
           next = [...prev, newDraft];
         }
-        // sync async, tidak blocking UI
         setDraftSamples(userProgressId!, next).catch(() => {});
         return next;
       });
@@ -87,7 +83,6 @@ export function useSampleDrafts(userProgressId: string | undefined) {
     [userProgressId],
   );
 
-  // hapus draft tertentu
   const removeDraft = useCallback(
     async (tempId: string) => {
       setDrafts((prev) => {
@@ -99,7 +94,6 @@ export function useSampleDrafts(userProgressId: string | undefined) {
     [userProgressId],
   );
 
-  // bersihkan semua draft (dipakai setelah submit ke backend)
   const clearAllDrafts = useCallback(async () => {
     setDrafts([]);
     if (userProgressId) {

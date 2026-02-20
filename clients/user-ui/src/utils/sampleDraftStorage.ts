@@ -35,7 +35,6 @@ function openDb(): Promise<IDBDatabase | null> {
   });
 }
 
-// ambil semua draft untuk 1 userProgress
 export async function getDraftSamples(
   userProgressId: string,
 ): Promise<DraftSample[]> {
@@ -59,7 +58,6 @@ export async function getDraftSamples(
   });
 }
 
-// simpan semua draft untuk 1 userProgress
 export async function setDraftSamples(
   userProgressId: string,
   samples: DraftSample[],
@@ -80,7 +78,6 @@ export async function setDraftSamples(
   });
 }
 
-// hapus semua draft untuk 1 userProgress
 export async function clearDraftSamples(
   userProgressId: string,
 ): Promise<void> {

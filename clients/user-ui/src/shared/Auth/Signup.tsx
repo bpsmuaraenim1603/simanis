@@ -24,7 +24,6 @@ const formSchema = z
       .string()
       .min(3, { message: "Nama pekerjaan minimal 3 karakter" }),
 
-    // NEW
     nip: z.string().optional(),
 
     districtId: z.string().min(1, { message: "Kecamatan wajib dipilih" }),
