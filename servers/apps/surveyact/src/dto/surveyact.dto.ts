@@ -117,6 +117,12 @@ export class UpdateSurveyActivityDTO {
 }
 
 @InputType()
+export class CreateSampleTypeDTO {
+  @Field()
+  name: string;
+}
+
+@InputType()
 export class CreateSubSurveyActivityDTO {
   @Field()
   name: string;
@@ -148,6 +154,9 @@ export class CreateSubSurveyActivityDTO {
 
   @Field({ nullable: true })
   unitWorkPrice?: number;
+
+  @Field()
+  priceCompareUnit: 'SAMPEL' | 'BLOK';
 }
 
 @InputType()
@@ -182,6 +191,9 @@ export class UpdateSubSurveyActivityDTO {
 
   @Field({ nullable: true })
   unitWorkPrice?: number;
+
+  @Field()
+  priceCompareUnit: 'SAMPEL' | 'BLOK';
 
   @Field({ nullable: true })
   status?: 'BERJALAN' | 'SELESAI';

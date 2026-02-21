@@ -31,6 +31,7 @@ import {
   ExportUserSamplePhotosResult,
   VillageType,
   MonthlyAdminDocRecapType,
+  SampleTypeType,
 } from './types/surveyact.types';
 import {
   CreateContentIssueDto,
@@ -53,6 +54,7 @@ import {
   GenerateMonthlyStaffDocInput,
   GenerateMonthlyStaffDocsInput,
   UpdateSubSurveyActivityStatusDTO,
+  CreateSampleTypeDTO,
 } from './dto/surveyact.dto';
 
 import {
@@ -129,6 +131,16 @@ export class SurveyActivityResolver {
   @Query(() => [SubSurveyActivityType], { name: 'allSubSurveyActivities' })
   async allSubSurveyActivities() {
     return this.service.findAllSubSurveyActivity();
+  }
+
+  @Query(() => [SampleTypeType], { name: 'allSurveySampleTypes' })
+  async allSurveySampleTypes() {
+    return this.service.getAllSampleTypes();
+  }
+
+  @Mutation(() => SampleTypeType)
+  async createSurveySampleType(@Args('input') input: CreateSampleTypeDTO) {
+    return this.service.createSampleType(input.name);
   }
 
   @Query(() => SubSurveyActivityType, { name: 'subSurveyActivityBySlug' })

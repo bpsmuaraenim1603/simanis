@@ -10,6 +10,7 @@ export const UPDATE_SUB_SURVEY_ACTIVITY = gql`
       endDate
       targetSample
       sampleType
+      priceCompareUnit
       activityType
       budgetCode
       unitWorkPrice

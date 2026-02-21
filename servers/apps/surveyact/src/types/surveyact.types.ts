@@ -81,6 +81,21 @@ export class VillageType {
 }
 
 @ObjectType()
+export class SampleTypeType {
+  @Field(() => ID)
+  id: string;
+
+  @Field()
+  name: string;
+
+  @Field()
+  createdAt: Date;
+
+  @Field()
+ updatedAt: Date;
+}
+
+@ObjectType()
 export class SubSurveyActivityType {
   @Field(() => ID)
   id: string;
@@ -117,6 +132,9 @@ export class SubSurveyActivityType {
 
   @Field(() => Number, { nullable: true })
   unitWorkPrice?: number | null;
+
+  @Field()
+  priceCompareUnit: string;
 }
 
 @ObjectType()
@@ -564,6 +582,9 @@ export class MitraBulananExportRowType {
 
   @Field(() => String)
   sampleType!: string;
+
+  @Field(() => String)
+  priceCompareUnit!: string;
 
   @Field(() => Int, { nullable: true })
   unitWorkPrice?: number | null;

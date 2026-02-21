@@ -352,9 +352,9 @@ const ProgressTemplate = () => {
             </div>
 
             <div className="bg-slate-400 rounded-lg border w-full p-3 space-y-2 font-semibold">
-              <p>Target Sampel {progress.activityType}</p>
+              <p>{progress.activityType === "Pencacahan" ? "Target Pencacahan" : "Target & Capaian Listing"}</p>
               <p className="text-base md:text-xl">
-                {progress.targetSample} {progress.sampleType}
+                {progress.targetSample} {progress.activityType === "Pencacahan" ? "Sampel Responden" : "Data Responden"}
               </p>
             </div>
 

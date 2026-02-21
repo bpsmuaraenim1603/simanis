@@ -88,6 +88,11 @@ enum SubSurveyStatus {
   SELESAI
 }
 
+enum PriceCompareUnit {
+  SAMPEL
+  BLOK
+}
+
 model Avatar {
   id       String @id @default(uuid())
   publicId String
@@ -106,6 +111,13 @@ model SurveyActivity {
   SubSurveyActivity SubSurveyActivity[]
 }
 
+model SampleType {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model SubSurveyActivity {
   id               String          @id @default(uuid())
   name             String
@@ -120,6 +132,7 @@ model SubSurveyActivity {
   activityType     String
   budgetCode       String?
   unitWorkPrice    Int?
+  priceCompareUnit PriceCompareUnit @default(SAMPEL)
 
   UserProgress UserProgress[]
   SuratTugas   JobLetter[]

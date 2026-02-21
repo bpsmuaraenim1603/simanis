@@ -18,6 +18,7 @@ import HUSelect, { HUSelectOption } from "@/src/components/HUSelect";
 import { GET_DAILY_SIGNUP_CODE } from "@/src/graphql/actions/get-daily-signup-code.action";
 import { ROTATE_DAILY_SIGNUP_CODE } from "@/src/graphql/actions/rotate-daily-signup-code.action";
 import { getRoles } from "@/src/utils/roles";
+import { Search } from "lucide-react";
 
 function Tabs<T extends string>({
   tabs,
@@ -292,18 +293,24 @@ function SingleMonthMitraTable({
             <span className="text-xl text-gray-700">›</span>
           </IconButton>
         </div>
-        <div className="flex items-center">
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Pencarian"
-            className="w-full max-w-md rounded-md border border-gray-200 px-3 py-2 text-sm outline-none"
-          />
+        <div>
+          <div className="relative w-full">
+            <Search
+              size={16}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+            />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Pencarian"
+              className="w-full max-w-md rounded-md border border-gray-200 pl-9 pr-3 py-2 text-sm outline-none"
+            />
+          </div>
         </div>
       </div>
 
-      <div className="w-full overflow-auto max-h-[1000px] border rounded-md">
-        <table className="min-w-[1150px] w-full text-[11px]">
+      <div className="w-full overflow-auto max-h-[800px] border rounded-md">
+        <table className="min-w-[1150px] w-full text-[12px]">
           <thead className="bg-gray-50 sticky top-0">
             <tr className="border-b">
               <th className="px-2 py-2 text-left w-[40px]">No</th>
@@ -326,76 +333,82 @@ function SingleMonthMitraTable({
             </tr>
           </thead>
           <tbody>
-            {filteredRows.map((list, gi) => {
-              const span = list.length;
-              return list.map((r: any, ri: number) => {
-                const vol = Number(r?.totalAssigned ?? 0) || 0;
-                const unit = Number(r?.unitWorkPrice ?? 0) || 0;
-                const nilai = vol * unit;
-                const jumlah = Number(r?.docsBill ?? 0) || 0;
-                const sbml = Number(r?.limit_bill ?? 0) || 0;
-                const selisih = sbml - jumlah;
-                const jangka = `${fmtDateId(r?.startDate)} - ${fmtDateId(r?.endDate)}`;
+            {filteredRows.length > 0 ? (
+              filteredRows.map((list, gi) => {
+                const span = list.length;
+                return list.map((r: any, ri: number) => {
+                  const vol = Number(r?.totalAssigned ?? 0) || 0;
+                  const unit = Number(r?.unitWorkPrice ?? 0) || 0;
+                  const nilai = vol * unit;
+                  const jumlah = Number(r?.docsBill ?? 0) || 0;
+                  const sbml = Number(r?.limit_bill ?? 0) || 0;
+                  const selisih = sbml - jumlah;
+                  const jangka = `${fmtDateId(r?.startDate)} - ${fmtDateId(r?.endDate)}`;
 
-                return (
-                  <tr
-                    key={`${gi}-${ri}-${r?.subsurveyactivity ?? "k"}`}
-                    className="border-b hover:bg-gray-50"
-                  >
-                    {ri === 0 ? (
-                      <>
-                        <td rowSpan={span} className="px-2 py-2 align-top">
-                          {gi + 1}
-                        </td>
-                        <td rowSpan={span} className="px-2 py-2 align-top">
-                          {r?.name ?? "-"}
-                        </td>
-                        <td rowSpan={span} className="px-2 py-2 align-top">
-                          {r?.job_name ?? "-"}
-                        </td>
-                        <td rowSpan={span} className="px-2 py-2 align-top">
-                          {r?.district ?? "-"}
-                        </td>
-                        <td rowSpan={span} className="px-2 py-2 align-top">
-                          {r?.city ?? "-"}
-                        </td>
-                      </>
-                    ) : null}
+                  return (
+                    <tr
+                      key={`${gi}-${ri}-${r?.subsurveyactivity ?? "k"}`}
+                      className="border-b hover:bg-gray-50"
+                    >
+                      {ri === 0 ? (
+                        <>
+                          <td rowSpan={span} className="px-2 py-2 align-top">
+                            {gi + 1}
+                          </td>
+                          <td rowSpan={span} className="px-2 py-2 align-top">
+                            {r?.name ?? "-"}
+                          </td>
+                          <td rowSpan={span} className="px-2 py-2 align-top">
+                            {r?.job_name ?? "-"}
+                          </td>
+                          <td rowSpan={span} className="px-2 py-2 align-top">
+                            {r?.district ?? "-"}
+                          </td>
+                          <td rowSpan={span} className="px-2 py-2 align-top">
+                            {r?.city ?? "-"}
+                          </td>
+                        </>
+                      ) : null}
 
-                    <td className="px-2 py-2">{r?.subsurveyactivity ?? "-"}</td>
-                    <td className="px-2 py-2">{jangka}</td>
-                    <td className="px-2 py-2 text-right">{vol}</td>
-                    <td className="px-2 py-2">{r?.sampleType ?? "-"}</td>
-                    <td className="px-2 py-2 text-right">
-                      {unit ? unit.toLocaleString("id-ID") : "-"}
-                    </td>
-                    <td className="px-2 py-2 text-right">
-                      {nilai ? nilai.toLocaleString("id-ID") : "-"}
-                    </td>
-                    <td className="px-2 py-2">{r?.budgetCode ?? "-"}</td>
-                    <td className="px-2 py-2 text-right">
-                      {jumlah ? jumlah.toLocaleString("id-ID") : "-"}
-                    </td>
-                    <td className="px-2 py-2 text-right">
-                      {sbml ? sbml.toLocaleString("id-ID") : "-"}
-                    </td>
-                    <td className="px-2 py-2 text-right">
-                      {selisih ? selisih.toLocaleString("id-ID") : "-"}
-                    </td>
-                    <td className="px-2 py-2">{r?.chiefName ?? "-"}</td>
-                    <td className="px-2 py-2">
-                      {r?.dipa ?? "DIPA BPS Kabupaten Muara Enim"}
-                    </td>
-                  </tr>
-                );
-              });
-            })}
+                      <td className="px-2 py-2">
+                        {r?.subsurveyactivity ?? "-"}
+                      </td>
+                      <td className="px-2 py-2">{jangka}</td>
+                      <td className="px-2 py-2 text-right">{vol}</td>
+                      <td className="px-2 py-2">{r?.sampleType ?? "-"}</td>
+                      <td className="px-2 py-2 text-right">
+                        {unit ? unit.toLocaleString("id-ID") : "-"}
+                      </td>
+                      <td className="px-2 py-2 text-right">
+                        {nilai ? nilai.toLocaleString("id-ID") : "-"}
+                      </td>
+                      <td className="px-2 py-2">{r?.budgetCode ?? "-"}</td>
+                      <td className="px-2 py-2 text-right">
+                        {jumlah ? jumlah.toLocaleString("id-ID") : "-"}
+                      </td>
+                      <td className="px-2 py-2 text-right">
+                        {sbml ? sbml.toLocaleString("id-ID") : "-"}
+                      </td>
+                      <td className="px-2 py-2 text-right">
+                        {selisih ? selisih.toLocaleString("id-ID") : "-"}
+                      </td>
+                      <td className="px-2 py-2">{r?.chiefName ?? "-"}</td>
+                      <td className="px-2 py-2">
+                        {r?.dipa ?? "DIPA BPS Kabupaten Muara Enim"}
+                      </td>
+                    </tr>
+                  );
+                });
+              })
+            ) : (
+              <tr>
+                <td colSpan={15} className="px-2 py-2 text-center">
+                  Pencarian "{q}" tidak ditemukan.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
-      </div>
-
-      <div className="mt-2 text-[11px] text-gray-500">
-        Pindah bulan: tekan tombol kiri atau kanan.
       </div>
     </div>
   );
@@ -684,7 +697,7 @@ function MonthlyStaffUsagePanel({
         { header: "KEGIATAN", width: 42 },
         { header: "JANGKA WAKTU", width: 24 },
         { header: "VOL", width: 10 },
-        { header: "SATUAN", width: 12 },
+        { header: "SATUAN", width: 20 },
         { header: "HARGA SATUAN", width: 14 },
         { header: "NILAI PERJANJIAN", width: 18 },
         { header: "BEBAN ANGGARAN", width: 18 },
@@ -949,11 +962,7 @@ function MonthlyStaffUsagePanel({
       {/* Default PPK */}
       {String((currentUser as any)?.primaryRole) === "Superadmin" && (
         <div className="border rounded-lg p-3 sm:p-4">
-          <div className="text-sm font-semibold mb-2">Default PPK</div>
-          <div className="text-xs text-gray-500 mb-3">
-            Pilih 1 pengguna sebagai default PPK. Pengguna lain tetap bisa
-            dipilih saat input PPK di BAST/SPK.
-          </div>
+          <div className="text-sm font-semibold mb-2">Pilih PPK</div>
 
           <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
             <div className="w-full sm:max-w-md">
@@ -998,39 +1007,6 @@ function MonthlyStaffUsagePanel({
         </div>
       )}
 
-      {/* detail mitra bulanan */}
-      <div className="border rounded-lg p-3 sm:p-4">
-        <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
-          <div>
-            <div className="font-semibold">Pemakaian Mitra Bulanan</div>
-          </div>
-          {/* <div className="text-xs text-gray-500">
-            {exportPreviewLoading
-              ? "Memuat..."
-              : `Total baris: ${exportPreviewRows.length}`}
-          </div> */}
-        </div>
-
-        {exportPreviewError ? (
-          <div className="mt-3 text-sm text-red-600">
-            Gagal memuat data mitra bulanan:{" "}
-            {(exportPreviewError as any)?.message ?? "unknown error"}
-          </div>
-        ) : exportPreviewRows.length === 0 ? (
-          <div className="mt-3 text-sm text-gray-600">
-            Data kosong untuk tahun {year}. Cek apakah ada kegiatan yang
-            tanggalnya overlap dengan tahun ini, atau sudah ada progress mitra.
-          </div>
-        ) : (
-          <SingleMonthMitraTable
-            year={year}
-            activeMonth={activeMonth}
-            setActiveMonth={setActiveMonth}
-            rowsByMonth={mitraRowsByMonth}
-          />
-        )}
-      </div>
-
       {/* ringkasan */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <button
@@ -1062,6 +1038,39 @@ function MonthlyStaffUsagePanel({
             Lihat daftar petugas →
           </div>
         </button>
+      </div>
+
+      {/* detail mitra bulanan */}
+      <div className="border rounded-lg p-3 sm:p-4">
+        <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
+          <div>
+            <div className="font-semibold">Pemakaian Mitra Bulanan</div>
+          </div>
+          {/* <div className="text-xs text-gray-500">
+            {exportPreviewLoading
+              ? "Memuat..."
+              : `Total baris: ${exportPreviewRows.length}`}
+          </div> */}
+        </div>
+
+        {exportPreviewError ? (
+          <div className="mt-3 text-sm text-red-600">
+            Gagal memuat data mitra bulanan:{" "}
+            {(exportPreviewError as any)?.message ?? "unknown error"}
+          </div>
+        ) : exportPreviewRows.length === 0 ? (
+          <div className="mt-3 text-sm text-gray-600">
+            Data kosong untuk tahun {year}. Cek apakah ada kegiatan yang
+            tanggalnya overlap dengan tahun ini, atau sudah ada progress mitra.
+          </div>
+        ) : (
+          <SingleMonthMitraTable
+            year={year}
+            activeMonth={activeMonth}
+            setActiveMonth={setActiveMonth}
+            rowsByMonth={mitraRowsByMonth}
+          />
+        )}
       </div>
 
       {showActivitiesModal && (
@@ -1219,21 +1228,22 @@ function MonthlyStaffUsagePanel({
         </div>
       )}
 
-      {loading && <div className="text-sm text-gray-600">Memuat data…</div>}
-      {error && (
+      {/* awal komentar */}
+      {/* {loading && <div className="text-sm text-gray-600">Memuat data…</div>} */}
+      {/* {error && (
         <div className="text-sm text-red-600">
           Gagal memuat: {error.message}
         </div>
-      )}
+      )} */}
 
-      {!loading && !error && grouped.length === 0 && (
+      {/* {!loading && !error && grouped.length === 0 && (
         <div className="text-sm text-gray-600">
           Tidak ada kegiatan di tahun {year}.
         </div>
-      )}
+      )} */}
 
       {/* per bulan */}
-      <div className="space-y-4">
+      {/* <div className="space-y-4">
         {grouped.map(([m, list]) => (
           <div key={m} className="border rounded-lg overflow-hidden">
             <div className="px-3 py-2 bg-gray-50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
@@ -1286,7 +1296,9 @@ function MonthlyStaffUsagePanel({
             </div>
           </div>
         ))}
-      </div>
+      </div> */}
+      {/* akhir komentar      */}
+
       {selectedActivity && (
         <div
           className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center overflow-y-auto pt-20 px-3"

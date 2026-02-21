@@ -418,6 +418,29 @@ export class SurveyActivityService {
     return this.prisma.subSurveyActivity.findMany();
   }
 
+  async getAllSampleTypes() {
+    return this.prisma.sampleType.findMany({
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  async createSampleType(name: string) {
+    const cleaned = String(name ?? '').trim();
+    if (!cleaned)
+      throw new BadRequestException('Nama jenis sampel wajib diisi');
+
+    try {
+      return await this.prisma.sampleType.create({
+        data: { name: cleaned },
+      });
+    } catch (e: any) {
+      if (e?.code === 'P2002') {
+        throw new BadRequestException('Jenis sampel sudah ada');
+      }
+      throw e;
+    }
+  }
+
   async getSubSurvey(
     subSurveyActivityId: string,
   ): Promise<SubSurveyActivityType | null> {
@@ -2702,6 +2725,7 @@ export class SurveyActivityService {
         subSurveyActivityId: true,
         totalAssigned: true,
         docsBill: true,
+        blockCount: true,
         user: {
           select: {
             id: true,
@@ -2718,6 +2742,7 @@ export class SurveyActivityService {
             startDate: true,
             endDate: true,
             sampleType: true,
+            priceCompareUnit: true,
             unitWorkPrice: true,
             budgetCode: true,
             surveyActivity: {
@@ -2769,6 +2794,11 @@ export class SurveyActivityService {
     const out: any[] = [];
     const map = new Map<string, any>();
 
+    const normBlock = (v: any): string => {
+      const s = String(v ?? '').trim();
+      return s;
+    };
+
     for (const r of rows) {
       const ssa = r.subSurveyActivity;
       if (!ssa?.startDate) continue;
@@ -2776,8 +2806,8 @@ export class SurveyActivityService {
       const month = ssa.startDate.getMonth() + 1;
       const key = `${year}||${month}||${r.userId}||${r.subSurveyActivityId}`;
 
-      const vol = Number(r.totalAssigned ?? 0) || 0;
-      const bill = toNumberLoose(r.docsBill); // 0 tetap 0
+      const compare = String(ssa?.priceCompareUnit ?? 'SAMPEL');
+      const bill = toNumberLoose(r.docsBill);
 
       const existing = map.get(key);
       if (!existing) {
@@ -2796,29 +2826,49 @@ export class SurveyActivityService {
           startDate: ssa.startDate,
           endDate: ssa.endDate ?? ssa.startDate,
 
-          totalAssigned: vol,
-          docsBill: bill, // 0 tetap 0
+          totalAssigned: 0,
+          docsBill: bill,
 
           sampleType: ssa?.sampleType ?? '',
+          priceCompareUnit: ssa?.priceCompareUnit ?? 'SAMPEL',
           unitWorkPrice: ssa?.unitWorkPrice ?? null,
           budgetCode: ssa?.budgetCode ?? null,
           limit_bill: toNumberLoose(r.user?.limit_bill),
           chiefName: ssa?.surveyActivity?.chief?.name ?? null,
           dipa,
+
+          __blocks: new Set<string>(),
         };
+
+        if (compare === 'BLOK') {
+          const b = normBlock(r.blockCount);
+          if (b) row.__blocks.add(b);
+          row.totalAssigned = row.__blocks.size;
+        } else {
+          row.totalAssigned = Number(r.totalAssigned ?? 0) || 0;
+        }
 
         map.set(key, row);
         out.push(row);
-      } else {
-        existing.totalAssigned += vol;
-        existing.docsBill = toNumberLoose(existing.docsBill) + bill; // 0 tetap 0
-
-        const end = (ssa.endDate ?? ssa.startDate).getTime();
-        const curEnd = new Date(
-          existing.endDate ?? existing.startDate,
-        ).getTime();
-        if (end > curEnd) existing.endDate = ssa.endDate ?? ssa.startDate;
+        continue;
       }
+
+      if (compare === 'BLOK') {
+        const b = normBlock(r.blockCount);
+        if (b) existing.__blocks.add(b);
+        existing.totalAssigned = existing.__blocks.size;
+      } else {
+        existing.totalAssigned += Number(r.totalAssigned ?? 0) || 0;
+      }
+      existing.docsBill = toNumberLoose(existing.docsBill) + bill;
+
+      const end = (ssa.endDate ?? ssa.startDate).getTime();
+      const curEnd = new Date(existing.endDate ?? existing.startDate).getTime();
+      if (end > curEnd) existing.endDate = ssa.endDate ?? ssa.startDate;
+    }
+
+    for (const r of out) {
+      if (r?.__blocks) delete r.__blocks;
     }
 
     out.sort((a, b) => {

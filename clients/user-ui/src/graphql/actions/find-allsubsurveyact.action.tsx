@@ -13,6 +13,7 @@ export const GET_ALL_SUB_SURVEY_ACTIVITIES: DocumentNode = gql`
       endDate
       targetSample
       sampleType
+      priceCompareUnit
       activityType
       status
       budgetCode

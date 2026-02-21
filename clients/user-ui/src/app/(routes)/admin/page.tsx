@@ -40,6 +40,10 @@ import { BULK_IMPORT_USERPROGRESS_EXCEL } from "@/src/graphql/actions/bulk-impor
 import { GET_ALL_OF_DISTRICT } from "@/src/graphql/actions/find-alldistrict.action";
 import { GET_ALL_OF_VILLAGE } from "@/src/graphql/actions/find-allvillages.action";
 import UpdateActivityStatusModal from "@/src/components/UpdateActivityStatusModal";
+import {
+  CREATE_SAMPLE_TYPE,
+  GET_ALL_SAMPLE_TYPES,
+} from "@/src/graphql/actions/sample-types.action";
 
 type User = {
   id: string;
@@ -65,10 +69,15 @@ type SubSurveyActivity = {
   endDate: string;
   targetSample: number;
   sampleType: string;
+  priceCompareUnit?: "SAMPEL" | "BLOK" | string;
   activityType: string;
   status?: string;
   budgetCode?: string | null;
   unitWorkPrice?: number | null;
+};
+type SampleType = {
+  id: string;
+  name: string;
 };
 type District = { id: string; city: string; name: string; coderegion?: string };
 type Village = {
@@ -288,8 +297,10 @@ export default function Admin() {
   const [updateKegiatan] = useMutation(UPDATE_SUB_SURVEY_ACTIVITY);
   const [deleteKegiatan] = useMutation(DELETE_SUBSURVEY_ACTIVITY);
 
-  const [createUserProgress, { loading: creatingUserProgress }] = useMutation(CREATE_USER_PROGRESS);
-  const [updateUserProgress, { loading: updatingUserProgress }] = useMutation(UPDATE_USER_PROGRESS);
+  const [createUserProgress, { loading: creatingUserProgress }] =
+    useMutation(CREATE_USER_PROGRESS);
+  const [updateUserProgress, { loading: updatingUserProgress }] =
+    useMutation(UPDATE_USER_PROGRESS);
   const [deleteUserProgress] = useMutation(DELETE_USER_SURVEY_PROGRESS);
   const [bulkImportExcel, { loading: uploadingExcel }] = useMutation(
     BULK_IMPORT_USERPROGRESS_EXCEL,
@@ -415,6 +426,8 @@ export default function Admin() {
   const [kegiatanModalMode, setKegiatanModalMode] = useState<"add" | "edit">(
     "add",
   );
+  const [sampleTypeModalOpen, setSampleTypeModalOpen] = useState(false);
+  const [sampleTypeNameDraft, setSampleTypeNameDraft] = useState("");
   const [kegiatanDraft, setKegiatanDraft] = useState<
     Partial<SubSurveyActivity>
   >({
@@ -424,6 +437,7 @@ export default function Admin() {
     endDate: "",
     targetSample: 0,
     sampleType: "",
+    priceCompareUnit: "SAMPEL",
     activityType: "",
   });
   const [draftSampleCount, setDraftSampleCount] = useState<number | null>(null);
@@ -436,6 +450,21 @@ export default function Admin() {
       skip: !selectedTimId,
     },
   );
+
+  const {
+    data: sampleTypesData,
+    refetch: refetchSampleTypes,
+    loading: sampleTypesLoading,
+  } = useQuery(GET_ALL_SAMPLE_TYPES);
+
+  const [createSampleType] = useMutation(CREATE_SAMPLE_TYPE);
+
+  const sampleTypeOptions = useMemo(() => {
+    const list: SampleType[] = (sampleTypesData?.allSurveySampleTypes ?? []) as any[];
+    return list
+      .map((x) => ({ value: x.name, label: x.name }))
+      .sort((a, b) => a.label.localeCompare(b.label, "id"));
+  }, [sampleTypesData]);
 
   const kegiatanList: SubSurveyActivity[] =
     (kegiatanData?.subSurveyActivityById ?? []) as any[];
@@ -476,6 +505,7 @@ export default function Admin() {
       endDate: "",
       targetSample: 0,
       sampleType: "",
+      priceCompareUnit: "SAMPEL",
       activityType: "",
       budgetCode: "",
       unitWorkPrice: 0,
@@ -502,6 +532,9 @@ export default function Admin() {
     const endDate = String(kegiatanDraft.endDate ?? "");
     const targetSample = Number(kegiatanDraft.targetSample ?? 0);
     const sampleType = String(kegiatanDraft.sampleType ?? "").trim();
+    const priceCompareUnit = String(
+      kegiatanDraft.priceCompareUnit ?? "SAMPEL",
+    ).trim();
     const activityType = String(kegiatanDraft.activityType ?? "").trim();
     const budgetCode = String(kegiatanDraft.budgetCode ?? "").trim();
     const unitWorkPrice = Number(kegiatanDraft.unitWorkPrice ?? 0);
@@ -513,6 +546,7 @@ export default function Admin() {
       !startDate ||
       !endDate ||
       !sampleType ||
+      !priceCompareUnit ||
       !activityType
     )
       return toast.error("Semua field wajib diisi.");
@@ -529,6 +563,7 @@ export default function Admin() {
               endDate: new Date(endDate),
               targetSample: Number.isFinite(targetSample) ? targetSample : 0,
               sampleType,
+              priceCompareUnit: (priceCompareUnit as any) || "SAMPEL",
               activityType,
               budgetCode: budgetCode || null,
               unitWorkPrice: Number.isFinite(unitWorkPrice) ? unitWorkPrice : 0,
@@ -549,6 +584,7 @@ export default function Admin() {
               endDate: new Date(endDate),
               targetSample: Number.isFinite(targetSample) ? targetSample : 0,
               sampleType,
+              priceCompareUnit: (priceCompareUnit as any) || "SAMPEL",
               activityType,
               budgetCode: budgetCode || null,
               unitWorkPrice: Number.isFinite(unitWorkPrice) ? unitWorkPrice : 0,
@@ -561,6 +597,20 @@ export default function Admin() {
       await refetchKegiatan();
     } catch (e: any) {
       toast.error(e?.message ?? "Gagal menyimpan kegiatan.");
+    }
+  }
+
+  async function handleCreateSampleType() {
+    const name = String(sampleTypeNameDraft ?? "").trim();
+    if (!name) return toast.error("Nama jenis sampel wajib diisi.");
+    try {
+      await createSampleType({ variables: { input: { name } } });
+      toast.success("Jenis sampel ditambahkan.");
+      setSampleTypeNameDraft("");
+      setSampleTypeModalOpen(false);
+      await refetchSampleTypes();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Gagal menambah jenis sampel.");
     }
   }
 
@@ -599,6 +649,7 @@ export default function Admin() {
             targetSample: Number(k.targetSample ?? 0),
             sampleType: k.sampleType,
             activityType: k.activityType,
+            priceCompareUnit: k.priceCompareUnit,
           },
         },
       });
@@ -794,7 +845,12 @@ export default function Admin() {
       honorPetugas: String(perPetugas * samples.length),
       honorPengawas: String(perPengawas * samples.length),
     }));
-  }, [blockModalOpen, samples.length, blockForm.honorDokPetugas, blockForm.honorDokPengawas]);
+  }, [
+    blockModalOpen,
+    samples.length,
+    blockForm.honorDokPetugas,
+    blockForm.honorDokPengawas,
+  ]);
 
   function safePerSample(total: any, count: number) {
     if (!count || count <= 0) return "0";
@@ -834,7 +890,7 @@ export default function Admin() {
     setIdentityBlock({
       petugasName: petugas.user?.name ?? "",
       pengawasName: pengawas?.user?.name ?? "",
-    })
+    });
     setBlockModalMode("edit");
     const list = (petugas.samples ?? []).map((s) => ({
       identity: s.identity,
@@ -842,8 +898,14 @@ export default function Admin() {
       approvalStatus: (s.approvalStatus as any) ?? "Menunggu",
     }));
     const count = list.length || 0;
-    const unitPetugas = count > 0 && toMoney(petugas.docsBill) > 0 ? safePerSample(petugas.docsBill, count) : String(defaultUnitWorkPrice);
-    const unitPengawas = count > 0 && pengawas && toMoney(pengawas.docsBill) > 0 ? safePerSample(pengawas?.docsBill, count) : String(defaultUnitWorkPrice);
+    const unitPetugas =
+      count > 0 && toMoney(petugas.docsBill) > 0
+        ? safePerSample(petugas.docsBill, count)
+        : String(defaultUnitWorkPrice);
+    const unitPengawas =
+      count > 0 && pengawas && toMoney(pengawas.docsBill) > 0
+        ? safePerSample(pengawas?.docsBill, count)
+        : String(defaultUnitWorkPrice);
     setBlockForm({
       blockCount: String(petugas.blockCount ?? ""),
       districtId: String(petugas.districtId ?? ""),
@@ -1576,16 +1638,30 @@ export default function Admin() {
                     <div className="text-sm font-semibold mb-1">
                       Jenis sampel
                     </div>
-                    <input
-                      className="w-full px-3 py-2 border rounded bg-white"
-                      value={String(kegiatanDraft.sampleType ?? "")}
-                      onChange={(e) =>
-                        setKegiatanDraft((p) => ({
-                          ...p,
-                          sampleType: e.target.value,
-                        }))
-                      }
-                    />
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <HUSelect
+                          value={String(kegiatanDraft.sampleType ?? "") || null}
+                          onValueChange={(v) =>
+                            setKegiatanDraft((p) => ({
+                              ...p,
+                              sampleType: (v ?? "") as string,
+                            }))
+                          }
+                          options={sampleTypeOptions}
+                          placeholder={
+                            sampleTypesLoading ? "Memuat..." : "Pilih"
+                          }
+                        />
+                      </div>
+                      <IconButton
+                        title="Tambah jenis sampel"
+                        onClick={() => setSampleTypeModalOpen(true)}
+                        variant="neutral"
+                      >
+                        <Plus size={16} />
+                      </IconButton>
+                    </div>
                   </div>
                   <div>
                     <div className="text-sm font-semibold mb-1">
@@ -1640,6 +1716,28 @@ export default function Admin() {
                       placeholder="0"
                     />
                   </div>
+                  <div>
+                    <div className="text-sm font-semibold mb-1">
+                      Satuan pembanding harga
+                    </div>
+                    <HUSelect
+                      value={
+                        String(kegiatanDraft.priceCompareUnit ?? "SAMPEL") ||
+                        "SAMPEL"
+                      }
+                      onValueChange={(v) =>
+                        setKegiatanDraft((p) => ({
+                          ...p,
+                          priceCompareUnit: (v ?? "SAMPEL") as any,
+                        }))
+                      }
+                      options={[
+                        { value: "SAMPEL", label: "Sampel" },
+                        { value: "BLOK", label: "Blok" },
+                      ]}
+                      placeholder="Pilih"
+                    />
+                  </div>
                 </div>
 
                 <div className="flex justify-end gap-2">
@@ -1653,6 +1751,50 @@ export default function Admin() {
                   <button
                     type="button"
                     onClick={saveKegiatan}
+                    className={`${styles.button} text-white`}
+                  >
+                    Simpan
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {sampleTypeModalOpen && (
+            <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-3 z-50">
+              <div className="bg-white w-full max-w-md rounded-lg p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="font-bold">Tambah Jenis Sampel</div>
+                  <IconButton
+                    title="Tutup"
+                    onClick={() => setSampleTypeModalOpen(false)}
+                    variant="neutral"
+                  >
+                    <X size={16} />
+                  </IconButton>
+                </div>
+
+                <div>
+                  <div className="text-sm font-semibold mb-1">Nama</div>
+                  <input
+                    className="w-full px-3 py-2 border rounded bg-white"
+                    value={sampleTypeNameDraft}
+                    onChange={(e) => setSampleTypeNameDraft(e.target.value)}
+                    placeholder="Contoh: Sampel Rumah Tangga"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSampleTypeModalOpen(false)}
+                    className="px-4 py-2 rounded bg-gray-100"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCreateSampleType}
                     className={`${styles.button} text-white`}
                   >
                     Simpan
@@ -1946,9 +2088,13 @@ export default function Admin() {
                                   const pengawasDocs =
                                     b.pengawas?.docsBill ?? "0";
                                   const blockLabel = (() => {
-                                    const bc = String(b.petugas.blockCount ?? "");
+                                    const bc = String(
+                                      b.petugas.blockCount ?? "",
+                                    );
                                     if (!bc) return "(tanpa nama blok)";
-                                    return bc.startsWith("DRAFT-") ? "DRAFT" : bc;
+                                    return bc.startsWith("DRAFT-")
+                                      ? "DRAFT"
+                                      : bc;
                                   })();
                                   return (
                                     <div
@@ -2025,7 +2171,9 @@ export default function Admin() {
               <div className="bg-white w-full max-w-4xl rounded-lg p-4 space-y-3 max-h-[90vh] overflow-auto">
                 <div className="flex items-center justify-between">
                   <div className="font-bold">
-                    {blockModalMode === "add" ? "Tambah Blok" : `Update Blok (${identityBlock.petugasName}-${identityBlock.pengawasName})` }
+                    {blockModalMode === "add"
+                      ? "Tambah Blok"
+                      : `Update Blok (${identityBlock.petugasName}-${identityBlock.pengawasName})`}
                   </div>
                   <IconButton
                     title="Tutup"
@@ -2122,9 +2270,7 @@ export default function Admin() {
                 </div>
 
                 <div className="border rounded p-3">
-                  <div className="font-semibold mb-2">
-                    Tabel sampel
-                  </div>
+                  <div className="font-semibold mb-2">Tabel sampel</div>
                   <div className="overflow-x-auto">
                     <table className="min-w-full text-sm">
                       <thead>
@@ -2286,7 +2432,9 @@ export default function Admin() {
                     disabled={creatingUserProgress || updatingUserProgress}
                     className={`${styles.button} text-white`}
                   >
-                    {creatingUserProgress || updatingUserProgress ? "Menyimpan..." : "Simpan"}
+                    {creatingUserProgress || updatingUserProgress
+                      ? "Menyimpan..."
+                      : "Simpan"}
                   </button>
                 </div>
               </div>

@@ -15,6 +15,7 @@ export const GET_MITRA_BULANAN_EXPORT = gql`
       endDate
       totalAssigned
       sampleType
+      priceCompareUnit
       unitWorkPrice
       docsBill
       budgetCode
