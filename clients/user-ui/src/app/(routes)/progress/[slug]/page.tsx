@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { GET_SURVEY_ACTIVITIES_BY_SLUG } from "@/src/graphql/actions/find-surveyact.action";
 import { GET_ALL_SUB_SURVEY_ACTIVITIES } from "@/src/graphql/actions/find-allsubsurveyact.action";
 import { GET_ALL_SUB_SURVEY_PROGRESS } from "@/src/graphql/actions/find-allsubsurveyprogress.action";
-import { GET_USER_PROGRESS_BY_SUBSURVEY_ID } from "@/src/graphql/actions/find-usersurveyprogress.action";
+import { GET_USER_PROGRESS_PAGE_BY_SUBSURVEY_ID } from "@/src/graphql/actions/find-usersurveyprogress-page.action";
 import {
   useParams,
   usePathname,
@@ -54,6 +54,8 @@ const ProgressTemplate = () => {
   const [progressRole, setProgressRole] = useState<string | null>("PETUGAS");
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [selectedCity, setSelectedCity] = useState<string>("");
+  const PAGE_SIZE = 200;
+  const [page, setPage] = useState<number>(1);
 
   const { data: surveyData, loading: loadingSurvey } = useQuery(
     GET_SURVEY_ACTIVITIES_BY_SLUG,
@@ -73,15 +75,32 @@ const ProgressTemplate = () => {
     skip: !selectedSubSurvey,
     fetchPolicy: "network-only",
   });
-  const { data: progressData } = useQuery(GET_USER_PROGRESS_BY_SUBSURVEY_ID, {
-    variables: { subSurveyActivityId: selectedSubSurvey },
+  useEffect(() => {
+    setPage(1);
+  }, [selectedSubSurvey, progressRole]);
+
+  const {
+    data: progressPageData,
+    fetchMore,
+    loading: progressLoading,
+  } = useQuery(GET_USER_PROGRESS_PAGE_BY_SUBSURVEY_ID, {
+    variables: {
+      subSurveyActivityId: selectedSubSurvey,
+      page,
+      pageSize: PAGE_SIZE,
+      progressRole,
+    },
     skip: !selectedSubSurvey,
     fetchPolicy: "network-only",
+    notifyOnNetworkStatusChange: true,
   });
   const subSurveyActivities = subSurveyDataAll?.subSurveyActivityById ?? [];
   const progress = subSurveyData?.subSurveyProgress ?? null;
+  const progressPage = progressPageData?.userProgressPageBySubSurveyActivityId;
   const userProgress: ProgressRow[] =
-    (progressData?.userProgressBySubSurveyActivityId as ProgressRow[]) ?? [];
+    (progressPage?.items as ProgressRow[]) ?? [];
+  const progressTotal: number = progressPage?.total ?? 0;
+  const canLoadMore = userProgress.length < progressTotal;
   const cities = useMemo<string[]>(() => {
     const list = userProgress
       .map((p) => p?.district?.city ?? "")
@@ -536,6 +555,48 @@ const ProgressTemplate = () => {
                   ))}
                 </tbody>
               </table>
+            </div>
+            <div className="flex items-center justify-center py-3">
+              {canLoadMore ? (
+                <button
+                  type="button"
+                  disabled={progressLoading}
+                  onClick={async () => {
+                    const next = page + 1;
+                    await fetchMore({
+                      variables: { page: next },
+                      updateQuery: (prev, { fetchMoreResult }) => {
+                        const prevPage =
+                          prev?.userProgressPageBySubSurveyActivityId;
+                        const nextPage =
+                          fetchMoreResult?.userProgressPageBySubSurveyActivityId;
+
+                        if (!prevPage) return fetchMoreResult;
+                        if (!nextPage) return prev;
+
+                        const merged = [
+                          ...(prevPage.items ?? []),
+                          ...(nextPage.items ?? []),
+                        ];
+
+                        const map = new Map<string, any>();
+                        for (const r of merged) if (r?.id) map.set(r.id, r);
+                        return {
+                          ...fetchMoreResult,
+                          userProgressPageBySubSurveyActivityId: {
+                            ...nextPage,
+                            items: Array.from(map.values()),
+                          },
+                        };
+                      },
+                    });
+                    setPage(next);
+                  }}
+                  className="inline-flex items-center px-4 py-2 rounded-md text-sm font-semibold border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-60"
+                >
+                  {progressLoading ? "Memuat..." : "Muat lagi"}
+                </button>
+              ) : null}
             </div>
           </div>
         </div>

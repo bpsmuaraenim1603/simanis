@@ -303,7 +303,7 @@ function SingleMonthMitraTable({
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Pencarian"
-              className="w-full max-w-md rounded-md border border-gray-200 pl-9 pr-3 py-2 text-sm outline-none"
+              className="w-full max-w-md rounded-md border border-gray-200 pl-9 pr-3 py-2 text-sm outline-none bg-white"
             />
           </div>
         </div>

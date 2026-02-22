@@ -27,6 +27,7 @@ import {
   SubSurveyProgressType,
   SurveyActivityType,
   UserProgressType,
+  UserProgressPageType,
   UserSampleType,
   ExportUserSamplePhotosResult,
   VillageType,
@@ -64,6 +65,7 @@ import {
   UserProgress,
   Role,
   SubSurveyStatus,
+  ProgressRole,
 } from '@prisma/client';
 import { UserType } from 'apps/users/src/types/users.types';
 import { FileUpload, GraphQLUpload } from 'graphql-upload-ts';
@@ -207,6 +209,32 @@ export class SurveyActivityResolver {
     return this.service.getUserProgressBySubSurveyActivityId(
       subSurveyActivityId,
     );
+  }
+
+  @Query(() => UserProgressType, { nullable: true })
+  async userProgressById(@Args('userProgressId') userProgressId: string) {
+    return this.service.getUserProgressById(userProgressId);
+  }
+
+  @Query(() => UserProgressPageType)
+  async userProgressPageBySubSurveyActivityId(
+    @Args('subSurveyActivityId') subSurveyActivityId: string,
+    @Args('page', { type: () => Int, nullable: true }) page?: number,
+    @Args('pageSize', { type: () => Int, nullable: true }) pageSize?: number,
+    @Args('progressRole', { type: () => ProgressRole, nullable: true })
+    progressRole?: ProgressRole,
+    @Args('search', { type: () => String, nullable: true }) search?: string,
+    @Args('superVisorId', { type: () => String, nullable: true })
+    superVisorId?: string,
+  ) {
+    return this.service.getUserProgressPageBySubSurveyActivityId({
+      subSurveyActivityId,
+      page,
+      pageSize,
+      progressRole,
+      search,
+      superVisorId,
+    });
   }
 
   @Query(() => [UserProgressType])

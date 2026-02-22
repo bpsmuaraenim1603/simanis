@@ -204,6 +204,21 @@ export class UserProgressType {
 }
 
 @ObjectType()
+export class UserProgressPageType {
+  @Field(() => [UserProgressType])
+  items: UserProgressType[];
+
+  @Field(() => Int)
+  total: number;
+
+  @Field(() => Int)
+  page: number;
+
+  @Field(() => Int)
+  pageSize: number;
+}
+
+@ObjectType()
 export class UserSampleType {
   @Field(() => ID)
   id: string;

@@ -12,7 +12,8 @@ import useUser from "@/src/hooks/useUser";
 import { useRouter } from "next/navigation";
 import { GET_ALL_SURVEY_ACTIVITIES } from "@/src/graphql/actions/find-allsurveyact.action";
 import { GET_ALL_SUB_SURVEY_ACTIVITIES } from "@/src/graphql/actions/find-allsubsurveyact.action";
-import { GET_USER_PROGRESS_BY_SUBSURVEY_ID } from "@/src/graphql/actions/find-usersurveyprogress.action";
+import { GET_USER_PROGRESS_PAGE_BY_SUBSURVEY_ID } from "@/src/graphql/actions/find-usersurveyprogress-page.action";
+import { GET_USER_PROGRESS_BY_ID } from "@/src/graphql/actions/find-userprogress-byid.action";
 import { PATCH_USER_SAMPLES } from "@/src/graphql/actions/patch-usersamples.action";
 import { getRoles } from "@/src/utils/roles";
 
@@ -43,7 +44,6 @@ type UserProgressRow = {
   lastUpdated?: string | null;
   superVisorId?: string | null;
   blockCount: string;
-  
 
   user?: UserLite | null;
   subSurveyActivity?: {
@@ -54,17 +54,7 @@ type UserProgressRow = {
   district?: { id: string; name?: string | null; city?: string | null } | null;
   village?: { id: string; name?: string | null } | null;
 
-  samples?: {
-    id: string;
-    nus: string;
-    identity?: string | null;
-    cacahStatus: string;
-    approvalStatus: string;
-    geoLat?: number | null;
-    geoLng?: number | null;
-    photoPath?: string | null;
-    photoSignedUrl?: string | null;
-  }[];
+  samples?: any[];
 };
 
 type ViewMode = "activity" | "blocks" | "detail";
@@ -95,7 +85,7 @@ export default function SupervisorManagePage() {
   const roles = useMemo(() => getRoles(currentUser), [currentUser]);
   const allowed = useMemo(
     () => roles.some((r) => ALLOWED.includes(r)),
-    [roles]
+    [roles],
   );
   const isSuperadmin = useMemo(() => roles.includes("Superadmin"), [roles]);
 
@@ -112,21 +102,24 @@ export default function SupervisorManagePage() {
     GET_ALL_SURVEY_ACTIVITIES,
     {
       fetchPolicy: "cache-and-network",
-    }
+    },
   );
 
   const [allSubActivities, setAllSubActivities] = useState<SubSurveyActivity[]>(
-    []
+    [],
   );
   const [subsLoading, setSubsLoading] = useState(false);
   const [assignedSubIds, setAssignedSubIds] = useState<Set<string>>(new Set());
   const [assignedLoading, setAssignedLoading] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("activity");
   const [subSurveyActivityId, setSubSurveyActivityId] = useState("");
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 200;
+  const [rowsCache, setRowsCache] = useState<UserProgressRow[]>([]);
   const [selectedUserProgressId, setSelectedUserProgressId] = useState("");
   const [approvedSamples, setApprovedSamples] = useState<any[]>([]);
   const [detailModal, setDetailModal] = useState<null | { index: number }>(
-    null
+    null,
   );
   const [qIdentity, setQIdentity] = useState("");
 
@@ -147,13 +140,13 @@ export default function SupervisorManagePage() {
               query: GET_ALL_SUB_SURVEY_ACTIVITIES,
               variables: { surveyActivityId: sa.id },
               fetchPolicy: "network-only",
-            })
-          )
+            }),
+          ),
         );
 
         const merged: SubSurveyActivity[] = results
           .flatMap(
-            (r) => (r.data?.subSurveyActivityById ?? []) as SubSurveyActivity[]
+            (r) => (r.data?.subSurveyActivityById ?? []) as SubSurveyActivity[],
           )
           .filter(Boolean);
 
@@ -172,38 +165,41 @@ export default function SupervisorManagePage() {
     loadAllSubs();
   }, [saData, apollo]);
 
-  const [fetchUP, { data: upData, loading: upLoading }] = useLazyQuery(
-    GET_USER_PROGRESS_BY_SUBSURVEY_ID,
-    {
-      fetchPolicy: "network-only",
-    }
+  const [fetchUPPage, { data: upPageData, loading: upLoading }] = useLazyQuery(
+    GET_USER_PROGRESS_PAGE_BY_SUBSURVEY_ID,
+    { fetchPolicy: "network-only" },
   );
 
+  const [fetchUPById, { data: upByIdData, loading: upDetailLoading }] =
+    useLazyQuery(GET_USER_PROGRESS_BY_ID, { fetchPolicy: "network-only" });
+
   const [patchUserSamples, { loading: patching }] =
-    useMutation(PATCH_USER_SAMPLES);
+    useMutation(PATCH_USER_SAMPLES, { fetchPolicy: "no-cache" });
 
   const supervisorId = currentUser?.id ?? "";
 
-  const allUPRows: UserProgressRow[] =
-    upData?.userProgressBySubSurveyActivityId ?? [];
+  const pageResult = upPageData?.userProgressPageBySubSurveyActivityId;
+  const pageItems: UserProgressRow[] = pageResult?.items ?? [];
+  const pageTotal: number = pageResult?.total ?? 0;
+
+  useEffect(() => {
+    // merge pageItems ke rowsCache
+    if (!pageItems?.length) return;
+    setRowsCache((prev) => {
+      const map = new Map<string, UserProgressRow>();
+      for (const r of prev) if (r?.id) map.set(r.id, r);
+      for (const r of pageItems) if (r?.id) map.set(r.id, r);
+      return Array.from(map.values());
+    });
+  }, [pageItems]);
 
   const myUPRows = useMemo(() => {
-    const rows = allUPRows.filter(
-      (r) => r.subSurveyActivityId === subSurveyActivityId
-    );
-
-    const svFieldExist = rows.some(
-      (r) => typeof r.superVisorId !== "undefined"
-    );
-    if (!svFieldExist) return rows;
-
-    if (isSuperadmin) return rows;
-    return rows.filter((r) => (r.superVisorId ?? "") === supervisorId);
-  }, [allUPRows, subSurveyActivityId, supervisorId, isSuperadmin]);
+    return rowsCache;
+  }, [rowsCache]);
 
   const selectedSub = useMemo(
     () => allSubActivities.find((s) => s.id === subSurveyActivityId),
-    [allSubActivities, subSurveyActivityId]
+    [allSubActivities, subSurveyActivityId],
   );
 
   const isListing =
@@ -228,7 +224,7 @@ export default function SupervisorManagePage() {
     const startDay = new Date(
       start.getFullYear(),
       start.getMonth(),
-      start.getDate()
+      start.getDate(),
     );
     const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
 
@@ -242,7 +238,7 @@ export default function SupervisorManagePage() {
     const base = [...(allSubActivities ?? [])];
 
     const inSchedule = base.filter((s) =>
-      isTodayInRange(s.startDate, s.endDate)
+      isTodayInRange(s.startDate, s.endDate),
     );
 
     if (isSuperadmin) {
@@ -276,10 +272,10 @@ export default function SupervisorManagePage() {
   }
 
   function pushStateToUrl(
-    next: Partial<{ mode: ViewMode; sa: string; up: string }>
+    next: Partial<{ mode: ViewMode; sa: string; up: string }>,
   ) {
     const p = new URLSearchParams(
-      typeof window !== "undefined" ? window.location.search : ""
+      typeof window !== "undefined" ? window.location.search : "",
     );
     if (next.mode !== undefined) p.set("mode", next.mode);
     if (next.sa !== undefined) {
@@ -298,7 +294,32 @@ export default function SupervisorManagePage() {
     setSelectedUserProgressId("");
     setViewMode("blocks");
     pushStateToUrl({ mode: "blocks", sa: activityId, up: "" });
-    fetchUP({ variables: { subSurveyActivityId: activityId } });
+    setPage(1);
+    setRowsCache([]);
+    fetchUPPage({
+      variables: {
+        subSurveyActivityId: activityId,
+        page: 1,
+        pageSize: PAGE_SIZE,
+        progressRole: "PETUGAS",
+        superVisorId: isSuperadmin ? null : supervisorId,
+      },
+    });
+  }
+
+  const canLoadMore = myUPRows.length < pageTotal;
+  async function loadMore() {
+    const next = page + 1;
+    await fetchUPPage({
+      variables: {
+        subSurveyActivityId,
+        page: next,
+        pageSize: PAGE_SIZE,
+        progressRole: "PETUGAS",
+        superVisorId: isSuperadmin ? null : supervisorId,
+      },
+    });
+    setPage(next);
   }
 
   function backToActivityList() {
@@ -312,6 +333,7 @@ export default function SupervisorManagePage() {
     setSelectedUserProgressId(row.id);
     setViewMode("detail");
     pushStateToUrl({ mode: "detail", up: row.id });
+    fetchUPById({ variables: { userProgressId: row.id } });
   }
 
   function backToBlockList() {
@@ -336,10 +358,11 @@ export default function SupervisorManagePage() {
     return rows;
   }, [myUPRows]);
 
-  const currentUP: UserProgressRow | undefined = useMemo(
-    () => myUPRows.find((r) => r.id === selectedUserProgressId),
-    [myUPRows, selectedUserProgressId]
-  );
+  const currentUP: UserProgressRow | undefined = useMemo(() => {
+    const full = upByIdData?.userProgressById as UserProgressRow | undefined;
+    if (full?.id && full.id === selectedUserProgressId) return full;
+    return myUPRows.find((r) => r.id === selectedUserProgressId);
+  }, [upByIdData, myUPRows, selectedUserProgressId]);
 
   const mapSamples = useMemo(() => {
     return (approvedSamples ?? []).filter((s: any) => {
@@ -376,12 +399,12 @@ export default function SupervisorManagePage() {
 
   const goPrev = () =>
     setDetailModal((prev) =>
-      prev ? { index: Math.max(prev.index - 1, 0) } : prev
+      prev ? { index: Math.max(prev.index - 1, 0) } : prev,
     );
 
   const goNext = () =>
     setDetailModal((prev) =>
-      prev ? { index: Math.min(prev.index + 1, sampleCount - 1) } : prev
+      prev ? { index: Math.min(prev.index + 1, sampleCount - 1) } : prev,
     );
 
   useEffect(() => {
@@ -393,7 +416,21 @@ export default function SupervisorManagePage() {
       setSelectedUserProgressId(s.up);
 
       if ((s.mode === "blocks" || s.mode === "detail") && s.sa) {
-        fetchUP({ variables: { subSurveyActivityId: s.sa } });
+        setSubSurveyActivityId(s.sa);
+        setPage(1);
+        setRowsCache([]);
+        fetchUPPage({
+          variables: {
+            subSurveyActivityId: s.sa,
+            page: 1,
+            pageSize: PAGE_SIZE,
+            progressRole: "PETUGAS",
+            superVisorId: isSuperadmin ? null : supervisorId,
+          },
+        });
+      }
+      if (s.mode === "detail" && s.up) {
+        fetchUPById({ variables: { userProgressId: s.up } });
       }
     };
 
@@ -417,7 +454,7 @@ export default function SupervisorManagePage() {
   useEffect(() => {
     if (currentUP?.samples) {
       const sorted = [...currentUP.samples].sort(
-        (a: any, b: any) => Number(a.nus) - Number(b.nus)
+        (a: any, b: any) => Number(a.nus) - Number(b.nus),
       );
       setApprovedSamples(sorted);
     } else {
@@ -452,19 +489,20 @@ export default function SupervisorManagePage() {
         const next = new Set<string>();
         for (const sub of allSubActivities) {
           const res = await apollo.query({
-            query: GET_USER_PROGRESS_BY_SUBSURVEY_ID,
-            variables: { subSurveyActivityId: sub.id },
+            query: GET_USER_PROGRESS_PAGE_BY_SUBSURVEY_ID,
+            variables: {
+              subSurveyActivityId: sub.id,
+              page: 1,
+              pageSize: 1,
+              progressRole: "PETUGAS",
+              superVisorId: currentUser.id,
+            },
             fetchPolicy: "network-only",
           });
 
-          const rows: UserProgressRow[] =
-            res.data?.userProgressBySubSurveyActivityId ?? [];
-
-          const mine = rows.filter(
-            (r) => (r.superVisorId ?? "") === (currentUser.id ?? "")
-          );
-
-          if (mine.length > 0) next.add(sub.id);
+          const total =
+            res.data?.userProgressPageBySubSurveyActivityId?.total ?? 0;
+          if (total > 0) next.add(sub.id);
         }
 
         setAssignedSubIds(next);
@@ -492,7 +530,7 @@ export default function SupervisorManagePage() {
 
   async function setSampleApproval(
     sampleId: string,
-    status: "Disetujui" | "Ditolak" | "Menunggu"
+    status: "Disetujui" | "Ditolak" | "Menunggu",
   ) {
     if (!currentUP?.id) return toast.error("Pilih blok dulu.");
     try {
@@ -504,9 +542,9 @@ export default function SupervisorManagePage() {
           },
         },
       });
-      await fetchUP({ variables: { subSurveyActivityId } });
+      await fetchUPById({ variables: { userProgressId: currentUP.id } });
       toast.success(
-        status === "Disetujui" ? "Sampel disetujui" : "Sampel dikembalikan"
+        status === "Disetujui" ? "Sampel disetujui" : "Sampel dikembalikan",
       );
     } catch (e: any) {
       toast.error(e?.message ?? "Gagal update approval");
@@ -698,6 +736,18 @@ export default function SupervisorManagePage() {
               ))}
             </div>
           )}
+          {subSurveyActivityId && canLoadMore ? (
+            <div className="flex justify-center py-3">
+              <button
+                type="button"
+                disabled={upLoading}
+                onClick={loadMore}
+                className="inline-flex items-center px-4 py-2 rounded-md text-sm font-semibold border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-60"
+              >
+                {upLoading ? "Memuat..." : "Muat lagi"}
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -793,74 +843,86 @@ export default function SupervisorManagePage() {
                   </tr>
                 </thead>
 
-                <tbody>
-                  {filteredSamples.map((s: any) => {
-                    const canApprove = s.cacahStatus === "Selesai";
-                    return (
-                      <tr key={s.id} className="border-t">
-                        <td className="p-2 sm:p-3">{s.nus}</td>
-                        <td className="p-2 sm:p-3">{s.identity}</td>
-                        <td className="p-2 sm:p-3">
-                          {s.cacahStatus === "Selesai" ? (
-                            <span className="inline-block px-3 py-1 rounded bg-green-100 text-green-700">
-                              Selesai Dicacah
-                            </span>
-                          ) : (
-                            <span className="inline-block px-3 py-1 rounded bg-red-100 text-red-700">
-                              Belum Dicacah
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-2 sm:p-3">
-                          {s.approvalStatus === "Menunggu" ? (
-                            <span className="inline-block px-3 py-1 rounded bg-yellow-100 text-yellow-700">
-                              Menunggu
-                            </span>
-                          ) : s.approvalStatus === "Ditolak" ? (
-                            <span className="inline-block px-3 py-1 rounded bg-red-100 text-red-700">
-                              Ditolak
-                            </span>
-                          ) : (
-                            <span className="inline-block px-3 py-1 rounded bg-green-100 text-green-700">
-                              Disetujui
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-2 sm:p-3 flex">
-                          <button
-                            type="button"
-                            className="px-3 py-1 rounded bg-purple-600 text-white disabled:opacity-40"
-                            onClick={() => {
-                              const idx = approvedSamples.findIndex(
-                                (x: any) => x.id === s.id
-                              );
-                              if (idx >= 0) {
-                                window.history.pushState(
-                                  { supervisorModal: true },
-                                  ""
-                                );
-                                setDetailModal({ index: idx });
-                              }
-                            }}
-                            disabled={s.cacahStatus !== "Selesai"}
-                          >
-                            Lihat Keterangan
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-
-                  {approvedSamples.length === 0 && (
+                {upDetailLoading ? (
+                  <tbody>
                     <tr>
-                      <td className="p-3 text-gray-500" colSpan={6}>
-                        {!currentUP?.id
-                          ? "Pilih blok untuk melihat sampel."
-                          : "Belum ada sampel untuk progres ini."}
+                      <td className="p-3 text-gray-500 text-center" colSpan={6}>
+                        <span>
+                          Memuat...
+                        </span>
                       </td>
                     </tr>
-                  )}
-                </tbody>
+                  </tbody>
+                ) :  approvedSamples.length === 0 ? (
+                  <tbody>
+                    <tr>
+                      <td className="p-3 text-gray-500 text-center" colSpan={6}>
+                        <span>
+                          Belum ada sampel untuk progres ini.
+                        </span>
+                      </td>
+                    </tr>
+                  </tbody>
+                ) : (
+                  <tbody>
+                    {filteredSamples.map((s: any) => {
+                      const canApprove = s.cacahStatus === "Selesai";
+                      return (
+                        <tr key={s.id} className="border-t">
+                          <td className="p-2 sm:p-3">{s.nus}</td>
+                          <td className="p-2 sm:p-3">{s.identity}</td>
+                          <td className="p-2 sm:p-3">
+                            {s.cacahStatus === "Selesai" ? (
+                              <span className="inline-block px-3 py-1 rounded bg-green-100 text-green-700">
+                                Selesai Dicacah
+                              </span>
+                            ) : (
+                              <span className="inline-block px-3 py-1 rounded bg-red-100 text-red-700">
+                                Belum Dicacah
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-2 sm:p-3">
+                            {s.approvalStatus === "Menunggu" ? (
+                              <span className="inline-block px-3 py-1 rounded bg-yellow-100 text-yellow-700">
+                                Menunggu
+                              </span>
+                            ) : s.approvalStatus === "Ditolak" ? (
+                              <span className="inline-block px-3 py-1 rounded bg-red-100 text-red-700">
+                                Ditolak
+                              </span>
+                            ) : (
+                              <span className="inline-block px-3 py-1 rounded bg-green-100 text-green-700">
+                                Disetujui
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-2 sm:p-3 flex">
+                            <button
+                              type="button"
+                              className="px-3 py-1 rounded bg-purple-600 text-white disabled:opacity-40"
+                              onClick={() => {
+                                const idx = approvedSamples.findIndex(
+                                  (x: any) => x.id === s.id,
+                                );
+                                if (idx >= 0) {
+                                  window.history.pushState(
+                                    { supervisorModal: true },
+                                    "",
+                                  );
+                                  setDetailModal({ index: idx });
+                                }
+                              }}
+                              disabled={s.cacahStatus !== "Selesai"}
+                            >
+                              Lihat Keterangan
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                )}
               </table>
               {detailModal && activeSample && (
                 <div
@@ -985,7 +1047,7 @@ export default function SupervisorManagePage() {
                                       onClick={async () => {
                                         await setSampleApproval(
                                           activeSample.id,
-                                          "Disetujui"
+                                          "Disetujui",
                                         );
                                         closeSupervisorModal();
                                       }}
@@ -1000,7 +1062,7 @@ export default function SupervisorManagePage() {
                                       onClick={async () => {
                                         await setSampleApproval(
                                           activeSample.id,
-                                          "Menunggu"
+                                          "Menunggu",
                                         );
                                         closeSupervisorModal();
                                       }}

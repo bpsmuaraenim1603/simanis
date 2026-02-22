@@ -1,6 +1,7 @@
 "use client";
 
-import { GET_USER_PROGRESS_BY_USER_ID } from "@/src/graphql/actions/find-usersurveyprogressbyuser.action";
+import { GET_USER_PROGRESS_BY_USER_ID_LITE } from "@/src/graphql/actions/find-usersurveyprogressbyuser-lite.action";
+import { GET_USER_PROGRESS_BY_ID } from "@/src/graphql/actions/find-userprogress-byid.action";
 import { PATCH_USER_SAMPLES } from "@/src/graphql/actions/patch-usersamples.action";
 import { UPLOAD_SURVEY_SAMPLE_PHOTO } from "@/src/graphql/actions/upload-survey-sample-photo.action";
 import useUser from "@/src/hooks/useUser";
@@ -67,7 +68,12 @@ export default function UserPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [showCameraModal, setShowCameraModal] = useState(false);
   const [fetchUserProgress, { data: userProgressData, loading: upLoading }] =
-    useLazyQuery(GET_USER_PROGRESS_BY_USER_ID, { fetchPolicy: "network-only" });
+    useLazyQuery(GET_USER_PROGRESS_BY_USER_ID_LITE, {
+      fetchPolicy: "network-only",
+    });
+
+  const [fetchUPById, { data: upByIdData, loading: upDetailLoading }] =
+    useLazyQuery(GET_USER_PROGRESS_BY_ID, { fetchPolicy: "network-only" });
   useEffect(() => {
     if (user?.id) fetchUserProgress({ variables: { userId: user.id } });
   }, [user?.id, fetchUserProgress]);
@@ -282,16 +288,21 @@ export default function UserPage() {
   } = useSampleDrafts(currentUserProgressId);
 
   useEffect(() => {
-    if (!currentUP?.samples) return setEditableSamples([]);
-    const sorted = [...currentUP.samples].sort(
+    if (!currentUP?.id) {
+      setEditableSamples([]);
+      return;
+    }
+    fetchUPById({ variables: { userProgressId: currentUP.id } });
+  }, [currentUP?.id]);
+
+  useEffect(() => {
+    const full = upByIdData?.userProgressById;
+    const samples = full?.samples ?? [];
+    const sorted = [...samples].sort(
       (a: any, b: any) => Number(a.nus) - Number(b.nus),
     );
     setEditableSamples(sorted.map((s: any) => ({ ...s })));
-  }, [
-    userProgressData,
-    updateUserProgressForm.subSurveyActivityId,
-    selectedBlock,
-  ]);
+  }, [upByIdData]);
 
   useEffect(() => {
     function applyFromUrl() {

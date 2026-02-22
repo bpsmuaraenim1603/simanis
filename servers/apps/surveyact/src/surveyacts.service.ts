@@ -36,6 +36,7 @@ import {
   SubmitSPJ,
   User,
   SubSurveyStatus,
+  ProgressRole,
 } from '@prisma/client';
 import { HttpService } from '@nestjs/axios';
 import { identity, lastValueFrom } from 'rxjs';
@@ -775,6 +776,70 @@ export class SurveyActivityService {
         samples: true,
       },
     });
+  }
+
+  async getUserProgressById(userProgressId: string) {
+    return this.prisma.userProgress.findUnique({
+      where: { id: userProgressId },
+      include: {
+        user: true,
+        subSurveyActivity: true,
+        district: true,
+        village: true,
+        supervisor: true,
+        samples: true,
+      },
+    });
+  }
+
+  async getUserProgressPageBySubSurveyActivityId(params: {
+    subSurveyActivityId: string;
+    page?: number;
+    pageSize?: number;
+    progressRole?: ProgressRole;
+    search?: string;
+    superVisorId?: string;
+  }) {
+    const {
+      subSurveyActivityId,
+      page = 1,
+      pageSize = 200,
+      progressRole,
+      search,
+      superVisorId,
+    } = params;
+
+    const safePage = Math.max(1, Number(page) || 1);
+    const safePageSize = Math.min(1000, Math.max(1, Number(pageSize) || 200));
+    const skip = (safePage - 1) * safePageSize;
+
+    const where: any = { subSurveyActivityId };
+    if (progressRole) where.progressRole = progressRole;
+    if (superVisorId) where.superVisorId = superVisorId;
+    if (search && String(search).trim().length > 0) {
+      where.user = {
+        name: { contains: String(search).trim(), mode: 'insensitive' },
+      };
+    }
+
+    const [total, items] = await this.prisma.$transaction([
+      this.prisma.userProgress.count({ where }),
+      this.prisma.userProgress.findMany({
+        where,
+        skip,
+        take: safePageSize,
+        orderBy: [{ district: { city: 'asc' } }, { user: { name: 'asc' } }],
+        include: {
+          user: true,
+          subSurveyActivity: true,
+          district: true,
+          village: true,
+          supervisor: true,
+        },
+      }),
+    ]);
+
+    return { items, total, page: safePage, pageSize: safePageSize };
   }
 
   async getUserProgressSurveyByUserId(userId: string) {
@@ -1667,24 +1732,28 @@ export class SurveyActivityService {
 
     const now = new Date();
     const MS_PER_DAY = 24 * 60 * 60 * 1000;
-    for (const s of subSurveys) {
-      const diffDays = Math.ceil(
-        (s.endDate.getTime() - now.getTime()) / MS_PER_DAY,
-      );
-      if (diffDays === 3 || diffDays === 2 || diffDays === 1) {
-        const endKey = s.endDate.toISOString().slice(0, 10);
-        for (const p of s.UserProgress) {
-          await this.createInAppNotification({
-            recipientId: p.userId,
-            actorId: null,
-            type: NotificationType.SUBSURVEY_END_SOON,
-            targetType: TargetType.SUBSURVEY_ACTIVITY,
-            targetId: s.id,
-            title: 'Tenggat kegiatan mendekat',
-            body: `Kegiatan "${s.name}" akan berakhir dalam ${diffDays} hari (tenggat: ${endKey}).`,
-            dedupKey: `endsoon:${s.id}:${endKey}:${diffDays}`,
-            metadata: { endDate: endKey, diffDays },
-          });
+    const enableEndSoonNotif = process.env.PROGRESS_NOTIFY_ON_QUERY === 'true';
+
+    if (enableEndSoonNotif) {
+      for (const s of subSurveys) {
+        const diffDays = Math.ceil(
+          (s.endDate.getTime() - now.getTime()) / MS_PER_DAY,
+        );
+        if (diffDays === 3 || diffDays === 2 || diffDays === 1) {
+          const endKey = s.endDate.toISOString().slice(0, 10);
+          for (const p of s.UserProgress) {
+            await this.createInAppNotification({
+              recipientId: p.userId,
+              actorId: null,
+              type: NotificationType.SUBSURVEY_END_SOON,
+              targetType: TargetType.SUBSURVEY_ACTIVITY,
+              targetId: s.id,
+              title: 'Tenggat kegiatan mendekat',
+              body: `Kegiatan "${s.name}" akan berakhir dalam ${diffDays} hari (tenggat: ${endKey}).`,
+              dedupKey: `endsoon:${s.id}:${endKey}:${diffDays}`,
+              metadata: { endDate: endKey, diffDays },
+            });
+          }
         }
       }
     }
