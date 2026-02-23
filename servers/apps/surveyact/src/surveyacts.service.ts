@@ -466,6 +466,14 @@ export class SurveyActivityService {
     const docsBillPengawas = params.docsBillPengawas ?? null;
     if (!subSurveyActivityId || !superVisorId) return;
 
+    const supUser = await this.prisma.user.findUnique({
+      where: { id: superVisorId },
+      select: { districtId: true, villageId: true, primaryRole: true },
+    });
+
+    const supDistrictId = (supUser?.districtId ?? districtId) ?? null;
+    const supVillageId = (supUser?.villageId ?? villageId) ?? null;
+
     const exists = await this.prisma.userProgress.findFirst({
       where: {
         userId: superVisorId,
@@ -475,7 +483,13 @@ export class SurveyActivityService {
       },
       select: { id: true },
     });
-    if (exists) return;
+    if (exists) {
+      await this.prisma.userProgress.update({
+        where: { id: exists.id },
+        data: { districtId: supDistrictId, villageId: supVillageId },
+      });
+      return;
+    }
 
     const supBill = this.parseMoney(
       docsBillPengawas && String(docsBillPengawas).trim()
@@ -498,8 +512,8 @@ export class SurveyActivityService {
         approvedCount: 0,
         rejectedCount: 0,
         blockCount: blockCount,
-        districtId: districtId ?? null,
-        villageId: villageId ?? null,
+        districtId: supDistrictId,
+        villageId: supVillageId,
         docsBill:
           docsBillPengawas && String(docsBillPengawas).trim()
             ? String(docsBillPengawas).trim()
@@ -1022,6 +1036,15 @@ export class SurveyActivityService {
         const isRenameBlock = oldBlock !== newBlock;
         const isChangeSupervisor = oldSup !== newSup;
 
+        const supUser = newSup
+          ? await tx.user.findUnique({
+              where: { id: newSup },
+              select: { districtId: true, villageId: true },
+            })
+          : null;
+        const supDistrictId = supUser?.districtId ?? null;
+        const supVillageId = supUser?.villageId ?? null;
+
         if (
           isPetugas &&
           hasSub &&
@@ -1053,8 +1076,8 @@ export class SurveyActivityService {
               data: {
                 userId: newSup,
                 blockCount: newBlock,
-                districtId: upAfter.districtId ?? null,
-                villageId: upAfter.villageId ?? null,
+                districtId: supDistrictId,
+                villageId: supVillageId,
               },
             });
           } else if (
@@ -1090,8 +1113,8 @@ export class SurveyActivityService {
               approvedCount: 0,
               rejectedCount: 0,
               blockCount: upAfter.blockCount ?? null,
-              districtId: upAfter.districtId ?? null,
-              villageId: upAfter.villageId ?? null,
+              districtId: supDistrictId,
+              villageId: supVillageId,
               docsBill: '0',
               superVisorId: null,
             },
@@ -1140,8 +1163,8 @@ export class SurveyActivityService {
                 forcedDocsBillPengawas !== undefined
                   ? String(forcedDocsBillPengawas).trim()
                   : '0',
-              districtId: upAfter.districtId ?? null,
-              villageId: upAfter.villageId ?? null,
+              districtId: supDistrictId,
+              villageId: supVillageId,
               blockCount: upAfter.blockCount ?? null,
             },
           });

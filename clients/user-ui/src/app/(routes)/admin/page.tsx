@@ -2103,52 +2103,70 @@ export default function Admin() {
                 />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                <input
-                  className="w-full px-3 py-2 border rounded-md bg-white"
-                  placeholder="Jumlah sampel"
-                  inputMode="numeric"
-                  value={String(addPairSampleCount)}
-                  onChange={(e) => {
-                    const v = e.target.value.replace(/[^0-9]/g, "");
-                    setAddPairSampleCount(v ? Number(v) : 0);
-                  }}
-                />
+                <div>
+                  <label htmlFor="addPairSampleCount" className="text-sm">Jumlah Sampel</label>
+                  <input
+                    id="addPairSampleCount"
+                    className="w-full px-3 py-2 border rounded-md bg-white"
+                    placeholder="Jumlah sampel"
+                    inputMode="numeric"
+                    value={String(addPairSampleCount)}
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/[^0-9]/g, "");
+                      setAddPairSampleCount(v ? Number(v) : 0);
+                    }}
+                  />
+                </div>
 
-                <input
-                  className="w-full px-3 py-2 border rounded-md bg-white"
-                  placeholder="Honor/dok petugas"
-                  inputMode="numeric"
-                  disabled={isPrimarySupervisor(addPairPetugasId)}
-                  value={
-                    isPrimarySupervisor(addPairPetugasId)
-                      ? "0"
-                      : String(addPairHonorDokPetugas)
-                  }
-                  onChange={(e) =>
-                    setAddPairHonorDokPetugas(
-                      e.target.value.replace(/[^0-9]/g, ""),
-                    )
-                  }
-                />
+                <div>
+                  <label htmlFor="addPairHonorDokPetugas" className="text-sm">
+                    Honor/dok petugas
+                  </label>
+                  <input
+                    id="addPairHonorDokPetugas"
+                    className="w-full px-3 py-2 border rounded-md bg-white"
+                    placeholder="Honor/dok petugas"
+                    inputMode="numeric"
+                    disabled={isPrimarySupervisor(addPairPetugasId)}
+                    value={
+                      isPrimarySupervisor(addPairPetugasId)
+                        ? "0"
+                        : String(addPairHonorDokPetugas)
+                    }
+                    onChange={(e) =>
+                      setAddPairHonorDokPetugas(
+                        e.target.value.replace(/[^0-9]/g, ""),
+                      )
+                    }
+                  />
+                </div>
 
-                <input
-                  className="w-full px-3 py-2 border rounded-md bg-white"
-                  placeholder="Honor/dok pengawas"
-                  inputMode="numeric"
-                  disabled={
-                    !addPairPengawasId || isPrimarySupervisor(addPairPengawasId)
-                  }
-                  value={
-                    !addPairPengawasId || isPrimarySupervisor(addPairPengawasId)
-                      ? "0"
-                      : String(addPairHonorDokPengawas)
-                  }
-                  onChange={(e) =>
-                    setAddPairHonorDokPengawas(
-                      e.target.value.replace(/[^0-9]/g, ""),
-                    )
-                  }
-                />
+                <div>
+                  <label htmlFor="addPairHonorDokPengawas" className="text-sm">
+                    Honor/dok pengawas
+                  </label>
+                  <input
+                    id="addPairHonorDokPengawas"
+                    className="w-full px-3 py-2 border rounded-md bg-white"
+                    placeholder="Honor/dok pengawas"
+                    inputMode="numeric"
+                    disabled={
+                      !addPairPengawasId ||
+                      isPrimarySupervisor(addPairPengawasId)
+                    }
+                    value={
+                      !addPairPengawasId ||
+                      isPrimarySupervisor(addPairPengawasId)
+                        ? "0"
+                        : String(addPairHonorDokPengawas)
+                    }
+                    onChange={(e) =>
+                      setAddPairHonorDokPengawas(
+                        e.target.value.replace(/[^0-9]/g, ""),
+                      )
+                    }
+                  />
+                </div>
               </div>
               <div className="text-xs text-gray-600">
                 Blok akan dibuat otomatis:{" "}

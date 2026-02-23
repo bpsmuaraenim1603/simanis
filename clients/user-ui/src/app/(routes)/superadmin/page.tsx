@@ -134,6 +134,19 @@ function monthLabel(yyyyMM: string) {
   return `${names[(m ?? 1) - 1]} ${y}`;
 }
 
+const { data, loading, error, refetch } = useQuery(GET_ALL_USERS, {
+  fetchPolicy: "cache-and-network",
+});
+const users = data?.getUsers ?? [];
+
+const userOnlyIdSet = useMemo(() => {
+  const set = new Set<string>();
+  for (const u of users) {
+    if (String(u?.primaryRole) === "User") set.add(String(u?.id));
+  }
+  return set;
+}, [users]);
+
 function formatDateShort(iso: string) {
   const d = new Date(iso);
   const dd = String(d.getDate()).padStart(2, "0");
@@ -455,8 +468,15 @@ function MonthlyStaffUsagePanel({
     fetchPolicy: "network-only",
   });
 
-  const exportPreviewRows = (exportPreviewData?.getMitraBulananExport ??
+  const exportPreviewRowsRaw = (exportPreviewData?.getMitraBulananExport ??
     []) as any[];
+
+  const exportPreviewRows = useMemo(() => {
+    if (!userOnlyIdSet.size) return exportPreviewRowsRaw;
+    return exportPreviewRowsRaw.filter((r) =>
+      userOnlyIdSet.has(String(r?.userId)),
+    );
+  }, [exportPreviewRowsRaw, userOnlyIdSet]);
 
   const [activeMonth, setActiveMonth] = useState<number>(() => {
     const now = new Date();
@@ -633,7 +653,10 @@ function MonthlyStaffUsagePanel({
           (res as any).errors[0]?.message || "Query export gagal",
         );
 
-      const rows = (res.data?.getMitraBulananExport ?? []) as any[];
+      const rowsRaw = (res.data?.getMitraBulananExport ?? []) as any[];
+      const rows = userOnlyIdSet.size
+        ? rowsRaw.filter((r) => userOnlyIdSet.has(String(r?.userId)))
+        : rowsRaw;
 
       const monthNames = [
         "JANUARI",
@@ -1387,10 +1410,6 @@ function MonthlyStaffUsagePanel({
 }
 
 export default function SuperAdminManagePage() {
-  const { data, loading, error, refetch } = useQuery(GET_ALL_USERS, {
-    fetchPolicy: "cache-and-network",
-  });
-  const users = data?.getUsers ?? [];
   const { user: currentUser, loading: userLoading } = useUser();
   const router = useRouter();
 
