@@ -52,6 +52,8 @@ type User = {
   primaryRole: string;
   roles: string[];
   limit_bill?: string;
+  districtId?: string | null;
+  villageId?: string | null;
 };
 type SurveyActivity = {
   id: string;
@@ -310,6 +312,7 @@ export default function Admin() {
   // TAB: TIM
   // =========================
   const [timDraft, setTimDraft] = useState({ name: "", slug: "", chiefId: "" });
+  const [timSlugTouched, setTimSlugTouched] = useState(false);
   const [timRowEdits, setTimRowEdits] = useState<
     Record<string, { name: string; slug: string; chiefId: string }>
   >({});
@@ -363,6 +366,34 @@ export default function Admin() {
     [users],
   );
 
+  function isPrimarySupervisor(userId?: string | null) {
+    if (!userId) return false;
+    const u = users.find((x) => x.id === userId);
+    return String(u?.primaryRole ?? "") === "Supervisor";
+  }
+
+  function getUserLocation(userId?: string | null) {
+    const u = users.find((x) => x.id === userId);
+    return {
+      districtId: (u as any)?.districtId ? String((u as any).districtId) : null,
+      villageId: (u as any)?.villageId ? String((u as any).villageId) : null,
+    };
+  }
+
+  function nextBlockName(petugasId: string, pengawasId: string) {
+    const nums: number[] = [];
+    for (const up of upList) {
+      if (String(up.progressRole) !== "PETUGAS") continue;
+      if (up.userId !== petugasId) continue;
+      if (String(up.superVisorId ?? "") !== String(pengawasId ?? "")) continue;
+      const raw = String(up.blockCount ?? "");
+      const m = raw.match(/\bblok\s*0*(\d+)\b/i);
+      if (m) nums.push(Number(m[1]));
+    }
+    const next = (nums.length ? Math.max(...nums) : 0) + 1;
+    return `Blok ${String(next).padStart(3, "0")}`;
+  }
+
   async function handleAddTim() {
     const name = timDraft.name.trim();
     const slug = formatSlug(timDraft.slug || timDraft.name);
@@ -374,6 +405,7 @@ export default function Admin() {
       await createTim({ variables: { input: { name, slug, chiefId } } });
       toast.success("Tim ditambahkan.");
       setTimDraft({ name: "", slug: "", chiefId: "" });
+      setTimSlugTouched(false);
       await refetchTim();
     } catch (e: any) {
       toast.error(e?.message ?? "Gagal menambah tim.");
@@ -428,6 +460,7 @@ export default function Admin() {
   );
   const [sampleTypeModalOpen, setSampleTypeModalOpen] = useState(false);
   const [sampleTypeNameDraft, setSampleTypeNameDraft] = useState("");
+  const [kegiatanSlugTouched, setKegiatanSlugTouched] = useState(false);
   const [kegiatanDraft, setKegiatanDraft] = useState<
     Partial<SubSurveyActivity>
   >({
@@ -460,7 +493,8 @@ export default function Admin() {
   const [createSampleType] = useMutation(CREATE_SAMPLE_TYPE);
 
   const sampleTypeOptions = useMemo(() => {
-    const list: SampleType[] = (sampleTypesData?.allSurveySampleTypes ?? []) as any[];
+    const list: SampleType[] = (sampleTypesData?.allSurveySampleTypes ??
+      []) as any[];
     return list
       .map((x) => ({ value: x.name, label: x.name }))
       .sort((a, b) => a.label.localeCompare(b.label, "id"));
@@ -594,6 +628,7 @@ export default function Admin() {
         toast.success("Kegiatan diupdate.");
       }
       setKegiatanModalOpen(false);
+      setKegiatanSlugTouched(false);
       await refetchKegiatan();
     } catch (e: any) {
       toast.error(e?.message ?? "Gagal menyimpan kegiatan.");
@@ -735,38 +770,105 @@ export default function Admin() {
   const [addPairOpen, setAddPairOpen] = useState(false);
   const [addPairPetugasId, setAddPairPetugasId] = useState<string>("");
   const [addPairPengawasId, setAddPairPengawasId] = useState<string>("");
+  const [addPairSampleCount, setAddPairSampleCount] = useState<number>(1);
+  const [addPairHonorTouchedPetugas, setAddPairHonorTouchedPetugas] =
+    useState(false);
+  const [addPairHonorTouchedPengawas, setAddPairHonorTouchedPengawas] =
+    useState(false);
+
+  const [addPairHonorDokPetugas, setAddPairHonorDokPetugas] = useState<string>(
+    String(defaultUnitWorkPrice),
+  );
+  const [addPairHonorDokPengawas, setAddPairHonorDokPengawas] =
+    useState<string>(String(defaultUnitWorkPrice));
 
   async function handleAddPair() {
     if (!selectedKegiatanId) return toast.error("Pilih kegiatan dulu.");
     if (!addPairPetugasId) return toast.error("Petugas wajib dipilih.");
+    const n = Number(addPairSampleCount);
+    if (!Number.isFinite(n) || n <= 0)
+      return toast.error("Jumlah sampel wajib angka > 0.");
+
+    const blockCount = nextBlockName(addPairPetugasId, addPairPengawasId || "");
+
+    const petugasIsSup = isPrimarySupervisor(addPairPetugasId);
+    const pengawasIsSup = isPrimarySupervisor(addPairPengawasId);
+
+    const unitPetugas = petugasIsSup ? 0 : toMoney(addPairHonorDokPetugas);
+    const unitPengawas =
+      !addPairPengawasId || pengawasIsSup
+        ? 0
+        : toMoney(addPairHonorDokPengawas);
+
+    const { districtId, villageId } = getUserLocation(addPairPetugasId);
+
     try {
-      const draftBlock = `DRAFT-${(globalThis.crypto?.randomUUID?.() ?? Math.random().toString(16).slice(2)).slice(0, 8)}`;
       await createUserProgress({
         variables: {
           input: {
             userId: addPairPetugasId,
             superVisorId: addPairPengawasId || "",
             subSurveyActivityId: selectedKegiatanId,
-            blockCount: draftBlock,
-            districtId: null,
-            villageId: null,
-            docsBill: "0",
-            docsBillPengawas: "0",
+            blockCount,
+            districtId,
+            villageId,
+            docsBill: String(unitPetugas * n),
+            docsBillPengawas: addPairPengawasId
+              ? String(unitPengawas * n)
+              : "0",
             totalAssigned: 0,
             submitCount: 0,
             approvedCount: 0,
             rejectedCount: 0,
-            samples: [],
+            samples: Array.from({ length: n }).map((_, idx) => ({
+              nus: String(idx + 1).padStart(3, "0"),
+              identity: "",
+              cacahStatus: "Belum_Cacah",
+              approvalStatus: "Menunggu",
+              geoLat: null,
+              geoLng: null,
+            })),
           },
         },
       });
       toast.success("Blok petugas–pengawas ditambahkan.");
       setAddPairPetugasId("");
+      setAddPairPengawasId("");
+      setAddPairSampleCount(1);
+      setAddPairHonorDokPetugas(String(defaultUnitWorkPrice));
+      setAddPairHonorDokPengawas(String(defaultUnitWorkPrice));
+      setAddPairOpen(false);
       await refetchUP();
     } catch (e: any) {
       toast.error(e?.message ?? "Gagal menambahkan pair.");
     }
   }
+
+  useEffect(() => {
+    if (!addPairOpen) return;
+
+    const petugasIsSup = isPrimarySupervisor(addPairPetugasId);
+    const pengawasIsSup = isPrimarySupervisor(addPairPengawasId);
+
+    if (!addPairHonorTouchedPetugas) {
+      setAddPairHonorDokPetugas(
+        String(petugasIsSup ? 0 : defaultUnitWorkPrice),
+      );
+    }
+
+    if (!addPairHonorTouchedPengawas) {
+      setAddPairHonorDokPengawas(
+        String(!addPairPengawasId || pengawasIsSup ? 0 : defaultUnitWorkPrice),
+      );
+    }
+  }, [
+    addPairOpen,
+    defaultUnitWorkPrice,
+    addPairPetugasId,
+    addPairPengawasId,
+    addPairHonorTouchedPetugas,
+    addPairHonorTouchedPengawas,
+  ]);
 
   const filteredPairs = useMemo(() => {
     const q = petugasSearch.trim().toLowerCase();
@@ -835,13 +937,46 @@ export default function Admin() {
     return filtered.map((v) => ({ value: v.id, label: v.name }));
   }, [villages.length, blockForm.districtId]);
 
+  const activeEditPair = useMemo(() => {
+    const pair = pairs.find((p) => p.key === activePairKey);
+    return (
+      pairEdits[activePairKey] ?? {
+        userId: pair?.userId ?? "",
+        superVisorId: pair?.superVisorId ?? "",
+      }
+    );
+  }, [activePairKey, pairEdits, pairs]);
+
+  const activePetugasIsSup = useMemo(
+    () => isPrimarySupervisor(activeEditPair.userId),
+    [activeEditPair.userId, users.length],
+  );
+  const activePengawasIsSup = useMemo(
+    () => isPrimarySupervisor(activeEditPair.superVisorId),
+    [activeEditPair.superVisorId, users.length],
+  );
+
   useEffect(() => {
     if (!blockModalOpen) return;
-    const perPetugas = toMoney(blockForm.honorDokPetugas);
-    const perPengawas = toMoney(blockForm.honorDokPengawas);
+    const pair = pairs.find((p) => p.key === activePairKey);
+    const editPair = pairEdits[activePairKey] ?? {
+      userId: pair?.userId ?? "",
+      superVisorId: pair?.superVisorId ?? "",
+    };
+
+    const petugasIsSup = isPrimarySupervisor(editPair.userId);
+    const pengawasIsSup = isPrimarySupervisor(editPair.superVisorId);
+
+    const perPetugas = petugasIsSup ? 0 : toMoney(blockForm.honorDokPetugas);
+    const perPengawas =
+      !editPair.superVisorId || pengawasIsSup
+        ? 0
+        : toMoney(blockForm.honorDokPengawas);
 
     setBlockForm((p) => ({
       ...p,
+      honorDokPetugas: String(perPetugas),
+      honorDokPengawas: String(perPengawas),
       honorPetugas: String(perPetugas * samples.length),
       honorPengawas: String(perPengawas * samples.length),
     }));
@@ -850,6 +985,9 @@ export default function Admin() {
     samples.length,
     blockForm.honorDokPetugas,
     blockForm.honorDokPengawas,
+    activePairKey,
+    pairEdits,
+    pairs.length,
   ]);
 
   function safePerSample(total: any, count: number) {
@@ -863,14 +1001,27 @@ export default function Admin() {
     setActivePairKey(pairKey);
     setActiveBlock(null);
     setBlockModalMode("add");
+    const pair = pairs.find((p) => p.key === pairKey);
+    const edit = pairEdits[pairKey] ?? {
+      userId: pair?.userId ?? "",
+      superVisorId: pair?.superVisorId ?? "",
+    };
+
+    const petugasIsSup = isPrimarySupervisor(edit.userId);
+    const pengawasIsSup = isPrimarySupervisor(edit.superVisorId);
+
+    const { districtId, villageId } = getUserLocation(edit.userId);
+
     setBlockForm({
-      blockCount: "",
-      districtId: "",
-      villageId: "",
+      blockCount: nextBlockName(edit.userId, edit.superVisorId || ""),
+      districtId: districtId ?? "",
+      villageId: villageId ?? "",
       honorPetugas: "",
       honorPengawas: "",
-      honorDokPetugas: String(defaultUnitWorkPrice),
-      honorDokPengawas: String(defaultUnitWorkPrice),
+      honorDokPetugas: String(petugasIsSup ? 0 : defaultUnitWorkPrice),
+      honorDokPengawas: String(
+        !edit.superVisorId || pengawasIsSup ? 0 : defaultUnitWorkPrice,
+      ),
     });
     setSamples([
       { identity: "", cacahStatus: "Belum_Cacah", approvalStatus: "Menunggu" },
@@ -898,14 +1049,20 @@ export default function Admin() {
       approvalStatus: (s.approvalStatus as any) ?? "Menunggu",
     }));
     const count = list.length || 0;
-    const unitPetugas =
-      count > 0 && toMoney(petugas.docsBill) > 0
+    const petugasIsSup = isPrimarySupervisor(petugas.userId);
+    const pengawasIsSup = isPrimarySupervisor(pengawas?.userId);
+
+    const unitPetugas = petugasIsSup
+      ? "0"
+      : count > 0 && toMoney(petugas.docsBill) > 0
         ? safePerSample(petugas.docsBill, count)
         : String(defaultUnitWorkPrice);
     const unitPengawas =
-      count > 0 && pengawas && toMoney(pengawas.docsBill) > 0
-        ? safePerSample(pengawas?.docsBill, count)
-        : String(defaultUnitWorkPrice);
+      !pengawas || pengawasIsSup
+        ? "0"
+        : count > 0 && toMoney(pengawas.docsBill) > 0
+          ? safePerSample(pengawas?.docsBill, count)
+          : String(defaultUnitWorkPrice);
     setBlockForm({
       blockCount: String(petugas.blockCount ?? ""),
       districtId: String(petugas.districtId ?? ""),
@@ -940,12 +1097,15 @@ export default function Admin() {
 
     try {
       for (const b of pair.blocks) {
+        const { districtId, villageId } = getUserLocation(edit.userId);
         await updateUserProgress({
           variables: {
             input: {
               id: b.petugas.id,
               userId: edit.userId,
               superVisorId: edit.superVisorId || null,
+              districtId,
+              villageId,
             },
           },
         });
@@ -1284,17 +1444,23 @@ export default function Admin() {
                 className="w-full px-3 py-2 border rounded-md bg-white"
                 placeholder="Nama tim"
                 value={timDraft.name}
-                onChange={(e) =>
-                  setTimDraft((p) => ({ ...p, name: e.target.value }))
-                }
+                onChange={(e) => {
+                  const name = e.target.value;
+                  setTimDraft((p) => ({
+                    ...p,
+                    name,
+                    slug: timSlugTouched ? p.slug : formatSlug(name),
+                  }));
+                }}
               />
               <input
                 className="w-full px-3 py-2 border rounded-md bg-white"
                 placeholder="Slug"
                 value={timDraft.slug}
-                onChange={(e) =>
-                  setTimDraft((p) => ({ ...p, slug: e.target.value }))
-                }
+                onChange={(e) => {
+                  setTimSlugTouched(true);
+                  setTimDraft((p) => ({ ...p, slug: e.target.value }));
+                }}
               />
               <HUSelect
                 value={timDraft.chiefId || null}
@@ -1565,12 +1731,14 @@ export default function Admin() {
                     <input
                       className="w-full px-3 py-2 border rounded bg-white"
                       value={String(kegiatanDraft.name ?? "")}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const name = e.target.value;
                         setKegiatanDraft((p) => ({
                           ...p,
-                          name: e.target.value,
-                        }))
-                      }
+                          name,
+                          slug: kegiatanSlugTouched ? p.slug : formatSlug(name),
+                        }));
+                      }}
                     />
                   </div>
                   <div>
@@ -1578,12 +1746,13 @@ export default function Admin() {
                     <input
                       className="w-full px-3 py-2 border rounded bg-white"
                       value={String(kegiatanDraft.slug ?? "")}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        setKegiatanSlugTouched(true);
                         setKegiatanDraft((p) => ({
                           ...p,
                           slug: e.target.value,
-                        }))
-                      }
+                        }));
+                      }}
                     />
                   </div>
                   <div>
@@ -1592,7 +1761,7 @@ export default function Admin() {
                     </div>
                     <input
                       type="date"
-                      className="w-full px-3 py-2 border rounded bg-white"
+                      className="w-full px-3 py-2 border rounded bg-white text-black"
                       value={String(kegiatanDraft.startDate ?? "")}
                       onChange={(e) =>
                         setKegiatanDraft((p) => ({
@@ -1898,28 +2067,127 @@ export default function Admin() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <HUComboBox
                   value={addPairPetugasId || null}
-                  onValueChange={(v) =>
-                    setAddPairPetugasId((v ?? "") as string)
-                  }
+                  onValueChange={(v) => {
+                    const id = (v ?? "") as string;
+                    setAddPairPetugasId(id);
+
+                    if (!addPairHonorTouchedPetugas) {
+                      setAddPairHonorDokPetugas(
+                        String(
+                          isPrimarySupervisor(id) ? 0 : defaultUnitWorkPrice,
+                        ),
+                      );
+                    }
+                  }}
                   options={petugasOptions}
                   placeholder="Pilih petugas"
                 />
                 <HUComboBox
                   value={addPairPengawasId || null}
-                  onValueChange={(v) =>
-                    setAddPairPengawasId((v ?? "") as string)
-                  }
+                  onValueChange={(v) => {
+                    const id = (v ?? "") as string;
+                    setAddPairPengawasId(id);
+
+                    if (!addPairHonorTouchedPengawas) {
+                      setAddPairHonorDokPengawas(
+                        String(
+                          !id || isPrimarySupervisor(id)
+                            ? 0
+                            : defaultUnitWorkPrice,
+                        ),
+                      );
+                    }
+                  }}
                   options={pengawasOptions}
                   placeholder="Pilih pengawas"
                 />
               </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <input
+                  className="w-full px-3 py-2 border rounded-md bg-white"
+                  placeholder="Jumlah sampel"
+                  inputMode="numeric"
+                  value={String(addPairSampleCount)}
+                  onChange={(e) => {
+                    const v = e.target.value.replace(/[^0-9]/g, "");
+                    setAddPairSampleCount(v ? Number(v) : 0);
+                  }}
+                />
+
+                <input
+                  className="w-full px-3 py-2 border rounded-md bg-white"
+                  placeholder="Honor/dok petugas"
+                  inputMode="numeric"
+                  disabled={isPrimarySupervisor(addPairPetugasId)}
+                  value={
+                    isPrimarySupervisor(addPairPetugasId)
+                      ? "0"
+                      : String(addPairHonorDokPetugas)
+                  }
+                  onChange={(e) =>
+                    setAddPairHonorDokPetugas(
+                      e.target.value.replace(/[^0-9]/g, ""),
+                    )
+                  }
+                />
+
+                <input
+                  className="w-full px-3 py-2 border rounded-md bg-white"
+                  placeholder="Honor/dok pengawas"
+                  inputMode="numeric"
+                  disabled={
+                    !addPairPengawasId || isPrimarySupervisor(addPairPengawasId)
+                  }
+                  value={
+                    !addPairPengawasId || isPrimarySupervisor(addPairPengawasId)
+                      ? "0"
+                      : String(addPairHonorDokPengawas)
+                  }
+                  onChange={(e) =>
+                    setAddPairHonorDokPengawas(
+                      e.target.value.replace(/[^0-9]/g, ""),
+                    )
+                  }
+                />
+              </div>
+              <div className="text-xs text-gray-600">
+                Blok akan dibuat otomatis:{" "}
+                <b>
+                  {addPairPetugasId
+                    ? nextBlockName(addPairPetugasId, addPairPengawasId || "")
+                    : "-"}
+                </b>
+                {" • "}
+                Total honor petugas:{" "}
+                <b>
+                  {(
+                    (isPrimarySupervisor(addPairPetugasId)
+                      ? 0
+                      : toMoney(addPairHonorDokPetugas)) *
+                    (Number(addPairSampleCount) || 0)
+                  ).toLocaleString("id-ID")}
+                </b>
+                {" • "}
+                Total honor pengawas:{" "}
+                <b>
+                  {(
+                    (!addPairPengawasId ||
+                    isPrimarySupervisor(addPairPengawasId)
+                      ? 0
+                      : toMoney(addPairHonorDokPengawas)) *
+                    (Number(addPairSampleCount) || 0)
+                  ).toLocaleString("id-ID")}
+                </b>
+              </div>
+
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => void handleAddPair()}
-                  className="px-4 py-2 rounded bg-blue-600 text-white"
+                  disabled={creatingUserProgress}
+                  className="px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-60"
                 >
-                  Simpan
+                  {creatingUserProgress ? "Menyimpan..." : "Simpan"}
                 </button>
                 <button
                   type="button"
@@ -1927,6 +2195,9 @@ export default function Admin() {
                     setAddPairOpen(false);
                     setAddPairPetugasId("");
                     setAddPairPengawasId("");
+                    setAddPairSampleCount(1);
+                    setAddPairHonorDokPetugas(String(defaultUnitWorkPrice));
+                    setAddPairHonorDokPengawas(String(defaultUnitWorkPrice));
                   }}
                   className="px-4 py-2 rounded bg-white border"
                 >
@@ -2202,7 +2473,7 @@ export default function Admin() {
                       }
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                     <div>
                       <div className="text-sm font-semibold mb-1">
                         Harga satuan pekerjaan
@@ -2215,6 +2486,33 @@ export default function Admin() {
                         disabled
                       />
                     </div>
+
+                    <div>
+                      <div className="text-sm font-semibold mb-1">
+                        Honor petugas per sampel
+                      </div>
+                      <input
+                        className="w-full px-3 py-2 border rounded bg-white"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        disabled={activePetugasIsSup}
+                        value={
+                          activePetugasIsSup
+                            ? "0"
+                            : (toMoney(
+                                blockForm.honorDokPetugas,
+                              ).toLocaleString("id-ID") ?? "")
+                        }
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/[^0-9]/g, "");
+                          setBlockForm((p) => ({
+                            ...p,
+                            honorDokPetugas: raw,
+                          }));
+                        }}
+                      />
+                    </div>
+
                     <div>
                       <div className="text-sm font-semibold mb-1">
                         Honor pengawas per sampel
@@ -2223,10 +2521,15 @@ export default function Admin() {
                         className="w-full px-3 py-2 border rounded bg-white"
                         inputMode="numeric"
                         pattern="[0-9]*"
+                        disabled={
+                          !activeEditPair.superVisorId || activePengawasIsSup
+                        }
                         value={
-                          toMoney(blockForm.honorDokPengawas).toLocaleString(
-                            "id-ID",
-                          ) ?? ""
+                          !activeEditPair.superVisorId || activePengawasIsSup
+                            ? "0"
+                            : (toMoney(
+                                blockForm.honorDokPengawas,
+                              ).toLocaleString("id-ID") ?? "")
                         }
                         onChange={(e) => {
                           const raw = e.target.value.replace(/[^0-9]/g, "");

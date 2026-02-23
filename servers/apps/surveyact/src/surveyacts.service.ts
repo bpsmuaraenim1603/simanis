@@ -568,6 +568,27 @@ export class SurveyActivityService {
       );
     }
 
+    const petugasUser = await this.prisma.user.findUnique({
+      where: { id: input.userId },
+      select: { primaryRole: true },
+    });
+    const petugasIsSupervisor = petugasUser?.primaryRole === 'Supervisor';
+    if (petugasIsSupervisor) {
+      (rest as any).docsBill = '0';
+    }
+
+    let forcedDocsBillPengawas: string | null | undefined = docsBillPengawas;
+    if (rest.superVisorId) {
+      const pengawasUser = await this.prisma.user.findUnique({
+        where: { id: rest.superVisorId },
+        select: { primaryRole: true },
+      });
+      const pengawasIsSupervisor = pengawasUser?.primaryRole === 'Supervisor';
+      if (pengawasIsSupervisor) {
+        forcedDocsBillPengawas = '0';
+      }
+    }
+
     const addPetugas = this.parseMoney((rest as any)?.docsBill ?? null);
     await this.assertMonthlyBillLimit({
       userId: input.userId,
@@ -600,13 +621,13 @@ export class SurveyActivityService {
       districtId: created.districtId,
       blockCount: created.blockCount,
       villageId: created.villageId,
-      docsBillPengawas: docsBillPengawas ?? null,
+      docsBillPengawas: forcedDocsBillPengawas ?? null,
     });
 
     if (
       created.superVisorId &&
-      docsBillPengawas &&
-      String(docsBillPengawas).trim()
+      forcedDocsBillPengawas &&
+      String(forcedDocsBillPengawas).trim()
     ) {
       const existingSup = await this.prisma.userProgress.findFirst({
         where: {
@@ -617,7 +638,7 @@ export class SurveyActivityService {
         },
         select: { id: true, docsBill: true },
       });
-      const nextSup = this.parseMoney(String(docsBillPengawas).trim());
+      const nextSup = this.parseMoney(String(forcedDocsBillPengawas).trim());
       const prevSup = this.parseMoney(existingSup?.docsBill ?? null);
       const deltaSup = Math.max(0, nextSup - prevSup);
       const superVisorId = created.superVisorId;
@@ -912,6 +933,45 @@ export class SurveyActivityService {
       if (!upBefore)
         throw new NotFoundException('UserProgress tidak ditemukan');
 
+      const nextUserIdRaw =
+        Object.prototype.hasOwnProperty.call(rest as any, 'userId')
+          ? (rest as any).userId
+          : upBefore.userId;
+
+      const nextUserId = nextUserIdRaw ? String(nextUserIdRaw) : upBefore.userId;
+
+      const petugasUser = await tx.user.findUnique({
+       where: { id: nextUserId },
+        select: { primaryRole: true },
+      });
+      const petugasIsSupervisor = petugasUser?.primaryRole === 'Supervisor';
+      if (petugasIsSupervisor) {
+        (rest as any).docsBill = '0';
+     }
+
+      const nextSupIdRaw =
+        Object.prototype.hasOwnProperty.call(rest as any, 'superVisorId')
+          ? (rest as any).superVisorId
+          : upBefore.superVisorId;
+
+      const nextSupId =
+        nextSupIdRaw === null || nextSupIdRaw === undefined || nextSupIdRaw === ''
+          ? null
+         : String(nextSupIdRaw);
+
+      const pengawasUser = nextSupId
+        ? await tx.user.findUnique({
+            where: { id: nextSupId },
+            select: { primaryRole: true },
+          })
+        : null;
+
+      const pengawasIsSupervisor = pengawasUser?.primaryRole === 'Supervisor';
+
+      // Jika pengawas "Supervisor", paksa honor pengawas 0 (walaupun payload isi angka).
+      const forcedDocsBillPengawas =
+        nextSupId && pengawasIsSupervisor ? '0' : docsBillPengawas;
+
       if (
         Object.prototype.hasOwnProperty.call(rest as any, 'docsBill') &&
         upBefore.subSurveyActivityId
@@ -1039,7 +1099,7 @@ export class SurveyActivityService {
         }
 
         if (
-          docsBillPengawas !== undefined &&
+          forcedDocsBillPengawas !== undefined &&
           upAfter.subSurveyActivityId &&
           upAfter.superVisorId
         ) {
@@ -1059,7 +1119,7 @@ export class SurveyActivityService {
             );
           }
 
-          const nextSup = this.parseMoney(docsBillPengawas ?? null);
+          const nextSup = this.parseMoney(forcedDocsBillPengawas ?? null);
           const prevSup = this.parseMoney(targetSup.docsBill ?? null);
 
           const delta = Math.max(0, nextSup - prevSup);
@@ -1076,8 +1136,9 @@ export class SurveyActivityService {
             where: { id: targetSup.id },
             data: {
               docsBill:
-                docsBillPengawas !== null && docsBillPengawas !== undefined
-                  ? String(docsBillPengawas).trim()
+                forcedDocsBillPengawas !== null &&
+                forcedDocsBillPengawas !== undefined
+                  ? String(forcedDocsBillPengawas).trim()
                   : '0',
               districtId: upAfter.districtId ?? null,
               villageId: upAfter.villageId ?? null,
