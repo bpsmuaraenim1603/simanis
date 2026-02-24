@@ -134,19 +134,6 @@ function monthLabel(yyyyMM: string) {
   return `${names[(m ?? 1) - 1]} ${y}`;
 }
 
-const { data, loading, error, refetch } = useQuery(GET_ALL_USERS, {
-  fetchPolicy: "cache-and-network",
-});
-const users = data?.getUsers ?? [];
-
-const userOnlyIdSet = useMemo(() => {
-  const set = new Set<string>();
-  for (const u of users) {
-    if (String(u?.primaryRole) === "User") set.add(String(u?.id));
-  }
-  return set;
-}, [users]);
-
 function formatDateShort(iso: string) {
   const d = new Date(iso);
   const dd = String(d.getDate()).padStart(2, "0");
@@ -348,14 +335,25 @@ function SingleMonthMitraTable({
           <tbody>
             {filteredRows.length > 0 ? (
               filteredRows.map((list, gi) => {
+                const totalJumlahPegawai = list.reduce(
+                  (acc, x) => acc + (Number(x?.docsBill ?? 0) || 0),
+                  0,
+                );
+
+                const sbmlPegawai = Number(list?.[0]?.limit_bill ?? 0) || 0;
+                const selisihTotalPegawai = sbmlPegawai - totalJumlahPegawai;
                 const span = list.length;
+                let runningHonor = 0;
                 return list.map((r: any, ri: number) => {
                   const vol = Number(r?.totalAssigned ?? 0) || 0;
                   const unit = Number(r?.unitWorkPrice ?? 0) || 0;
                   const nilai = vol * unit;
                   const jumlah = Number(r?.docsBill ?? 0) || 0;
+                  runningHonor += jumlah;
+                  const selisihBerjalan = sbmlPegawai - runningHonor;
                   const sbml = Number(r?.limit_bill ?? 0) || 0;
                   const selisih = sbml - jumlah;
+                  const jumlahKegiatan = Number(r?.docsBill ?? 0) || 0;
                   const jangka = `${fmtDateId(r?.startDate)} - ${fmtDateId(r?.endDate)}`;
 
                   return (
@@ -365,48 +363,61 @@ function SingleMonthMitraTable({
                     >
                       {ri === 0 ? (
                         <>
-                          <td rowSpan={span} className="px-2 py-2 align-top">
+                          <td rowSpan={span} className="px-2 py-2 border">
                             {gi + 1}
                           </td>
-                          <td rowSpan={span} className="px-2 py-2 align-top">
+                          <td rowSpan={span} className="px-2 py-2 border">
                             {r?.name ?? "-"}
                           </td>
-                          <td rowSpan={span} className="px-2 py-2 align-top">
+                          <td rowSpan={span} className="px-2 py-2 border">
                             {r?.job_name ?? "-"}
                           </td>
-                          <td rowSpan={span} className="px-2 py-2 align-top">
+                          <td rowSpan={span} className="px-2 py-2 border">
                             {r?.district ?? "-"}
                           </td>
-                          <td rowSpan={span} className="px-2 py-2 align-top">
+                          <td rowSpan={span} className="px-2 py-2 border">
                             {r?.city ?? "-"}
                           </td>
                         </>
                       ) : null}
 
-                      <td className="px-2 py-2">
+                      <td className="px-2 py-2 border">
                         {r?.subsurveyactivity ?? "-"}
                       </td>
-                      <td className="px-2 py-2">{jangka}</td>
-                      <td className="px-2 py-2 text-right">{vol}</td>
-                      <td className="px-2 py-2">{r?.sampleType ?? "-"}</td>
-                      <td className="px-2 py-2 text-right">
+                      <td className="px-2 py-2 border">{jangka}</td>
+                      <td className="px-2 py-2 text-right border">{vol}</td>
+                      <td className="px-2 py-2 border">{r?.sampleType ?? "-"}</td>
+                      <td className="px-2 py-2 text-right border">
                         {unit ? unit.toLocaleString("id-ID") : "-"}
                       </td>
-                      <td className="px-2 py-2 text-right">
+                      <td className="px-2 py-2 text-right border">
                         {nilai ? nilai.toLocaleString("id-ID") : "-"}
                       </td>
-                      <td className="px-2 py-2">{r?.budgetCode ?? "-"}</td>
-                      <td className="px-2 py-2 text-right">
-                        {jumlah ? jumlah.toLocaleString("id-ID") : "-"}
+                      <td className="px-2 py-2 border">{r?.budgetCode ?? "-"}</td>
+                      <td className="px-2 py-2 text-right border">
+                        {jumlahKegiatan
+                          ? jumlahKegiatan.toLocaleString("id-ID")
+                          : "-"}
                       </td>
-                      <td className="px-2 py-2 text-right">
-                        {sbml ? sbml.toLocaleString("id-ID") : "-"}
+                      {ri === 0 ? (
+                        <>
+                          <td
+                            rowSpan={span}
+                            className="px-2 py-2 text-right border"
+                          >
+                            {sbmlPegawai
+                              ? sbmlPegawai.toLocaleString("id-ID")
+                              : "-"}
+                          </td>
+                        </>
+                      ) : null}
+                      <td className="px-2 py-2 text-right border">
+                        {Number.isFinite(selisihBerjalan)
+                          ? selisihBerjalan.toLocaleString("id-ID")
+                          : "-"}
                       </td>
-                      <td className="px-2 py-2 text-right">
-                        {selisih ? selisih.toLocaleString("id-ID") : "-"}
-                      </td>
-                      <td className="px-2 py-2">{r?.chiefName ?? "-"}</td>
-                      <td className="px-2 py-2">
+                      <td className="px-2 py-2 border">{r?.chiefName ?? "-"}</td>
+                      <td className="px-2 py-2 border">
                         {r?.dipa ?? "DIPA BPS Kabupaten Muara Enim"}
                       </td>
                     </tr>
@@ -445,10 +456,12 @@ function MonthlyStaffUsagePanel({
   year,
   setYear,
   onOpenUserActivities,
+  userOnlyIdSet,
 }: {
   year: number;
   setYear: (v: number) => void;
   onOpenUserActivities: (userId: string) => void | Promise<void>;
+  userOnlyIdSet: Set<string>;
 }) {
   const { data, loading, error, refetch } = useQuery(
     GET_MONTHLY_ACTIVITY_STAFF_USAGE,
@@ -657,6 +670,9 @@ function MonthlyStaffUsagePanel({
       const rows = userOnlyIdSet.size
         ? rowsRaw.filter((r) => userOnlyIdSet.has(String(r?.userId)))
         : rowsRaw;
+      const rowsUserOnly = userOnlyIdSet?.size
+        ? rows.filter((r: any) => userOnlyIdSet.has(String(r?.userId)))
+        : [];
 
       const monthNames = [
         "JANUARI",
@@ -683,7 +699,7 @@ function MonthlyStaffUsagePanel({
       };
 
       const groups = new Map<number, any[]>();
-      for (const r of rows) {
+      for (const r of rowsUserOnly) {
         const m = Number(r.month ?? 1);
         if (!groups.has(m)) groups.set(m, []);
         groups.get(m)!.push(r);
@@ -838,14 +854,22 @@ function MonthlyStaffUsagePanel({
           });
 
           const startUserRow = currentRow;
+          const totalDocsBillUser = sorted.reduce(
+            (acc, x) => acc + (Number(x?.docsBill ?? 0) || 0),
+            0,
+          );
+
+          const limitUser = Number(sorted?.[0]?.limit_bill ?? 0) || 0;
+          let runningHonor = 0;
 
           sorted.forEach((r: any) => {
             const vol = Number(r.totalAssigned ?? 0);
             const price = Number(r.unitWorkPrice ?? 0);
             const nilaiPerjanjian = vol * price;
-            const docsBill = Number(r.docsBill ?? 0);
+            const docsBill = Number(r.docsBill ?? 0) || 0;
             const limit = Number(r.limit_bill ?? 0);
-            const selisih = limit - docsBill;
+            runningHonor += docsBill;
+            const selisih = limit - runningHonor;
             const jangkaWaktu = `${fmtDate(r.startDate)}-${fmtDate(r.endDate)}`;
 
             ws.getRow(currentRow).values = [
@@ -891,18 +915,22 @@ function MonthlyStaffUsagePanel({
           const span = endUserRow - startUserRow + 1;
 
           if (span > 1) {
-            [1, 2, 3, 4, 5].forEach((c) => {
+            [1, 2, 3, 4, 5, 14].forEach((c) => {
               ws.mergeCells(startUserRow, c, endUserRow, c);
               ws.getCell(startUserRow, c).alignment = {
-                vertical: "middle",
-                horizontal: "left",
+                vertical: "top",
+                horizontal: c === 1 ? "center" : "left",
                 wrapText: true,
               };
             });
-            ws.getCell(startUserRow, 1).alignment = {
-              vertical: "middle",
-              horizontal: "center",
-            };
+
+            [14].forEach((c) => {
+              ws.getCell(startUserRow, c).alignment = {
+                vertical: "top",
+                horizontal: "right",
+                wrapText: true,
+              };
+            });
           }
 
           // ===== Baris pemisah (pink) =====
@@ -1410,6 +1438,18 @@ function MonthlyStaffUsagePanel({
 }
 
 export default function SuperAdminManagePage() {
+  const { data, loading, error, refetch } = useQuery(GET_ALL_USERS, {
+    fetchPolicy: "cache-and-network",
+  });
+  const users = data?.getUsers ?? [];
+
+  const userOnlyIdSet = useMemo(() => {
+    const set = new Set<string>();
+    for (const u of users) {
+      if (String(u?.primaryRole) === "User") set.add(String(u?.id));
+    }
+    return set;
+  }, [users]);
   const { user: currentUser, loading: userLoading } = useUser();
   const router = useRouter();
 
@@ -2404,6 +2444,7 @@ export default function SuperAdminManagePage() {
             year={year}
             setYear={setYear}
             onOpenUserActivities={openHonorModalById}
+            userOnlyIdSet={userOnlyIdSet}
           />
         )}
       </div>
