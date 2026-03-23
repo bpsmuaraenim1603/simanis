@@ -208,30 +208,51 @@ export class SurveyActivityService {
       'Sebelas',
     ];
 
-    if (n < 12) return satuan[n];
-    if (n < 20) return this.terbilang(n - 10) + ' Belas';
-    if (n < 100)
-      return (
-        this.terbilang(Math.floor(n / 10)) +
-        ' Puluh ' +
-        this.terbilang(n % 10)
-      ).trim();
-    if (n < 200) return 'Seratus ' + this.terbilang(n - 100);
-    if (n < 1000)
-      return (
-        this.terbilang(Math.floor(n / 100)) +
-        ' Ratus ' +
-        this.terbilang(n % 100)
-      ).trim();
-    if (n < 2000) return 'Seribu ' + this.terbilang(n - 1000);
-    if (n < 1_000_000)
-      return (
-        this.terbilang(Math.floor(n / 1000)) +
-        ' Ribu ' +
-        this.terbilang(n % 1000)
-      ).trim();
+    const angka = Math.floor(Math.abs(Number(n ?? 0)));
+    if (Number.isNaN(angka)) return '';
+    if (angka === 0) return 'Nol';
+    if (angka < 12) return satuan[angka];
+    if (angka < 20) return `${this.terbilang(angka - 10)} Belas`.trim();
+    if (angka < 100) {
+      return `${this.terbilang(Math.floor(angka / 10))} Puluh${
+        angka % 10 ? ' ' + this.terbilang(angka % 10) : ''
+      }`.trim();
+    }
+    if (angka < 200) {
+      return `Seratus${angka - 100 ? ' ' + this.terbilang(angka - 100) : ''}`.trim();
+    }
+    if (angka < 1000) {
+      return `${this.terbilang(Math.floor(angka / 100))} Ratus${
+        angka % 100 ? ' ' + this.terbilang(angka % 100) : ''
+      }`.trim();
+    }
+    if (angka < 2000) {
+      return `Seribu${angka - 1000 ? ' ' + this.terbilang(angka - 1000) : ''}`.trim();
+    }
+    if (angka < 1000000) {
+      return `${this.terbilang(Math.floor(angka / 1000))} Ribu${
+        angka % 1000 ? ' ' + this.terbilang(angka % 1000) : ''
+      }`.trim();
+    }
+    if (angka < 1000000000) {
+      return `${this.terbilang(Math.floor(angka / 1000000))} Juta${
+        angka % 1000000 ? ' ' + this.terbilang(angka % 1000000) : ''
+      }`.trim();
+    }
+    if (angka < 1000000000000) {
+      return `${this.terbilang(Math.floor(angka / 1000000000))} Miliar${
+        angka % 1000000000 ? ' ' + this.terbilang(angka % 1000000000) : ''
+      }`.trim();
+    }
+    if (angka < 1000000000000000) {
+      return `${this.terbilang(Math.floor(angka / 1000000000000))} Triliun${
+        angka % 1000000000000 ? ' ' + this.terbilang(angka % 1000000000000) : ''
+      }`.trim();
+    }
 
-    return '';
+    throw new BadRequestException(
+      `Nilai honor terlalu besar untuk dikonversi ke terbilang: ${angka}`,
+    );
   }
 
   private async enrichActor(actor: any) {
@@ -2518,6 +2539,15 @@ export class SurveyActivityService {
       sampleRows = XLSX.utils.sheet_to_json(sheetSamples, { defval: '' });
     }
 
+    type ImportedSample = {
+      nus: string;
+      identity: string;
+      cacahStatus?: string;
+      approvalStatus?: string;
+      geoLat?: number | null;
+      geoLng?: number | null;
+    };
+
     const samplesByNoPetugas = new Map<
       string,
       {
@@ -2534,12 +2564,12 @@ export class SurveyActivityService {
       const noPetugas = String(r['Nomor Petugas'] || '').trim();
       if (!noPetugas) continue;
 
-      const nus = String(r['NUS'] || '').trim();
-      const identity = String(r['Identitas Sampel'] || '').trim();
-      const cacahStatus = String(r['Status Cacah'] || '').trim();
-      const approvalStatus = String(r['Status Approval'] || '').trim();
-      const geoLatRaw = String(r['GeoLat'] ?? '').trim();
-      const geoLngRaw = String(r['GeoLng'] ?? '').trim();
+      const nus = String(r['NUS'] ?? r['nus'] ?? '').trim();
+      const identity = String(r['Identitas Sampel'] ?? r['identity'] ?? '').trim();
+      const cacahStatus = String(r['Status Cacah'] ?? r['cacahStatus'] ?? '').trim();
+      const approvalStatus = String(r['Status Approval'] ?? r['approvalStatus'] ?? '').trim();
+      const geoLatRaw = String(r['GeoLat'] ?? r['geoLat'] ?? '').trim();
+      const geoLngRaw = String(r['GeoLng'] ?? r['geoLng'] ?? '').trim();
 
       const geoLat = geoLatRaw ? Number(geoLatRaw) : null;
       const geoLng = geoLngRaw ? Number(geoLngRaw) : null;
@@ -2569,6 +2599,43 @@ export class SurveyActivityService {
     const looksLikeFormula = (v: any) =>
       typeof v === 'string' && v.trim().startsWith('=');
 
+    const parseOptionalSampleCount = (raw: any): number | null => {
+      if (raw === null || raw === undefined) return null;
+      const s = String(raw).trim();
+      if (!s) return null;
+
+      const n = Number(s);
+      if (!Number.isFinite(n) || n < 0) {
+        throw new Error('Jumlah Sampel harus berupa angka >= 0.');
+      }
+
+      return Math.floor(n);
+    };
+
+    const buildGeneratedSamples = (count: number): ImportedSample[] =>
+      Array.from({ length: count }).map((_, idx) => ({
+        nus: String(idx + 1).padStart(3, '0'),
+        identity: '',
+        cacahStatus: 'Belum_Cacah',
+        approvalStatus: 'Menunggu',
+        geoLat: null,
+        geoLng: null,
+      }));
+
+    const mapSamplesForCreate = (items: ImportedSample[]) =>
+      items.map((s, idx) => ({
+        nus:
+          s.nus && s.nus.trim()
+            ? s.nus.trim()
+            : String(idx + 1).padStart(3, '0'),
+        identity: s.identity ?? '',
+        cacahStatus: (s.cacahStatus || 'Belum_Cacah') as CacahStatus,
+        approvalStatus: (s.approvalStatus || 'Menunggu') as AgreeState,
+        geoLat: s.geoLat ?? null,
+        geoLng: s.geoLng ?? null,
+      }));
+
+
     // ============ LOOP PER BARIS PETUGAS ============
 
     for (let i = 0; i < petugasRows.length; i++) {
@@ -2588,6 +2655,7 @@ export class SurveyActivityService {
         const districtId = String(r['Id Kecamatan'] || '').trim() || null;
         const villageId = String(r['Id Desa'] || '').trim() || null;
         const blockCount = String(r['Nama Blok'] || '').trim() || null;
+        const sampleCount = parseOptionalSampleCount(r['Jumlah Sampel']);
 
         const docsBillPetugas =
           String(r['Honor Petugas'] || r.docsBill || '').trim() || '0';
@@ -2606,7 +2674,13 @@ export class SurveyActivityService {
           );
         }
 
-        const samplesForThisPetugas = samplesByNoPetugas.get(noPetugas) ?? [];
+        const samplesFromSheet = samplesByNoPetugas.get(noPetugas) ?? [];
+        const samplesForThisPetugas: ImportedSample[] =
+          samplesFromSheet.length > 0
+            ? samplesFromSheet
+            : sampleCount !== null
+              ? buildGeneratedSamples(sampleCount)
+              : [];
 
         // ============ TRANSAKSI PER PETUGAS ============
 
@@ -2688,9 +2762,14 @@ export class SurveyActivityService {
             select: { id: true, docsBill: true },
           });
 
-          let userProgressId: string;
+          if (existingPetugas) {
+            throw new Error(
+              'Data petugas untuk kombinasi petugas + kegiatan + blok sudah ada. Upload hanya untuk penambahan data baru.',
+            );
+          }
 
-          if (!existingPetugas) {
+          let userProgressId: string | null = null;
+          {
             const nextPetugasBill = this.parseMoney(docsBillPetugas);
             await this.assertMonthlyBillLimit({
               userId,
@@ -2714,19 +2793,7 @@ export class SurveyActivityService {
                 samples:
                   samplesForThisPetugas.length > 0
                     ? {
-                        create: samplesForThisPetugas.map((s, idx) => ({
-                          nus:
-                            s.nus && s.nus.trim()
-                              ? s.nus.trim()
-                              : String(idx + 1).padStart(3, '0'),
-                          identity: s.identity ?? '',
-                          cacahStatus: (s.cacahStatus ||
-                            'Belum_Cacah') as CacahStatus,
-                          approvalStatus: (s.approvalStatus ||
-                            'Menunggu') as AgreeState,
-                          geoLat: s.geoLat ?? null,
-                          geoLng: s.geoLng ?? null,
-                        })),
+                        create: mapSamplesForCreate(samplesForThisPetugas),
                       }
                     : undefined,
               },
@@ -2735,51 +2802,6 @@ export class SurveyActivityService {
 
             userProgressId = created.id;
             petugasInserted++;
-          } else {
-            userProgressId = existingPetugas.id;
-            const prevPetugasBill = this.parseMoney(existingPetugas.docsBill);
-            const nextPetugasBill = this.parseMoney(docsBillPetugas);
-            const deltaPetugas = Math.max(0, nextPetugasBill - prevPetugasBill);
-            await this.assertMonthlyBillLimit({
-              userId,
-              subSurveyActivityId,
-              addAmount: deltaPetugas,
-            });
-
-            await tx.userProgress.update({
-              where: { id: userProgressId },
-              data: {
-                superVisorId,
-                districtId,
-                villageId,
-                blockCount,
-                docsBill: docsBillPetugas,
-              },
-            });
-
-            await tx.userSample.deleteMany({
-              where: { userProgressId },
-            });
-
-            if (samplesForThisPetugas.length > 0) {
-              await tx.userSample.createMany({
-                data: samplesForThisPetugas.map((s, idx) => ({
-                  userProgressId,
-                  nus:
-                    s.nus && s.nus.trim()
-                      ? s.nus.trim()
-                      : String(idx + 1).padStart(3, '0'),
-                  identity: s.identity ?? '',
-                  cacahStatus: (s.cacahStatus || 'Belum_Cacah') as CacahStatus,
-                  approvalStatus: (s.approvalStatus ||
-                    'Menunggu') as AgreeState,
-                  geoLat: s.geoLat ?? null,
-                  geoLng: s.geoLng ?? null,
-                })),
-              });
-            }
-
-            petugasUpdated++;
           }
 
           // ====== PENGAWAS (tanpa sampel) ======
@@ -2819,19 +2841,7 @@ export class SurveyActivityService {
               });
               pengawasInserted++;
             } else {
-              const prevSupBill = this.parseMoney(existingSup.docsBill);
-              const nextSupBill = this.parseMoney(docsBillPengawas);
-              const deltaSup = Math.max(0, nextSupBill - prevSupBill);
-              await this.assertMonthlyBillLimit({
-                userId: superVisorId,
-                subSurveyActivityId,
-                addAmount: deltaSup,
-              });
-              await tx.userProgress.update({
-                where: { id: existingSup.id },
-                data: { docsBill: docsBillPengawas },
-              });
-              pengawasUpdated++;
+              pengawasUpdated += 0;
             }
           }
 
@@ -3710,7 +3720,17 @@ export class SurveyActivityService {
         const unitName =
           String((r as any).unitName ?? 'Dokumen').trim() || 'Dokumen';
         const totalDocs = Number(r.totalDocs ?? base.totalDocs);
+         if (!Number.isFinite(totalDocs) || totalDocs <= 0) {
+          throw new BadRequestException(
+            `Jumlah satuan tidak valid untuk kegiatan "${base.activityName ?? '-'}".`,
+          );
+        }
         const unitCost = Number(base.unitCost ?? 0);
+        if (!Number.isFinite(unitCost) || unitCost <= 0) {
+          throw new BadRequestException(
+            `Honor satuan belum diatur atau bernilai 0 untuk kegiatan "${base.activityName ?? '-'}".`,
+          );
+        }
         const totalCost = Number(unitCost * totalDocs);
         return {
           subSurveyActivityId: base.subSurveyActivityId,
@@ -3777,9 +3797,21 @@ export class SurveyActivityService {
       0,
     );
 
+    if (!Number.isFinite(grandTotal) || grandTotal <= 0) {
+      throw new BadRequestException(
+        'Total honor tidak valid. Pastikan jumlah satuan dan honor satuan sudah benar.',
+      );
+    }
+
     const honorTotalAll = this.formatNumberID(grandTotal);
     const honorTotalAllTerbilang = this.terbilang(Math.floor(grandTotal));
-    const honorTerbilang = honorTotalAllTerbilang;
+    const honorTerbilang = `${honorTotalAllTerbilang} Rupiah`.trim();
+
+    if (!honorTerbilang || honorTerbilang === 'Rupiah') {
+      throw new BadRequestException(
+        'honorTerbilang kosong. Periksa grandTotal dan template SPK.',
+      );
+    }
 
     const rowsSpk = eligibleRows.map((r, i) => {
       const tglMulai = this.formatDateId(r.startDate);

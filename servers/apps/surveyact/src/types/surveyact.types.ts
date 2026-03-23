@@ -14,8 +14,8 @@ import {
   StatusST,
   ProgressRole,
 } from '@prisma/client';
-import { User } from 'apps/users/src/entities/users.entity';
-import { UserType } from 'apps/users/src/types/users.types';
+import { User } from '../../../users/src/entities/users.entity';
+import { UserType } from '../../../users/src/types/users.types';
 
 registerEnumType(AgreeState, {
   name: 'AgreeState',

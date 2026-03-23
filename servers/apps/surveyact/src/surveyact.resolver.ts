@@ -67,7 +67,7 @@ import {
   SubSurveyStatus,
   ProgressRole,
 } from '@prisma/client';
-import { UserType } from 'apps/users/src/types/users.types';
+import { UserType } from '../../users/src/types/users.types';
 import { FileUpload, GraphQLUpload } from 'graphql-upload-ts';
 import { DeleteByIdInput, DeleteResult } from './dto/delete.input';
 import { BulkUserProgressResult } from './dto/bulk-userprogress.dto';

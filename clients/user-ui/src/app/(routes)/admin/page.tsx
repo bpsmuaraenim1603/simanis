@@ -505,6 +505,16 @@ export default function Admin() {
 
   const [selectedKegiatanId, setSelectedKegiatanId] = useState<string>("");
 
+  const [addPairDistrictId, setAddPairDistrictId] = useState<string>("");
+  const [addPairVillageId, setAddPairVillageId] = useState<string>("");
+
+  const addPairVillageOptions = useMemo(() => {
+    if (!addPairDistrictId) return [];
+    return villages
+      .filter((v) => v.districtId === addPairDistrictId)
+      .map((v) => ({ value: v.id, label: v.name }));
+  }, [villages, addPairDistrictId]);
+
   const selectedKegiatan = useMemo(
     () => kegiatanList.find((k) => k.id === selectedKegiatanId) ?? null,
     [kegiatanList, selectedKegiatanId],
@@ -785,9 +795,16 @@ export default function Admin() {
   async function handleAddPair() {
     if (!selectedKegiatanId) return toast.error("Pilih kegiatan dulu.");
     if (!addPairPetugasId) return toast.error("Petugas wajib dipilih.");
+    if (!addPairDistrictId) return toast.error("Kecamatan wajib dipilih.");
+    if (!addPairVillageId) return toast.error("Desa wajib dipilih.");
     const n = Number(addPairSampleCount);
     if (!Number.isFinite(n) || n <= 0)
       return toast.error("Jumlah sampel wajib angka > 0.");
+
+    const selectedVillage = villages.find((v) => v.id === addPairVillageId);
+    if (selectedVillage && selectedVillage.districtId !== addPairDistrictId) {
+      return toast.error("Desa tidak sesuai dengan kecamatan yang dipilih.");
+    }
 
     const blockCount = nextBlockName(addPairPetugasId, addPairPengawasId || "");
 
@@ -800,7 +817,8 @@ export default function Admin() {
         ? 0
         : toMoney(addPairHonorDokPengawas);
 
-    const { districtId, villageId } = getUserLocation(addPairPetugasId);
+    const districtId = addPairDistrictId || null;
+    const villageId = addPairVillageId || null;
 
     try {
       await createUserProgress({
@@ -832,12 +850,11 @@ export default function Admin() {
         },
       });
       toast.success("Blok petugas–pengawas ditambahkan.");
-      setAddPairPetugasId("");
-      setAddPairPengawasId("");
       setAddPairSampleCount(1);
       setAddPairHonorDokPetugas(String(defaultUnitWorkPrice));
       setAddPairHonorDokPengawas(String(defaultUnitWorkPrice));
-      setAddPairOpen(false);
+      setAddPairHonorTouchedPetugas(false);
+      setAddPairHonorTouchedPengawas(false);
       await refetchUP();
     } catch (e: any) {
       toast.error(e?.message ?? "Gagal menambahkan pair.");
@@ -1257,6 +1274,26 @@ export default function Admin() {
   }
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const blockModalScrollRef = useRef<HTMLDivElement | null>(null);
+  const [shouldScrollToBottom, setShouldScrollToBottom] = useState(false);
+
+  useEffect(() => {
+    if (!blockModalOpen || !shouldScrollToBottom) return;
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const el = blockModalScrollRef.current;
+        if (!el) return;
+
+        el.scrollTo({
+          top: el.scrollHeight,
+          behavior: "smooth",
+        });
+
+        setShouldScrollToBottom(false);
+      });
+    });
+  }, [samples.length, blockModalOpen, shouldScrollToBottom]);
 
   function pickUploadPetugasSheet(wb: any) {
     const target = "UPLOAD_PETUGAS";
@@ -1338,6 +1375,7 @@ export default function Admin() {
         "Id Kecamatan": "Copy dari MASTER_KECAMATAN",
         "Id Desa": "Copy dari MASTER_DESA",
         "Nama Blok": "",
+        "Jumlah Sampel": "",
         "Honor Petugas": "",
         "Honor Pengawas": "",
       },
@@ -1382,14 +1420,13 @@ export default function Admin() {
 
     const sampleRows = [
       {
-        "Nomor Petugas":
-          "Hubungkan sampel dengan nomor petugas dari UPLOAD_PETUGAS",
-        nus: "",
-        identity: "",
-        cacahStatus: "",
-        approvalStatus: "",
-        geoLat: "",
-        geoLng: "",
+        "Nomor Petugas": "Isi sesuai Nomor Petugas pada sheet UPLOAD_PETUGAS",
+        NUS: "",
+        "Identitas Sampel": "",
+        "Status Cacah": "",
+        "Status Approval": "",
+        GeoLat: "",
+        GeoLng: "",
       },
     ];
 
@@ -1998,7 +2035,7 @@ export default function Admin() {
               options={tims.map((t) => ({ value: t.id, label: t.name }))}
               placeholder="Pilih tim"
             />
-            <HUSelect
+            <HUComboBox
               value={selectedKegiatanId || null}
               onValueChange={(v) => setSelectedKegiatanId((v ?? "") as string)}
               options={(kegiatanList ?? []).map((k) => ({
@@ -2049,6 +2086,13 @@ export default function Admin() {
               >
                 {uploadingExcel ? "Uploading..." : "Upload Excel"}
               </button>
+              <button
+                type="button"
+                onClick={() => setExpandedPairs({})}
+                className="px-4 py-2 rounded bg-gray-200 text-gray-800"
+              >
+                Tutup Semua Dropdown
+              </button>
             </div>
             <div className="text-xs text-gray-500">
               <button
@@ -2070,6 +2114,10 @@ export default function Admin() {
                   onValueChange={(v) => {
                     const id = (v ?? "") as string;
                     setAddPairPetugasId(id);
+
+                    const loc = getUserLocation(id);
+                    setAddPairDistrictId(loc.districtId ?? "");
+                    setAddPairVillageId(loc.villageId ?? "");
 
                     if (!addPairHonorTouchedPetugas) {
                       setAddPairHonorDokPetugas(
@@ -2102,9 +2150,37 @@ export default function Admin() {
                   placeholder="Pilih pengawas"
                 />
               </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div>
+                  <label className="text-sm">Kecamatan</label>
+                  <HUSelect
+                    value={addPairDistrictId || null}
+                    onValueChange={(v) => {
+                      setAddPairDistrictId((v ?? "") as string);
+                      setAddPairVillageId("");
+                    }}
+                    options={districtOptions}
+                    placeholder="Pilih kecamatan"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm">Desa</label>
+                  <HUSelect
+                    value={addPairVillageId || null}
+                    onValueChange={(v) =>
+                      setAddPairVillageId((v ?? "") as string)
+                    }
+                    options={addPairVillageOptions}
+                    placeholder="Pilih desa"
+                  />
+                </div>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                 <div>
-                  <label htmlFor="addPairSampleCount" className="text-sm">Jumlah Sampel</label>
+                  <label htmlFor="addPairSampleCount" className="text-sm">
+                    Jumlah Sampel
+                  </label>
                   <input
                     id="addPairSampleCount"
                     className="w-full px-3 py-2 border rounded-md bg-white"
@@ -2133,11 +2209,12 @@ export default function Admin() {
                         ? "0"
                         : String(addPairHonorDokPetugas)
                     }
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      setAddPairHonorTouchedPetugas(true);
                       setAddPairHonorDokPetugas(
                         e.target.value.replace(/[^0-9]/g, ""),
-                      )
-                    }
+                      );
+                    }}
                   />
                 </div>
 
@@ -2160,11 +2237,12 @@ export default function Admin() {
                         ? "0"
                         : String(addPairHonorDokPengawas)
                     }
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      setAddPairHonorTouchedPengawas(true);
                       setAddPairHonorDokPengawas(
                         e.target.value.replace(/[^0-9]/g, ""),
-                      )
-                    }
+                      );
+                    }}
                   />
                 </div>
               </div>
@@ -2213,9 +2291,13 @@ export default function Admin() {
                     setAddPairOpen(false);
                     setAddPairPetugasId("");
                     setAddPairPengawasId("");
+                    setAddPairDistrictId("");
+                    setAddPairVillageId("");
                     setAddPairSampleCount(1);
                     setAddPairHonorDokPetugas(String(defaultUnitWorkPrice));
                     setAddPairHonorDokPengawas(String(defaultUnitWorkPrice));
+                    setAddPairHonorTouchedPetugas(false);
+                    setAddPairHonorTouchedPengawas(false);
                   }}
                   className="px-4 py-2 rounded bg-white border"
                 >
@@ -2457,7 +2539,10 @@ export default function Admin() {
 
           {blockModalOpen && (
             <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-3 z-50">
-              <div className="bg-white w-full max-w-4xl rounded-lg p-4 space-y-3 max-h-[90vh] overflow-auto">
+              <div
+                ref={blockModalScrollRef}
+                className="bg-white w-full max-w-4xl rounded-lg p-4 space-y-3 max-h-[90vh] overflow-auto"
+              >
                 <div className="flex items-center justify-between">
                   <div className="font-bold">
                     {blockModalMode === "add"
@@ -2719,6 +2804,7 @@ export default function Admin() {
                             },
                           ];
                           setDraftSampleCount(next.length);
+                          setShouldScrollToBottom(true);
                           return next;
                         })
                       }

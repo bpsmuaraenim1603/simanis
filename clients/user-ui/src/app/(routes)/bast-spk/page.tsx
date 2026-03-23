@@ -27,6 +27,7 @@ type PreviewRow = {
 
 type EditableRow = PreviewRow & {
   editTotalDocs: number;
+  editUnitCost: number;
   editTotalCost: number;
   unitName: string;
   editUnitName: string;
@@ -105,14 +106,15 @@ export default function BastSpkPage() {
       fetchPolicy: "no-cache",
       onCompleted: (res) => {
         const data: PreviewRow[] = res?.getMonthlyStaffDocPreview ?? [];
-                const mapped: EditableRow[] = data.map((r) => {
+        const mapped: EditableRow[] = data.map((r) => {
           const editTotalDocs = toNumber(r.totalDocs);
-          const unitCost = toNumber(r.unitCost);
-          const editTotalCost = Number((editTotalDocs * unitCost).toFixed(2));
+          const editUnitCost = toNumber(r.unitCost);
+          const editTotalCost = Number((editTotalDocs * editUnitCost).toFixed(2));
           return {
             ...r,
             editTotalDocs,
             editTotalCost,
+            editUnitCost,
             editUnitName: "Dokumen",
             unitName: "Dokumen",
             included: r.eligible,
@@ -187,7 +189,6 @@ export default function BastSpkPage() {
     }));
   }, [ppkData]);
 
-
   useEffect(() => {
     if (ppkUserId) return;
     const opts = (ppkData?.ppkOptions ?? []) as any[];
@@ -198,7 +199,6 @@ export default function BastSpkPage() {
     setPpkName(def.name ?? "");
     setPpkNip(def.nip ?? "");
   }, [ppkData, ppkUserId]);
-
 
   const selectedUser = useMemo(() => {
     if (!selectedUserId) return null;
@@ -309,6 +309,21 @@ export default function BastSpkPage() {
           </div>
 
           <div>
+            <label className="block text-sm font-semibold mb-1">Bulan</label>
+            <select
+              className="w-full rounded-md border px-3 py-2 bg-white"
+              value={month}
+              onChange={(e) => setMonth(Number(e.target.value))}
+            >
+              {Array.from({ length: 12 }).map((_, i) => (
+                <option key={i + 1} value={i + 1}>
+                  {monthName(i + 1)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
             <label className="block text-sm font-semibold mb-1">
               Nama Pekerjaan (Petugas)
             </label>
@@ -332,21 +347,6 @@ export default function BastSpkPage() {
               placeholder="Contoh: Desa Mulyaguna"
               disabled={!selectedUserId}
             />
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold mb-1">Bulan</label>
-            <select
-              className="w-full rounded-md border px-3 py-2 bg-white"
-              value={month}
-              onChange={(e) => setMonth(Number(e.target.value))}
-            >
-              {Array.from({ length: 12 }).map((_, i) => (
-                <option key={i + 1} value={i + 1}>
-                  {monthName(i + 1)}
-                </option>
-              ))}
-            </select>
           </div>
 
           <div>
@@ -415,7 +415,9 @@ export default function BastSpkPage() {
               }
               placeholder="Contoh: 001"
             />
-            <span className="text-sm text-gray-600">nomor spk diambil dari nomor surat</span>
+            <span className="text-sm text-gray-600">
+              nomor spk diambil dari nomor surat
+            </span>
           </div>
 
           <div>
@@ -431,7 +433,9 @@ export default function BastSpkPage() {
               }
               placeholder="Contoh: 001"
             />
-            <span className="text-sm text-gray-600">nomor bast diambil dari nomor surat</span>
+            <span className="text-sm text-gray-600">
+              nomor bast diambil dari nomor surat
+            </span>
           </div>
         </div>
 
@@ -545,14 +549,24 @@ export default function BastSpkPage() {
                         />
                       </td>
                       <td className="border p-2 text-right">
-                         {toNumber(r.unitCost).toLocaleString("id-ID")}
-                       </td>
-                       <td className="border p-2 text-right">
-                         {toNumber(r.editTotalCost).toLocaleString("id-ID")}
-                       </td>
-                       <td className="border p-2">
-                         {r.budgetCode ? String(r.budgetCode) : "-"}
-                       </td>
+                        <input
+                          className="w-24 border rounded px-2 py-1 bg-white text-left"
+                          type="number"
+                          disabled={disabled}
+                          value={r.editUnitCost}
+                          onChange={(e) =>
+                            onRecalcRow(idx, {
+                              editUnitCost: toNumber(e.target.value),
+                            })
+                          }
+                        />
+                      </td>
+                      <td className="border p-2 text-right">
+                        {toNumber(r.editTotalCost).toLocaleString("id-ID")}
+                      </td>
+                      <td className="border p-2">
+                        {r.budgetCode ? String(r.budgetCode) : "-"}
+                      </td>
                       <td className="border p-2 text-center">
                         <input
                           type="checkbox"
@@ -585,8 +599,10 @@ export default function BastSpkPage() {
             onClick={() => {
               if (!selectedUserId) return toast.error("Pilih petugas dulu.");
               if (!ppkUserId.trim()) return toast.error("PPK wajib dipilih.");
-              if (!spkDocDate) return toast.error("Tanggal dokumen SPK wajib diisi.");
-              if (!bastDocDate) return toast.error("Tanggal dokumen BAST wajib diisi.");
+              if (!spkDocDate)
+                return toast.error("Tanggal dokumen SPK wajib diisi.");
+              if (!bastDocDate)
+                return toast.error("Tanggal dokumen BAST wajib diisi.");
               if (!petugasJobName.trim())
                 return toast.error("Nama pekerjaan petugas wajib diisi.");
               if (!petugasVillageName.trim())

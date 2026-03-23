@@ -6,7 +6,7 @@ import {
 } from '@nestjs/graphql';
 import { Role } from '@prisma/client';
 import { SubSurveyActivity } from '../../../surveyact/entities/surveyact.entity';
-import { DistrictType, VillageType } from 'apps/surveyact/src/types/surveyact.types';
+import { DistrictType, VillageType } from '../../../surveyact/src/types/surveyact.types';
 
 registerEnumType(Role, {
   name: 'Role',
