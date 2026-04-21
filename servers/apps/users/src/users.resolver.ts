@@ -7,6 +7,7 @@ import {
   ForgotPasswordResponse,
   LoginResponse,
   LogoutResponse,
+  MonthlyStaffDocNumberConfigResponse,
   NotificationListResponse,
   PpkOptionResponse,
   RegisterResponse,
@@ -277,5 +278,25 @@ export class UsersResolver {
     @Args('userId', { type: () => String }) userId: string,
   ) {
     return this.usersService.setDefaultPpkUser(user as any, userId);
+  }
+
+  @UseGuards(AuthGuard)
+  @Query(() => MonthlyStaffDocNumberConfigResponse)
+  async monthlyStaffDocNumberConfig() {
+    return this.usersService.getMonthlyStaffDocNumberConfig();
+  }
+
+  @UseGuards(AuthGuard)
+  @Mutation(() => Boolean)
+  async setMonthlyStaffDocNumberConfig(
+    @CurrentUser() user: User,
+    @Args('spkStartNumber', { type: () => Int }) spkStartNumber: number,
+    @Args('bastStartNumber', { type: () => Int }) bastStartNumber: number,
+  ) {
+    return this.usersService.setMonthlyStaffDocNumberConfig(
+      user as any,
+      spkStartNumber,
+      bastStartNumber,
+    );
   }
 }

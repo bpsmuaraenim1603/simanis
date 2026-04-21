@@ -19,6 +19,8 @@ import { GET_DAILY_SIGNUP_CODE } from "@/src/graphql/actions/get-daily-signup-co
 import { ROTATE_DAILY_SIGNUP_CODE } from "@/src/graphql/actions/rotate-daily-signup-code.action";
 import { getRoles } from "@/src/utils/roles";
 import { Search } from "lucide-react";
+import { GET_MONTHLY_STAFF_DOC_NUMBER_CONFIG } from "@/src/graphql/actions/get-monthly-staff-doc-number-config.action";
+import { SET_MONTHLY_STAFF_DOC_NUMBER_CONFIG } from "@/src/graphql/actions/set-monthly-staff-doc-number-config.action";
 
 function Tabs<T extends string>({
   tabs,
@@ -386,14 +388,18 @@ function SingleMonthMitraTable({
                       </td>
                       <td className="px-2 py-2 border">{jangka}</td>
                       <td className="px-2 py-2 text-right border">{vol}</td>
-                      <td className="px-2 py-2 border">{r?.sampleType ?? "-"}</td>
+                      <td className="px-2 py-2 border">
+                        {r?.sampleType ?? "-"}
+                      </td>
                       <td className="px-2 py-2 text-right border">
                         {unit ? unit.toLocaleString("id-ID") : "-"}
                       </td>
                       <td className="px-2 py-2 text-right border">
                         {nilai ? nilai.toLocaleString("id-ID") : "-"}
                       </td>
-                      <td className="px-2 py-2 border">{r?.budgetCode ?? "-"}</td>
+                      <td className="px-2 py-2 border">
+                        {r?.budgetCode ?? "-"}
+                      </td>
                       <td className="px-2 py-2 text-right border">
                         {jumlahKegiatan
                           ? jumlahKegiatan.toLocaleString("id-ID")
@@ -416,7 +422,9 @@ function SingleMonthMitraTable({
                           ? selisihBerjalan.toLocaleString("id-ID")
                           : "-"}
                       </td>
-                      <td className="px-2 py-2 border">{r?.chiefName ?? "-"}</td>
+                      <td className="px-2 py-2 border">
+                        {r?.chiefName ?? "-"}
+                      </td>
                       <td className="px-2 py-2 border">
                         {r?.dipa ?? "DIPA BPS Kabupaten Muara Enim"}
                       </td>
@@ -521,15 +529,40 @@ function MonthlyStaffUsagePanel({
     },
   );
 
+  const { data: monthlyDocConfigData } = useQuery(
+    GET_MONTHLY_STAFF_DOC_NUMBER_CONFIG,
+    {
+      fetchPolicy: "cache-and-network",
+    },
+  );
+
+  const [setMonthlyDocNumberConfig, { loading: savingDocNumberConfig }] =
+    useMutation(SET_MONTHLY_STAFF_DOC_NUMBER_CONFIG, {
+      refetchQueries: [{ query: GET_MONTHLY_STAFF_DOC_NUMBER_CONFIG }],
+    });
+
   const defaultPpkId =
     (ppkData?.ppkOptions ?? []).find((x: any) => x?.isDefault)?.id ?? "";
   const [selectedDefaultPpkId, setSelectedDefaultPpkId] = useState<string>("");
+  const [spkStartNumberInput, setSpkStartNumberInput] = useState<string>("");
+  const [bastStartNumberInput, setBastStartNumberInput] = useState<string>("");
 
   useEffect(() => {
     if (!selectedDefaultPpkId && defaultPpkId) {
       setSelectedDefaultPpkId(defaultPpkId);
     }
   }, [defaultPpkId, selectedDefaultPpkId]);
+
+  useEffect(() => {
+    const cfg = monthlyDocConfigData?.monthlyStaffDocNumberConfig;
+    if (!cfg) return;
+    if (!spkStartNumberInput) {
+      setSpkStartNumberInput(String(cfg.spkStartNumber ?? 1));
+    }
+    if (!bastStartNumberInput) {
+      setBastStartNumberInput(String(cfg.bastStartNumber ?? 1));
+    }
+  }, [monthlyDocConfigData, spkStartNumberInput, bastStartNumberInput]);
 
   const rows = (data?.getMonthlyActivityStaffUsage ?? []) as Array<{
     month: string;
@@ -1012,48 +1045,162 @@ function MonthlyStaffUsagePanel({
 
       {/* Default PPK */}
       {String((currentUser as any)?.primaryRole) === "Superadmin" && (
-        <div className="border rounded-lg p-3 sm:p-4">
-          <div className="text-sm font-semibold mb-2">Pilih PPK</div>
+        <div className="space-y-3">
+          <div className="border rounded-lg p-3 sm:p-4">
+            <div className="text-sm font-semibold mb-2">Pilih PPK</div>
 
-          <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-            <div className="w-full sm:max-w-md">
-              <HUSelect
-                value={selectedDefaultPpkId || null}
-                onValueChange={(v: string | null) =>
-                  setSelectedDefaultPpkId(String(v ?? ""))
-                }
-                placeholder="Pilih default PPK"
-                options={
-                  ((ppkData?.ppkOptions ?? []) as any[]).map((u) => ({
-                    label: `${u?.name ?? "-"}${u?.nip ? ` (${u.nip})` : ""}`,
-                    value: u?.id,
-                  })) as HUSelectOption[]
-                }
-              />
+            <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+              <div className="w-full sm:max-w-md">
+                <HUSelect
+                  value={selectedDefaultPpkId || null}
+                  onValueChange={(v: string | null) =>
+                    setSelectedDefaultPpkId(String(v ?? ""))
+                  }
+                  placeholder="Pilih default PPK"
+                  options={
+                    ((ppkData?.ppkOptions ?? []) as any[]).map((u) => ({
+                      label: `${u?.name ?? "-"}${u?.nip ? ` (${u.nip})` : ""}`,
+                      value: u?.id,
+                    })) as HUSelectOption[]
+                  }
+                />
+              </div>
+
+              <button
+                type="button"
+                disabled={!selectedDefaultPpkId || savingDefaultPpk}
+                onClick={async () => {
+                  try {
+                    await setDefaultPpkUser({
+                      variables: { userId: selectedDefaultPpkId },
+                    });
+                    toast.success("Default PPK berhasil disimpan");
+                  } catch (e: any) {
+                    toast.error(e?.message ?? "Gagal menyimpan default PPK");
+                  }
+                }}
+                className={[
+                  "px-3 py-2 rounded-md text-sm font-semibold",
+                  !selectedDefaultPpkId || savingDefaultPpk
+                    ? "bg-gray-300 text-gray-700 cursor-not-allowed"
+                    : "bg-blue-600 text-white hover:bg-blue-700",
+                ].join(" ")}
+              >
+                {savingDefaultPpk ? "Menyimpan..." : "Simpan"}
+              </button>
+            </div>
+          </div>
+
+          <div className="border rounded-lg p-3 sm:p-4">
+            <div className="text-sm font-semibold mb-3">
+              Nomor Awal Otomatis SPK & BAST
             </div>
 
-            <button
-              type="button"
-              disabled={!selectedDefaultPpkId || savingDefaultPpk}
-              onClick={async () => {
-                try {
-                  await setDefaultPpkUser({
-                    variables: { userId: selectedDefaultPpkId },
-                  });
-                  toast.success("Default PPK berhasil disimpan");
-                } catch (e: any) {
-                  toast.error(e?.message ?? "Gagal menyimpan default PPK");
-                }
-              }}
-              className={[
-                "px-3 py-2 rounded-md text-sm font-semibold",
-                !selectedDefaultPpkId || savingDefaultPpk
-                  ? "bg-gray-300 text-gray-700 cursor-not-allowed"
-                  : "bg-blue-600 text-white hover:bg-blue-700",
-              ].join(" ")}
-            >
-              {savingDefaultPpk ? "Menyimpan..." : "Simpan"}
-            </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">
+                  Nomor awal SPK
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  className="w-full rounded-md border px-3 py-2"
+                  value={spkStartNumberInput}
+                  onChange={(e) => setSpkStartNumberInput(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">
+                  Nomor awal BAST
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  className="w-full rounded-md border px-3 py-2"
+                  value={bastStartNumberInput}
+                  onChange={(e) => setBastStartNumberInput(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="mt-3 text-xs text-gray-600 space-y-1">
+              <div>
+                Nomor SPK terakhir:{" "}
+                <b>
+                  {monthlyDocConfigData?.monthlyStaffDocNumberConfig
+                    ?.currentSpkNumber ?? "-"}
+                </b>
+              </div>
+              <div>
+                Nomor BAST terakhir:{" "}
+                <b>
+                  {monthlyDocConfigData?.monthlyStaffDocNumberConfig
+                    ?.currentBastNumber ?? "-"}
+                </b>
+              </div>
+              <div>
+                Nomor berikutnya yang akan dipakai:{" "}
+                <b>
+                  SPK{" "}
+                  {monthlyDocConfigData?.monthlyStaffDocNumberConfig
+                    ?.nextSpkNumber ?? "-"}
+                </b>
+                {" / "}
+                <b>
+                  BAST{" "}
+                  {monthlyDocConfigData?.monthlyStaffDocNumberConfig
+                    ?.nextBastNumber ?? "-"}
+                </b>
+              </div>
+            </div>
+
+            <div className="mt-3">
+              <button
+                type="button"
+                disabled={savingDocNumberConfig}
+                onClick={async () => {
+                  try {
+                    const spkStartNumber = Number(spkStartNumberInput || 0);
+                    const bastStartNumber = Number(bastStartNumberInput || 0);
+
+                    if (
+                      !Number.isFinite(spkStartNumber) ||
+                      spkStartNumber < 1
+                    ) {
+                      return toast.error("Nomor awal SPK harus minimal 1");
+                    }
+                    if (
+                      !Number.isFinite(bastStartNumber) ||
+                      bastStartNumber < 1
+                    ) {
+                      return toast.error("Nomor awal BAST harus minimal 1");
+                    }
+
+                    await setMonthlyDocNumberConfig({
+                      variables: {
+                        spkStartNumber,
+                        bastStartNumber,
+                      },
+                    });
+
+                    toast.success("Nomor awal SPK dan BAST berhasil disimpan");
+                  } catch (e: any) {
+                    toast.error(
+                      e?.message ?? "Gagal menyimpan nomor awal SPK/BAST",
+                    );
+                  }
+                }}
+                className={[
+                  "px-3 py-2 rounded-md text-sm font-semibold",
+                  savingDocNumberConfig
+                    ? "bg-gray-300 text-gray-700 cursor-not-allowed"
+                    : "bg-indigo-600 text-white hover:bg-indigo-700",
+                ].join(" ")}
+              >
+                {savingDocNumberConfig ? "Menyimpan..." : "Simpan Nomor Awal"}
+              </button>
+            </div>
           </div>
         </div>
       )}

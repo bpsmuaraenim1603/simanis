@@ -135,6 +135,8 @@ export default function BastSpkPage() {
         if (!out?.spkUrl || !out?.bastUrl) {
           return toast.error("URL dokumen tidak ditemukan.");
         }
+        setNomorSPK(out?.nomorSPK ?? "");
+        setNomorBAST(out?.nomorBAST ?? "");
         if (out?.expiresAt) {
           const dt = new Date(out.expiresAt);
           setExpiresAtInfo(dt.toLocaleString());
@@ -210,22 +212,6 @@ export default function BastSpkPage() {
     [rows],
   );
 
-  const pad2 = (n: number) => String(n).padStart(2, "0");
-
-  const formatNomorSPK = (v: string, month: number, year: number) => {
-    const s = String(v ?? "").trim();
-    if (!s) return "";
-    if (s.includes("/BPS1603/PPK/SPK/")) return s;
-    return `${s}/BPS1603/PPK/SPK/${pad2(month)}/${year}`;
-  };
-
-  const formatNomorBAST = (v: string, month: number, year: number) => {
-    const s = String(v ?? "").trim();
-    if (!s) return "";
-    if (s.includes("/BPS1603/PPK/BAST/")) return s;
-    return `${s}/BPS1603/PPK/BAST/${pad2(month)}/${year}`;
-  };
-
   useEffect(() => {
     if (!selectedUser) {
       setPetugasJobName("");
@@ -235,11 +221,6 @@ export default function BastSpkPage() {
     setPetugasJobName(selectedUser.job_name ?? "");
     setPetugasVillageName(selectedUser.village?.name ?? "");
   }, [selectedUser]);
-
-  useEffect(() => {
-    setNomorSPK((prev) => formatNomorSPK(prev, month, year));
-    setNomorBAST((prev) => formatNomorBAST(prev, month, year));
-  }, [month, year]);
 
   useEffect(() => {
     if (!selectedUserId) return;
@@ -404,37 +385,31 @@ export default function BastSpkPage() {
 
           <div>
             <label className="block text-sm font-semibold mb-1">
-              Nomor SPK (format lengkap)
+              Nomor SPK
             </label>
             <input
-              className="w-full rounded-md border px-3 py-2 bg-white"
+              className="w-full rounded-md border px-3 py-2 bg-gray-50"
               value={nomorSPK}
-              onChange={(e) => setNomorSPK(e.target.value)}
-              onBlur={() =>
-                setNomorSPK((prev) => formatNomorSPK(prev, month, year))
-              }
-              placeholder="Contoh: 001"
+              readOnly
+              placeholder="Akan dibuat otomatis saat generate"
             />
             <span className="text-sm text-gray-600">
-              nomor spk diambil dari nomor surat
+              Nomor SPK dibuat otomatis oleh sistem
             </span>
           </div>
 
           <div>
             <label className="block text-sm font-semibold mb-1">
-              Nomor BAST (format lengkap)
+              Nomor BAST
             </label>
             <input
               className="w-full rounded-md border px-3 py-2 bg-white"
               value={nomorBAST}
-              onChange={(e) => setNomorBAST(e.target.value)}
-              onBlur={() =>
-                setNomorBAST((prev) => formatNomorBAST(prev, month, year))
-              }
-              placeholder="Contoh: 001"
+              readOnly
+              placeholder="Akan dibuat otomatis saat generate"
             />
             <span className="text-sm text-gray-600">
-              nomor bast diambil dari nomor surat
+              Nomor BAST dibuat otomatis oleh sistem
             </span>
           </div>
         </div>
@@ -607,10 +582,6 @@ export default function BastSpkPage() {
                 return toast.error("Nama pekerjaan petugas wajib diisi.");
               if (!petugasVillageName.trim())
                 return toast.error("Nama desa petugas wajib diisi.");
-              if (!nomorSPK.trim())
-                return toast.error("Nomor SPK wajib diisi.");
-              if (!nomorBAST.trim())
-                return toast.error("Nomor BAST wajib diisi.");
 
               const payloadRows = rows
                 .filter((r) => r.eligible && r.included)
@@ -633,8 +604,6 @@ export default function BastSpkPage() {
                     ppkUserId,
                     ppkName,
                     ppkNip,
-                    nomorSPK,
-                    nomorBAST,
                     spkDocDate: new Date(spkDocDate),
                     bastDocDate: new Date(bastDocDate),
                     pekerjaanPetugas: petugasJobName,

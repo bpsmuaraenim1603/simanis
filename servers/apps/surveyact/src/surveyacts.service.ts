@@ -51,7 +51,7 @@ import * as path from 'node:path';
 import { createClient } from '@supabase/supabase-js';
 import { StorageService } from './storage.service';
 import * as XLSX from 'xlsx';
-import * as JSZip from 'jszip';
+import JSZip from 'jszip';
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
 const DocxMerger = require('docx-merger');
@@ -137,6 +137,142 @@ export class SurveyActivityService {
     private readonly httpService: HttpService,
     private readonly storage: StorageService,
   ) {}
+
+  private readonly MONTHLY_DOC_SPK_START_KEY = 'MONTHLY_DOC_SPK_START_NUMBER';
+  private readonly MONTHLY_DOC_BAST_START_KEY = 'MONTHLY_DOC_BAST_START_NUMBER';
+  private readonly MONTHLY_DOC_SPK_CURRENT_KEY =
+    'MONTHLY_DOC_SPK_CURRENT_NUMBER';
+  private readonly MONTHLY_DOC_BAST_CURRENT_KEY =
+    'MONTHLY_DOC_BAST_CURRENT_NUMBER';
+
+  private parsePositiveInt(value: any, fallback: number) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return fallback;
+    const out = Math.floor(n);
+    return out >= 1 ? out : fallback;
+  }
+
+  private buildAutoDocNumber(
+    seq: number,
+    docType: 'SPK' | 'BAST',
+    month: number,
+    year: number,
+  ) {
+    const mm = String(month).padStart(2, '0');
+    const no = String(seq).padStart(3, '0');
+    return `${no}/BPS1603/PPK/${docType}/${mm}/${year}`;
+  }
+
+  private async reserveNextMonthlyDocSequence(
+    tx: PrismaService | any,
+    kind: 'SPK' | 'BAST',
+  ) {
+    const startKey =
+      kind === 'SPK'
+        ? this.MONTHLY_DOC_SPK_START_KEY
+        : this.MONTHLY_DOC_BAST_START_KEY;
+    const currentKey =
+      kind === 'SPK'
+        ? this.MONTHLY_DOC_SPK_CURRENT_KEY
+        : this.MONTHLY_DOC_BAST_CURRENT_KEY;
+
+    const [startRow, currentRow] = await Promise.all([
+      tx.systemSetting.findUnique({
+        where: { key: startKey },
+        select: { value: true },
+      }),
+      tx.systemSetting.findUnique({
+        where: { key: currentKey },
+        select: { value: true },
+      }),
+    ]);
+
+    const startNumber = this.parsePositiveInt(startRow?.value, 1);
+    const currentNumber = this.parsePositiveInt(
+      currentRow?.value,
+      startNumber - 1,
+    );
+    const nextNumber = Math.max(currentNumber + 1, startNumber);
+
+    await tx.systemSetting.upsert({
+      where: { key: currentKey },
+      create: {
+        key: currentKey,
+        value: String(nextNumber),
+      },
+      update: {
+        value: String(nextNumber),
+      },
+    });
+
+    return nextNumber;
+  }
+
+  private async resolveMonthlyDocNumbers(input: {
+    userId: string;
+    year: number;
+    month: number;
+    nomorSPK?: string | null;
+    nomorBAST?: string | null;
+  }) {
+    const existing = await this.prisma.monthlyAdminDocRecap.findUnique({
+      where: {
+        userId_year_month: {
+          userId: input.userId,
+          year: input.year,
+          month: input.month,
+        },
+      },
+      select: {
+        spkNumber: true,
+        bastNumber: true,
+      },
+    });
+
+    const manualSpk = String(input.nomorSPK ?? '').trim();
+    const manualBast = String(input.nomorBAST ?? '').trim();
+    const existingSpk = String(existing?.spkNumber ?? '').trim();
+    const existingBast = String(existing?.bastNumber ?? '').trim();
+
+    if (manualSpk && manualBast) {
+      return {
+        nomorSPK: manualSpk,
+        nomorBAST: manualBast,
+      };
+    }
+
+    if (existingSpk && existingBast) {
+      return {
+        nomorSPK: existingSpk,
+        nomorBAST: existingBast,
+      };
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      let nomorSPK = manualSpk || existingSpk;
+      let nomorBAST = manualBast || existingBast;
+
+      if (!nomorSPK) {
+        const seq = await this.reserveNextMonthlyDocSequence(tx, 'SPK');
+        nomorSPK = this.buildAutoDocNumber(seq, 'SPK', input.month, input.year);
+      }
+
+      if (!nomorBAST) {
+        const seq = await this.reserveNextMonthlyDocSequence(tx, 'BAST');
+        nomorBAST = this.buildAutoDocNumber(
+          seq,
+          'BAST',
+          input.month,
+          input.year,
+        );
+      }
+
+      return {
+        nomorSPK,
+        nomorBAST,
+      };
+    });
+  }
 
   private canAccessAll(actor: any) {
     const role = actor?.primaryRole;
@@ -3590,8 +3726,8 @@ export class SurveyActivityService {
     ppkId: string;
     ppkName: string;
     ppkNip: string;
-    nomorSPK: string;
-    nomorBAST: string;
+    nomorSPK?: string;
+    nomorBAST?: string;
     spkDocDate: Date;
     bastDocDate: Date;
     pekerjaanPetugas?: string;
@@ -3674,8 +3810,8 @@ export class SurveyActivityService {
     ppkId: string;
     ppkName: string;
     ppkNip: string;
-    nomorSPK: string;
-    nomorBAST: string;
+    nomorSPK?: string;
+    nomorBAST?: string;
     spkDocDate: Date;
     bastDocDate: Date;
     pekerjaanPetugas?: string;
@@ -3759,11 +3895,16 @@ export class SurveyActivityService {
       Math.max(...eligibleRows.map((r) => r.endDate.getTime())),
     );
 
-    const nomorSPK = String(input.nomorSPK || '').trim();
-    const nomorBAST = String(input.nomorBAST || '').trim();
+    const resolvedNumbers = await this.resolveMonthlyDocNumbers({
+      userId: input.userId,
+      year: input.year,
+      month: input.month,
+      nomorSPK: input.nomorSPK,
+      nomorBAST: input.nomorBAST,
+    });
 
-    if (!nomorSPK) throw new BadRequestException('nomorSPK wajib diisi');
-    if (!nomorBAST) throw new BadRequestException('nomorBAST wajib diisi');
+    const nomorSPK = String(resolvedNumbers.nomorSPK || '').trim();
+    const nomorBAST = String(resolvedNumbers.nomorBAST || '').trim();
 
     if (!nomorSPK.includes('/BPS1603/PPK/SPK/')) {
       throw new BadRequestException(
@@ -3924,8 +4065,8 @@ export class SurveyActivityService {
     ppkId: string;
     ppkName: string;
     ppkNip?: string;
-    nomorSPK: string;
-    nomorBAST: string;
+    nomorSPK?: string;
+    nomorBAST?: string;
     spkDocDate: Date;
     bastDocDate: Date;
     pekerjaanPetugas?: string;
@@ -3939,22 +4080,6 @@ export class SurveyActivityService {
   }) {
     const docType = String(input.docType || '').toUpperCase();
 
-    const mm = String(input.month).padStart(2, '0');
-    const normalizeSpk = (v: string) => {
-      const s = String(v || '').trim();
-      if (!s) return s;
-      return s.includes('/BPS1603/PPK/SPK/')
-        ? s
-        : `${s}/BPS1603/PPK/SPK/${mm}/${input.year}`;
-    };
-    const normalizeBast = (v: string) => {
-      const s = String(v || '').trim();
-      if (!s) return s;
-      return s.includes('/BPS1603/PPK/BAST/')
-        ? s
-        : `${s}/BPS1603/PPK/BAST/${mm}/${input.year}`;
-    };
-
     const out = await this.generateMonthlyStaffDocs({
       userId: input.userId,
       month: input.month,
@@ -3962,8 +4087,8 @@ export class SurveyActivityService {
       ppkId: input.ppkId,
       ppkName: input.ppkName,
       ppkNip: input.ppkNip || '-',
-      nomorSPK: normalizeSpk(input.nomorSPK),
-      nomorBAST: normalizeBast(input.nomorBAST),
+      nomorSPK: input.nomorSPK,
+      nomorBAST: input.nomorBAST,
       spkDocDate: input.spkDocDate,
       bastDocDate: input.bastDocDate,
       pekerjaanPetugas: input.pekerjaanPetugas,

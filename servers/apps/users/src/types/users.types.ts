@@ -4,7 +4,7 @@ import { User } from '../entities/users.entity';
 @ObjectType()
 export class ErrorType {
   @Field()
-  message: string;
+  message!: string;
 
   @Field({ nullable: true })
   code?: string;
@@ -13,22 +13,22 @@ export class ErrorType {
 @ObjectType()
 export class UserResponse {
   @Field(() => String)
-  name: string;
+  name!: string;
 
   @Field(() => String)
-  email: string;
+  email!: string;
 
   @Field(() => String)
-  phone_number: string;
+  phone_number!: string;
 
   @Field(() => String)
-  address: string | null;
+  address!: string | null;
 }
 
 @ObjectType()
 export class RegisterResponse {
   @Field()
-  activation_token: string;
+  activation_token!: string;
 
   @Field(() => ErrorType, { nullable: true })
   error?: ErrorType;
@@ -67,7 +67,7 @@ export class LogoutResponse {
 @ObjectType()
 export class ForgotPasswordResponse {
   @Field()
-  message: string;
+  message!: string;
 
   @Field(() => ErrorType, { nullable: true })
   error?: ErrorType;
@@ -85,10 +85,10 @@ export class ResetPasswordResponse {
 @ObjectType()
 export class UserType {
   @Field(() => ID)
-  id: string;
+  id!: string;
 
   @Field(() => String)
-  name: string;
+  name!: string;
 
   @Field(() => String, { nullable: true })
   email?: string;
@@ -97,10 +97,10 @@ export class UserType {
   phone_number?: string;
 
   @Field(() => String)
-  primaryRole: string;
+  primaryRole!: string;
 
   @Field(() => [String])
-  roles: string[];
+  roles!: string[];
 
   @Field(() => String, { nullable: true })
   limit_bill?: string;
@@ -115,19 +115,19 @@ export class UserType {
 @ObjectType()
 export class NotificationItem {
   @Field(() => ID)
-  id: string;
+  id!: string;
 
   @Field(() => String)
-  type: string;
+  type!: string;
 
   @Field(() => String)
-  targetType: string;
+  targetType!: string;
 
   @Field(() => String)
-  targetId: string;
+  targetId!: string;
 
   @Field(() => String)
-  title: string;
+  title!: string;
 
   @Field(() => String, { nullable: true })
   body?: string | null;
@@ -136,10 +136,10 @@ export class NotificationItem {
   actorName?: string | null;
 
   @Field(() => String)
-  channel: string;
+  channel!: string;
 
   @Field(() => Boolean)
-  isRead: boolean;
+  isRead!: boolean;
 
   @Field(() => Date, { nullable: true })
   readAt?: Date | null;
@@ -148,13 +148,13 @@ export class NotificationItem {
   metadata?: string | null;
 
   @Field(() => Date)
-  createdAt: Date;
+  createdAt!: Date;
 }
 
 @ObjectType()
 export class NotificationListResponse {
   @Field(() => [NotificationItem])
-  items: NotificationItem[];
+  items!: NotificationItem[];
 
   @Field(() => String, { nullable: true })
   nextCursor?: string;
@@ -163,32 +163,53 @@ export class NotificationListResponse {
 @ObjectType()
 export class UnreadCountResponse {
   @Field(() => Int)
-  count: number;
+  count!: number;
 }
 
 @ObjectType()
 export class DailySignupCodeResponse {
   @Field()
-  dateKey: string;
+  dateKey!: string;
 
   @Field()
-  code: string;
+  code!: string;
 }
 
 @ObjectType()
 export class PpkOptionResponse {
   @Field(() => String)
-  id: string;
+  id!: string;
 
   @Field(() => String)
-  name: string;
+  name!: string;
 
   @Field(() => String, { nullable: true })
   nip?: string;
 
   @Field(() => String)
-  primaryRole: string;
+  primaryRole!: string;
 
   @Field(() => Boolean, { nullable: true })
   isDefault?: boolean;
+}
+
+@ObjectType()
+export class MonthlyStaffDocNumberConfigResponse {
+  @Field(() => Int)
+  spkStartNumber!: number;
+
+  @Field(() => Int)
+  bastStartNumber!: number;
+
+  @Field(() => Int)
+  currentSpkNumber!: number;
+
+  @Field(() => Int)
+  currentBastNumber!: number;
+
+  @Field(() => Int)
+  nextSpkNumber!: number;
+
+  @Field(() => Int)
+  nextBastNumber!: number;
 }

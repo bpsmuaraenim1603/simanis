@@ -20,7 +20,7 @@ import { TokenSender } from './utils/sendToken';
 import { Prisma, User } from '@prisma/client';
 import * as crypto from 'crypto';
 import * as XLSX from 'xlsx';
-import * as dayjs from 'dayjs';
+import dayjs from 'dayjs';
 import { BulkSpjDefaultsInput, BulkSpjResult } from './dto/bulk-spj.dto';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
@@ -684,6 +684,10 @@ export class UsersService {
 
   
   private readonly DEFAULT_PPK_SETTING_KEY = 'DEFAULT_PPK_USER_ID';
+  private readonly MONTHLY_DOC_SPK_START_KEY = 'MONTHLY_DOC_SPK_START_NUMBER';
+  private readonly MONTHLY_DOC_BAST_START_KEY = 'MONTHLY_DOC_BAST_START_NUMBER';
+  private readonly MONTHLY_DOC_SPK_CURRENT_KEY = 'MONTHLY_DOC_SPK_CURRENT_NUMBER';
+  private readonly MONTHLY_DOC_BAST_CURRENT_KEY = 'MONTHLY_DOC_BAST_CURRENT_NUMBER';
 
   private isEligibleDefaultPpkRole(role: any): boolean {
     // eligible roles for being selected as default PPK
@@ -710,6 +714,127 @@ export class UsersService {
       where: { key: this.DEFAULT_PPK_SETTING_KEY },
       create: { key: this.DEFAULT_PPK_SETTING_KEY, value: target.id },
       update: { value: target.id },
+    });
+
+    return true;
+  }
+
+  private parsePositiveInt(value: any, fallback: number) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return fallback;
+    const out = Math.floor(n);
+    return out >= 1 ? out : fallback;
+  }
+
+  private async getSettingNumber(key: string, fallback: number) {
+    const row = await this.prisma.systemSetting.findUnique({
+      where: { key },
+      select: { value: true },
+    });
+    return this.parsePositiveInt(row?.value, fallback);
+  }
+
+  async getMonthlyStaffDocNumberConfig() {
+    const spkStartNumber = await this.getSettingNumber(
+      this.MONTHLY_DOC_SPK_START_KEY,
+      1,
+    );
+    const bastStartNumber = await this.getSettingNumber(
+      this.MONTHLY_DOC_BAST_START_KEY,
+      1,
+    );
+
+    const currentSpkNumber = await this.getSettingNumber(
+      this.MONTHLY_DOC_SPK_CURRENT_KEY,
+      spkStartNumber - 1,
+    );
+    const currentBastNumber = await this.getSettingNumber(
+      this.MONTHLY_DOC_BAST_CURRENT_KEY,
+      bastStartNumber - 1,
+    );
+
+    return {
+      spkStartNumber,
+      bastStartNumber,
+      currentSpkNumber,
+      currentBastNumber,
+      nextSpkNumber: Math.max(currentSpkNumber + 1, spkStartNumber),
+      nextBastNumber: Math.max(currentBastNumber + 1, bastStartNumber),
+    };
+  }
+
+  async setMonthlyStaffDocNumberConfig(
+    currentUser: User,
+    spkStartNumber: number,
+    bastStartNumber: number
+  ) {
+    if (String((currentUser as any)?.primaryRole) !== 'Superadmin') {
+      throw new BadRequestException(
+        'Hanya Superadmin yang dapat mengubah nomor awal SPK/BAST.',
+      );
+    }
+
+    const nextSpkStart = this.parsePositiveInt(spkStartNumber, 1);
+    const nextBastStart = this.parsePositiveInt(bastStartNumber, 1);
+
+    await this.prisma.$transaction(async (tx) => {
+      const currentSpk = await tx.systemSetting.findUnique({
+        where: { key: this.MONTHLY_DOC_SPK_CURRENT_KEY },
+        select: { value: true },
+      });
+      const currentBast = await tx.systemSetting.findUnique({
+        where: { key: this.MONTHLY_DOC_BAST_CURRENT_KEY },
+        select: { value: true },
+      });
+
+      await tx.systemSetting.upsert({
+        where: { key: this.MONTHLY_DOC_SPK_START_KEY },
+        create: {
+          key: this.MONTHLY_DOC_SPK_START_KEY,
+          value: String(nextSpkStart),
+        },
+        update: { value: String(nextSpkStart) },
+      });
+
+      await tx.systemSetting.upsert({
+        where: { key: this.MONTHLY_DOC_BAST_START_KEY },
+        create: {
+          key: this.MONTHLY_DOC_BAST_START_KEY,
+          value: String(nextBastStart),
+        },
+        update: { value: String(nextBastStart) },
+      });
+
+      const currentSpkNumber = this.parsePositiveInt(
+        currentSpk?.value,
+        nextSpkStart - 1,
+      );
+      const currentBastNumber = this.parsePositiveInt(
+        currentBast?.value,
+        nextBastStart - 1,
+      );
+
+      if (currentSpkNumber < nextSpkStart - 1) {
+        await tx.systemSetting.upsert({
+          where: { key: this.MONTHLY_DOC_SPK_CURRENT_KEY },
+          create: {
+            key: this.MONTHLY_DOC_SPK_CURRENT_KEY,
+            value: String(nextSpkStart - 1),
+          },
+          update: { value: String(nextSpkStart - 1) },
+        });
+      }
+
+      if (currentBastNumber < nextBastStart - 1) {
+        await tx.systemSetting.upsert({
+          where: { key: this.MONTHLY_DOC_BAST_CURRENT_KEY },
+         create: {
+            key: this.MONTHLY_DOC_BAST_CURRENT_KEY,
+            value: String(nextBastStart - 1),
+          },
+          update: { value: String(nextBastStart - 1) },
+        });
+      }
     });
 
     return true;
