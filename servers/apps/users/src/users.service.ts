@@ -734,7 +734,7 @@ export class UsersService {
     return this.parsePositiveInt(row?.value, fallback);
   }
 
-  async getMonthlyStaffDocNumberConfig() {
+  async getDocNumberConfig() {
     const spkStartNumber = await this.getSettingNumber(
       this.MONTHLY_DOC_SPK_START_KEY,
       1,
@@ -763,7 +763,7 @@ export class UsersService {
     };
   }
 
-  async setMonthlyStaffDocNumberConfig(
+  async setDocNumberConfig(
     currentUser: User,
     spkStartNumber: number,
     bastStartNumber: number

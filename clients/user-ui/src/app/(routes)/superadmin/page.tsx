@@ -1104,7 +1104,7 @@ function MonthlyStaffUsagePanel({
                 <input
                   type="number"
                   min={1}
-                  className="w-full rounded-md border px-3 py-2"
+                  className="w-full rounded-md border px-3 py-2 bg-white"
                   value={spkStartNumberInput}
                   onChange={(e) => setSpkStartNumberInput(e.target.value)}
                 />
@@ -1117,7 +1117,7 @@ function MonthlyStaffUsagePanel({
                 <input
                   type="number"
                   min={1}
-                  className="w-full rounded-md border px-3 py-2"
+                  className="w-full rounded-md border px-3 py-2 bg-white"
                   value={bastStartNumberInput}
                   onChange={(e) => setBastStartNumberInput(e.target.value)}
                 />

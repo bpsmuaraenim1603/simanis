@@ -160,7 +160,7 @@ export class SurveyActivityService {
   ) {
     const mm = String(month).padStart(2, '0');
     const no = String(seq).padStart(3, '0');
-    return `${no}/BPS1603/PPK/${docType}/${mm}/${year}`;
+    return `B-${no}/BPS1603/PPK/${docType}/${mm}/${year}`;
   }
 
   private async reserveNextMonthlyDocSequence(

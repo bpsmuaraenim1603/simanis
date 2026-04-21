@@ -4,10 +4,10 @@ import { UsersService } from './users.service';
 import {
   ActivationResponse,
   DailySignupCodeResponse,
+  DocNumberConfigResponse,
   ForgotPasswordResponse,
   LoginResponse,
   LogoutResponse,
-  MonthlyStaffDocNumberConfigResponse,
   NotificationListResponse,
   PpkOptionResponse,
   RegisterResponse,
@@ -281,19 +281,19 @@ export class UsersResolver {
   }
 
   @UseGuards(AuthGuard)
-  @Query(() => MonthlyStaffDocNumberConfigResponse)
-  async monthlyStaffDocNumberConfig() {
-    return this.usersService.getMonthlyStaffDocNumberConfig();
+  @Query(() => DocNumberConfigResponse)
+  async DocNumberConfig() {
+    return this.usersService.getDocNumberConfig();
   }
 
   @UseGuards(AuthGuard)
   @Mutation(() => Boolean)
-  async setMonthlyStaffDocNumberConfig(
+  async setDocNumberConfig(
     @CurrentUser() user: User,
     @Args('spkStartNumber', { type: () => Int }) spkStartNumber: number,
     @Args('bastStartNumber', { type: () => Int }) bastStartNumber: number,
   ) {
-    return this.usersService.setMonthlyStaffDocNumberConfig(
+    return this.usersService.setDocNumberConfig(
       user as any,
       spkStartNumber,
       bastStartNumber,

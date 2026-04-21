@@ -194,7 +194,7 @@ export class PpkOptionResponse {
 }
 
 @ObjectType()
-export class MonthlyStaffDocNumberConfigResponse {
+export class DocNumberConfigResponse {
   @Field(() => Int)
   spkStartNumber!: number;
 

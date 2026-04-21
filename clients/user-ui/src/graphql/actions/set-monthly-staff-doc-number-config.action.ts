@@ -1,11 +1,11 @@
 import { gql } from "@apollo/client";
 
 export const SET_MONTHLY_STAFF_DOC_NUMBER_CONFIG = gql`
-  mutation SetMonthlyStaffDocNumberConfig(
+  mutation SetDocNumberConfig(
     $spkStartNumber: Int!
     $bastStartNumber: Int!
   ) {
-    setMonthlyStaffDocNumberConfig(
+    setDocNumberConfig(
       spkStartNumber: $spkStartNumber
       bastStartNumber: $bastStartNumber
     )
