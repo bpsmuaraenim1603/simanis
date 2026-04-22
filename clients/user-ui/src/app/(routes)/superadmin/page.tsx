@@ -176,28 +176,19 @@ function SingleMonthMitraTable({
     "DESEMBER",
   ];
 
-  const availableMonths = useMemo(() => {
-    return Array.from(rowsByMonth.entries())
-      .filter(([, v]) => (v ?? []).length > 0)
-      .map(([k]) => k)
-      .sort((a, b) => a - b);
-  }, [rowsByMonth]);
-
-  useEffect(() => {
-    if (!availableMonths.length) return;
-    if (availableMonths.includes(activeMonth)) return;
-    setActiveMonth(availableMonths[0]);
-  }, [availableMonths, activeMonth, setActiveMonth]);
-
   const rowsMonth = rowsByMonth.get(activeMonth) ?? [];
 
   const jumpMonth = (dir: -1 | 1) => {
-    if (!availableMonths.length) return;
-    const idx = availableMonths.indexOf(activeMonth);
-    const safeIdx = idx === -1 ? 0 : idx;
-    const next =
-      (safeIdx + dir + availableMonths.length) % availableMonths.length;
-    setActiveMonth(availableMonths[next]);
+    const next = activeMonth + dir;
+    if (next < 1) {
+      setActiveMonth(12);
+      return;
+    }
+    if (next > 12) {
+      setActiveMonth(1);
+      return;
+    }
+    setActiveMonth(next);
   };
 
   const groups = useMemo(() => {
@@ -271,14 +262,6 @@ function SingleMonthMitraTable({
     return `${dd}/${mm}/${yy}`;
   };
 
-  if (!availableMonths.length) {
-    return (
-      <div className="mt-3 text-sm text-gray-600">
-        Tidak ada data mitra pada tahun {year}.
-      </div>
-    );
-  }
-
   return (
     <div className="mt-3">
       <div className="flex items-center justify-between gap-2 mb-2">
@@ -316,6 +299,12 @@ function SingleMonthMitraTable({
           </div>
         </div>
       </div>
+
+      {rowsMonth.length === 0 && (
+        <div className="mb-3 text-sm text-gray-600">
+          Data kosong untuk bulan {monthNames[activeMonth - 1]} {year}. Tolong dicek kembali
+        </div>
+      )}
 
       <div className="w-full overflow-auto max-h-[800px] border rounded-md">
         <table className="min-w-[1150px] w-full text-[12px]">
@@ -491,13 +480,15 @@ function MonthlyStaffUsagePanel({
     data: exportPreviewData,
     loading: exportPreviewLoading,
     error: exportPreviewError,
+    previousData: exportPreviewPreviousData,
     refetch: refetchExportPreview,
   } = useQuery(GET_MITRA_BULANAN_EXPORT, {
     variables: { year, month: activeMonth },
     fetchPolicy: "network-only",
+    notifyOnNetworkStatusChange: true,
   });
 
-  const exportPreviewRowsRaw = (exportPreviewData?.getMitraBulananExport ??
+  const exportPreviewRowsRaw = ((exportPreviewData ?? exportPreviewPreviousData)?.getMitraBulananExport ??
     []) as any[];
 
   useEffect(() => {
@@ -1219,10 +1210,9 @@ function MonthlyStaffUsagePanel({
             Gagal memuat data mitra bulanan:{" "}
             {(exportPreviewError as any)?.message ?? "unknown error"}
           </div>
-        ) : exportPreviewRows.length === 0 ? (
+        ) : exportPreviewLoading ? (
           <div className="mt-3 text-sm text-gray-600">
-            Data kosong untuk tahun {year}. Cek apakah ada kegiatan yang
-            tanggalnya overlap dengan tahun ini, atau sudah ada progress mitra.
+            Memuat data mitra bulanan...
           </div>
         ) : (
           <SingleMonthMitraTable
