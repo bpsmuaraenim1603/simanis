@@ -213,3 +213,15 @@ export class DocNumberConfigResponse {
   @Field(() => Int)
   nextBastNumber!: number;
 }
+
+@ObjectType()
+export class UsersPageResponse {
+  @Field(() => [User])
+  items!: User[];
+
+  @Field(() => Int)
+  total!: number;
+
+  @Field(() => Int)
+  page!: number;
+}

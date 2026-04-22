@@ -455,6 +455,48 @@ export class UsersService {
     });
   }
 
+  async getUsersPage(input: {
+    page: number;
+    pageSize: number;
+    search?: string | null;
+  }) {
+    const page = Math.max(1, Number(input?.page ?? 1));
+    const pageSize = Math.min(100, Math.max(1, Number(input?.pageSize ?? 25)));
+    const skip = (page - 1) * pageSize;
+    const keyword = String(input?.search ?? '').trim();
+
+    const where: Prisma.UserWhereInput = keyword
+      ? {
+          OR: [
+            { name: { contains: keyword, mode: 'insensitive' } },
+            { email: { contains: keyword, mode: 'insensitive' } },
+            { primaryRole: { equals: keyword as any } },
+            { roles: { has: keyword as any } },
+          ],
+        }
+      : {};
+
+    const [total, items] = await this.prisma.$transaction([
+      this.prisma.user.count({ where }),
+      this.prisma.user.findMany({
+        where,
+        include: {
+          village: { select: { id: true, name: true } },
+          district: { select: { id: true, name: true } },
+        },
+        orderBy: { name: 'asc' },
+        skip,
+        take: pageSize,
+      }),
+    ]);
+
+    return {
+      items,
+      total,
+      page,
+    };
+  }
+
   async updateUserProfile(
     userId: string,
     updateData: UpdateUserDto,

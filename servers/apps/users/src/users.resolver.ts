@@ -13,6 +13,7 @@ import {
   RegisterResponse,
   ResetPasswordResponse,
   UnreadCountResponse,
+  UsersPageResponse,
   // UserResponse,
   UserType,
 } from './types/users.types';
@@ -182,6 +183,19 @@ export class UsersResolver {
   @Query(() => [User])
   async getUsers() {
     return this.usersService.getUsers();
+  }
+
+  @Query(() => UsersPageResponse)
+  async getUsersPage(
+    @Args('page', { type: () => Int }) page: number,
+    @Args('pageSize', { type: () => Int }) pageSize: number,
+    @Args('search', { type: () => String, nullable: true }) search?: string,
+  ) {
+    return this.usersService.getUsersPage({
+      page,
+      pageSize,
+      search,
+    });
   }
 
   @Mutation(() => User)

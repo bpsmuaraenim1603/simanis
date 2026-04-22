@@ -389,10 +389,11 @@ export class SurveyActivityResolver {
   @Query(() => [MonthlyActivityStaffUsageRowType])
   getMonthlyActivityStaffUsage(
     @Args('year', { type: () => Int }) year: number,
+    @Args('month', { type: () => Int, nullable: true }) month: number | null,
     @Context() ctx: any,
   ) {
     const actor = ctx?.req?.user;
-    return this.service.getMonthlyActivityStaffUsage(year, actor);
+    return this.service.getMonthlyActivityStaffUsage(year, actor, month ?? undefined);
   }
   @Query(() => [MonthlyStaffDocPreviewRowType])
   getMonthlyStaffDocPreview(
@@ -445,8 +446,11 @@ export class SurveyActivityResolver {
   }
 
   @Query(() => [MitraBulananExportRowType])
-  getMitraBulananExport(@Args('year', { type: () => Int }) year: number) {
-    return this.service.getMitraBulananExport(year);
+  getMitraBulananExport(
+    @Args('year', { type: () => Int }) year: number,
+    @Args('month', { type: () => Int, nullable: true }) month: number | null,
+  ) {
+    return this.service.getMitraBulananExport(year, month ?? undefined);
   }
 
 

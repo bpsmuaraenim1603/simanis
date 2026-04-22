@@ -28,55 +28,30 @@ type ProgressRow = {
   rejectedCount: number;
 };
 
-function startOfMonth(value?: string | null) {
+function parseDate(value?: string | null) {
   if (!value) return null;
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return null;
   return new Date(d.getFullYear(), d.getMonth(), 1);
 }
 
-function getMonthKey(date: Date) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  return `${y}-${m}`;
-}
-
-function getMonthLabel(date: Date) {
-  return date.toLocaleDateString("id-ID", {
-    month: "long",
-    year: "numeric",
-  });
-}
-
-function enumerateActiveMonths(
+function isActiveInCurrentMonth(
   startDate?: string | null,
   endDate?: string | null,
 ) {
-  const start = startOfMonth(startDate);
-  const end = startOfMonth(endDate);
+  const start = parseDate(startDate);
+  const end = parseDate(endDate);
+  if (!start || !end) return false;
 
-  if (!start && !end) return [];
-  if (start && !end)
-    return [{ key: getMonthKey(start), label: getMonthLabel(start) }];
-  if (!start && end)
-    return [{ key: getMonthKey(end), label: getMonthLabel(end) }];
-  if (!start || !end) return [];
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  monthEnd.setHours(23, 59, 59, 999);
 
-  const first = start <= end ? start : end;
-  const last = start <= end ? end : start;
+  const rangeStart = start <= end ? start : end;
+  const rangeEnd = start <= end ? end : start;
 
-  const months: { key: string; label: string }[] = [];
-  const cursor = new Date(first.getFullYear(), first.getMonth(), 1);
-
-  while (cursor <= last) {
-    months.push({
-      key: getMonthKey(cursor),
-      label: getMonthLabel(cursor),
-    });
-    cursor.setMonth(cursor.getMonth() + 1);
-  }
-
-  return months;
+  return rangeStart <= monthEnd && rangeEnd >= monthStart;
 }
 
 const ProgressTemplate = () => {
@@ -288,53 +263,14 @@ const ProgressTemplate = () => {
     setSelectedCity(selectedCityQ);
   }, [selectedCityQ]);
 
-  const subSurveyActivitiesByMonth = useMemo(() => {
-    const groups = new Map<
-      string,
-      { label: string; items: typeof subSurveyActivities }
-    >();
-
-    for (const sub of subSurveyActivities) {
-      const activeMonths = enumerateActiveMonths(sub?.startDate, sub?.endDate);
-
-      if (!activeMonths.length) {
-        const fallbackKey = "tanpa-jadwal";
-        const existing = groups.get(fallbackKey);
-        if (existing) existing.items.push(sub);
-        else {
-          groups.set(fallbackKey, {
-            label: "Tanpa Jadwal",
-            items: [sub],
-          });
-        }
-        continue;
-      }
-
-      for (const month of activeMonths) {
-        const existing = groups.get(month.key);
-        if (existing) existing.items.push(sub);
-        else {
-          groups.set(month.key, {
-            label: month.label,
-            items: [sub],
-          });
-        }
-      }
-    }
-
-    return Array.from(groups.entries())
-      .map(([key, value]) => ({
-        key,
-        label: value.label,
-        items: value.items.sort((a: any, b: any) =>
-          String(a?.name ?? "").localeCompare(String(b?.name ?? ""), "id"),
-        ),
-      }))
-      .sort((a, b) => {
-        if (a.key === "tanpa-jadwal") return 1;
-        if (b.key === "tanpa-jadwal") return -1;
-        return a.key.localeCompare(b.key, "id");
-      });
+  const activeSubSurveyActivities = useMemo(() => {
+    return [...subSurveyActivities]
+      .filter((sub: any) =>
+        isActiveInCurrentMonth(sub?.startDate, sub?.endDate),
+      )
+      .sort((a: any, b: any) =>
+        String(a?.name ?? "").localeCompare(String(b?.name ?? ""), "id"),
+      );
   }, [subSurveyActivities]);
 
   const overallPercent =
@@ -408,55 +344,38 @@ const ProgressTemplate = () => {
       </div>
 
       {/* Pilihan sub survey */}
-      <div className="bg-orange-50 rounded-lg p-3 md:p-4 w-full shadow-md space-y-4">
+      <div className="bg-orange-50 rounded-lg p-3 md:p-4 w-full shadow-md">
         <div>
           <p className="font-semibold text-base md:text-lg">
             Pilih Jenis Survei:
           </p>
           <p className="text-sm text-gray-600 mt-1">
-            Kegiatan ditampilkan berdasarkan bulan aktifnya.
+            Hanya kegiatan yang aktif pada bulan ini yang ditampilkan.
           </p>
         </div>
-        {subSurveyActivitiesByMonth.length === 0 ? (
+        {activeSubSurveyActivities.length === 0 ? (
           <div className="text-sm text-gray-600">Belum ada kegiatan.</div>
         ) : (
-          <div className="space-y-4">
-            {subSurveyActivitiesByMonth.map((monthGroup) => (
-              <div key={monthGroup.key} className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="h-px flex-1 bg-orange-200" />
-                  <p className="text-sm font-bold text-orange-700 uppercase tracking-wide">
-                    {monthGroup.label}
-                  </p>
-                  <div className="h-px flex-1 bg-orange-200" />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                  {monthGroup.items.map((subSurvey: any) => (
-                    <div
-                      key={`${monthGroup.key}-${subSurvey.id}`}
-                      className="relative group"
-                    >
-                      <button
-                        onClick={() => {
-                          setSelectedSubSurvey(subSurvey.id);
-                          setSelectedName(subSurvey.name);
-                          setSelectedCity("");
-                          setQuery({ sub: subSurvey.slug });
-                        }}
-                        className={`w-full p-2 rounded-md border font-semibold ${
-                          selectedSubSurvey === subSurvey.id
-                            ? "bg-orange-500 text-white"
-                            : "bg-slate-700 text-white hover:bg-orange-500"
-                        }`}
-                      >
-                        <span className="block truncate">{subSurvey.name}</span>
-                      </button>
-                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block bg-black text-white text-xs rounded py-1 px-2 whitespace-nowrap shadow-lg z-10">
-                        {subSurvey.name}
-                      </div>
-                    </div>
-                  ))}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-4 overflow-y-auto max-h-40">
+            {activeSubSurveyActivities.map((subSurvey: any) => (
+              <div key={subSurvey.id} className="relative group">
+                <button
+                  onClick={() => {
+                    setSelectedSubSurvey(subSurvey.id);
+                    setSelectedName(subSurvey.name);
+                    setSelectedCity("");
+                    setQuery({ sub: subSurvey.slug });
+                  }}
+                  className={`w-full p-2 rounded-md border font-semibold ${
+                    selectedSubSurvey === subSurvey.id
+                      ? "bg-orange-500 text-white"
+                      : "bg-slate-700 text-white hover:bg-orange-500"
+                  }`}
+                >
+                  <span className="block truncate">{subSurvey.name}</span>
+                </button>
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block bg-black text-white text-xs rounded py-1 px-2 whitespace-nowrap shadow-lg z-10">
+                  {subSurvey.name}
                 </div>
               </div>
             ))}

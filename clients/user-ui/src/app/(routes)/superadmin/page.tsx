@@ -1,10 +1,16 @@
 "use client";
 
-import React, { useMemo, useState, useCallback, useEffect } from "react";
+import React, {
+  useMemo,
+  useState,
+  useCallback,
+  useEffect,
+  useDeferredValue,
+} from "react";
 import { useQuery, useMutation, useLazyQuery } from "@apollo/client";
 import toast from "react-hot-toast";
 import ExcelJS from "exceljs";
-import { GET_ALL_USERS } from "@/src/graphql/actions/find-allusers.action";
+import { GET_USERS_PAGE } from "@/src/graphql/actions/get-users-page.action";
 import { UPDATE_ROLE } from "@/src/graphql/actions/update-role.action";
 import { UPDATE_BILL_LIMIT } from "@/src/graphql/actions/update-limitbill.action";
 import { GET_USER_PROGRESS_BY_USER_ID } from "@/src/graphql/actions/find-usersurveyprogressbyuser.action";
@@ -464,17 +470,19 @@ function MonthlyStaffUsagePanel({
   year,
   setYear,
   onOpenUserActivities,
-  userOnlyIdSet,
 }: {
   year: number;
   setYear: (v: number) => void;
   onOpenUserActivities: (userId: string) => void | Promise<void>;
-  userOnlyIdSet: Set<string>;
 }) {
+  const [activeMonth, setActiveMonth] = useState<number>(() => {
+    const now = new Date();
+    return now.getFullYear() === year ? now.getMonth() + 1 : 1;
+  });
   const { data, loading, error, refetch } = useQuery(
     GET_MONTHLY_ACTIVITY_STAFF_USAGE,
     {
-      variables: { year },
+      variables: { year, month: activeMonth },
       fetchPolicy: "cache-and-network",
     },
   );
@@ -485,27 +493,14 @@ function MonthlyStaffUsagePanel({
     error: exportPreviewError,
     refetch: refetchExportPreview,
   } = useQuery(GET_MITRA_BULANAN_EXPORT, {
-    variables: { year },
+    variables: { year, month: activeMonth },
     fetchPolicy: "network-only",
   });
 
   const exportPreviewRowsRaw = (exportPreviewData?.getMitraBulananExport ??
     []) as any[];
 
-  const exportPreviewRows = useMemo(() => {
-    if (!userOnlyIdSet.size) return exportPreviewRowsRaw;
-    return exportPreviewRowsRaw.filter((r) =>
-      userOnlyIdSet.has(String(r?.userId)),
-    );
-  }, [exportPreviewRowsRaw, userOnlyIdSet]);
-
-  const [activeMonth, setActiveMonth] = useState<number>(() => {
-    const now = new Date();
-    return now.getFullYear() === year ? now.getMonth() + 1 : 1;
-  });
-
   useEffect(() => {
-    // reset to current month when year changes
     const now = new Date();
     setActiveMonth(now.getFullYear() === year ? now.getMonth() + 1 : 1);
   }, [year]);
@@ -516,6 +511,8 @@ function MonthlyStaffUsagePanel({
       fetchPolicy: "network-only",
     },
   );
+
+  const exportPreviewRows = exportPreviewRowsRaw;
 
   // ===== Default PPK (ditentukan Superadmin) =====
   const { data: ppkData } = useQuery(PPK_OPTIONS, {
@@ -574,48 +571,21 @@ function MonthlyStaffUsagePanel({
     staffUsers?: Array<{ id: string; name?: string; email?: string }>;
   }>;
 
-  const grouped = useMemo(() => {
-    const map = new Map<string, typeof rows>();
-    for (const r of rows) {
-      const k = r.month || "-";
-      if (!map.has(k)) map.set(k, []);
-      map.get(k)!.push(r);
-    }
-
-    const entries = Array.from(map.entries()).sort(([a], [b]) =>
-      a.localeCompare(b),
-    );
-
-    for (const [, arr] of entries) {
-      arr.sort(
-        (x, y) =>
-          new Date(x.startDate).getTime() - new Date(y.startDate).getTime(),
-      );
-    }
-    return entries;
-  }, [rows]);
-
   const totalActivities = rows.length;
 
   const mitraRowsByMonth = useMemo(() => {
     const map = new Map<number, any[]>();
-    for (const r of exportPreviewRows) {
-      const m = Number(r?.month);
-      if (!m || m < 1 || m > 12) continue;
-      if (!map.has(m)) map.set(m, []);
-      map.get(m)!.push(r);
-    }
-    // sort each month by activity then name
-    for (const [m, arr] of map.entries()) {
-      arr.sort((a, b) => {
-        const aa = String(a?.subsurveyactivity ?? "");
-        const bb = String(b?.subsurveyactivity ?? "");
-        if (aa !== bb) return aa.localeCompare(bb);
-        return String(a?.name ?? "").localeCompare(String(b?.name ?? ""));
-      });
+    const arr = [...exportPreviewRows].sort((a, b) => {
+      const aa = String(a?.subsurveyactivity ?? "");
+      const bb = String(b?.subsurveyactivity ?? "");
+      if (aa !== bb) return aa.localeCompare(bb);
+      return String(a?.name ?? "").localeCompare(String(b?.name ?? ""));
+    });
+    if (arr.length) {
+      map.set(activeMonth, arr);
     }
     return map;
-  }, [exportPreviewRows]);
+  }, [exportPreviewRows, activeMonth]);
 
   const uniqueUsersYear = useMemo(() => {
     const set = new Set<string>();
@@ -700,12 +670,7 @@ function MonthlyStaffUsagePanel({
         );
 
       const rowsRaw = (res.data?.getMitraBulananExport ?? []) as any[];
-      const rows = userOnlyIdSet.size
-        ? rowsRaw.filter((r) => userOnlyIdSet.has(String(r?.userId)))
-        : rowsRaw;
-      const rowsUserOnly = userOnlyIdSet?.size
-        ? rows.filter((r: any) => userOnlyIdSet.has(String(r?.userId)))
-        : [];
+      const rowsUserOnly = rowsRaw;
 
       const monthNames = [
         "JANUARI",
@@ -1128,29 +1093,27 @@ function MonthlyStaffUsagePanel({
               <div>
                 Nomor SPK terakhir:{" "}
                 <b>
-                  {monthlyDocConfigData?.DocNumberConfig
-                    ?.currentSpkNumber ?? "-"}
+                  {monthlyDocConfigData?.DocNumberConfig?.currentSpkNumber ??
+                    "-"}
                 </b>
               </div>
               <div>
                 Nomor BAST terakhir:{" "}
                 <b>
-                  {monthlyDocConfigData?.DocNumberConfig
-                    ?.currentBastNumber ?? "-"}
+                  {monthlyDocConfigData?.DocNumberConfig?.currentBastNumber ??
+                    "-"}
                 </b>
               </div>
               <div>
                 Nomor berikutnya yang akan dipakai:{" "}
                 <b>
                   SPK{" "}
-                  {monthlyDocConfigData?.DocNumberConfig
-                    ?.nextSpkNumber ?? "-"}
+                  {monthlyDocConfigData?.DocNumberConfig?.nextSpkNumber ?? "-"}
                 </b>
                 {" / "}
                 <b>
                   BAST{" "}
-                  {monthlyDocConfigData?.DocNumberConfig
-                    ?.nextBastNumber ?? "-"}
+                  {monthlyDocConfigData?.DocNumberConfig?.nextBastNumber ?? "-"}
                 </b>
               </div>
             </div>
@@ -1585,20 +1548,23 @@ function MonthlyStaffUsagePanel({
 }
 
 export default function SuperAdminManagePage() {
-  const { data, loading, error, refetch } = useQuery(GET_ALL_USERS, {
-    fetchPolicy: "cache-and-network",
-  });
-  const users = data?.getUsers ?? [];
-
-  const userOnlyIdSet = useMemo(() => {
-    const set = new Set<string>();
-    for (const u of users) {
-      if (String(u?.primaryRole) === "User") set.add(String(u?.id));
-    }
-    return set;
-  }, [users]);
   const { user: currentUser, loading: userLoading } = useUser();
   const router = useRouter();
+  const [searchTerm, setSearchTerm] = useState("");
+  const deferredSearchTerm = useDeferredValue(searchTerm);
+  const [usersPage, setUsersPage] = useState(1);
+  const USERS_PAGE_SIZE = 25;
+  const { data, loading, error, refetch } = useQuery(GET_USERS_PAGE, {
+    variables: {
+      page: usersPage,
+      pageSize: USERS_PAGE_SIZE,
+      search: deferredSearchTerm.trim() || null,
+    },
+    fetchPolicy: "cache-and-network",
+  });
+  const users = data?.getUsersPage?.items ?? [];
+  const totalUsers = Number(data?.getUsersPage?.total ?? 0);
+  const totalPages = Math.max(1, Math.ceil(totalUsers / USERS_PAGE_SIZE));
 
   const [roleDraft, setRoleDraft] = useState<Record<string, string[]>>({});
   const [primaryDraft, setPrimaryDraft] = useState<Record<string, string>>({});
@@ -1664,7 +1630,6 @@ export default function SuperAdminManagePage() {
     }
   }, [userLoading, isAllowed, router]);
 
-  const [searchTerm, setSearchTerm] = useState("");
   const [pendingLimit, setPendingLimit] = useState<Record<string, string>>({});
   const [updating, setUpdating] = useState<Record<string, boolean>>({});
   const pathname = usePathname();
@@ -1705,16 +1670,9 @@ export default function SuperAdminManagePage() {
   const [updateRole] = useMutation(UPDATE_ROLE);
   const [updateBillLimit] = useMutation(UPDATE_BILL_LIMIT);
 
-  const filteredUsers = useMemo(() => {
-    const q = searchTerm.trim().toLowerCase();
-    if (!q) return users;
-    return users.filter((u: any) => {
-      const roleLabel = (getRoles(u) ?? []).map(getRoleLabel).join(", ");
-      return [u.name, u.email, roleLabel]
-        .filter(Boolean)
-        .some((v: string) => String(v).toLowerCase().includes(q));
-    });
-  }, [users, searchTerm]);
+  useEffect(() => {
+    setUsersPage(1);
+  }, [deferredSearchTerm]);
 
   const handleLimitChange = (id: string, val: string) => {
     const clean = digitsOnly(val);
@@ -2100,7 +2058,7 @@ export default function SuperAdminManagePage() {
                           </td>
                         </tr>
                       )}
-                      {!loading && !error && filteredUsers.length === 0 && (
+                      {!loading && !error && users.length === 0 && (
                         <tr>
                           <td
                             colSpan={5}
@@ -2111,7 +2069,7 @@ export default function SuperAdminManagePage() {
                         </tr>
                       )}
 
-                      {filteredUsers.map((user: any) => {
+                      {users.map((user: any) => {
                         const baseLimit = Number(
                           user.limit_bill ?? user.limitBill ?? 0,
                         );
@@ -2428,6 +2386,34 @@ export default function SuperAdminManagePage() {
                   </table>
                 </div>
               </div>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm">
+                <div className="text-gray-600">
+                  Menampilkan {users.length} dari {totalUsers} pengguna
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={usersPage <= 1}
+                    onClick={() => setUsersPage((p) => Math.max(1, p - 1))}
+                    className="px-3 py-2 rounded border disabled:opacity-50"
+                  >
+                    Sebelumnya
+                  </button>
+                  <div className="min-w-[110px] text-center">
+                    Halaman {usersPage} / {totalPages}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={usersPage >= totalPages}
+                    onClick={() =>
+                      setUsersPage((p) => Math.min(totalPages, p + 1))
+                    }
+                    className="px-3 py-2 rounded border disabled:opacity-50"
+                  >
+                    Berikutnya
+                  </button>
+                </div>
+              </div>
             </div>
 
             {/* ===== MODAL: DAFTAR HONOR USER ===== */}
@@ -2591,7 +2577,6 @@ export default function SuperAdminManagePage() {
             year={year}
             setYear={setYear}
             onOpenUserActivities={openHonorModalById}
-            userOnlyIdSet={userOnlyIdSet}
           />
         )}
       </div>

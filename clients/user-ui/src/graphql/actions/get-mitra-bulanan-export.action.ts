@@ -1,8 +1,8 @@
 import { gql } from "@apollo/client";
 
 export const GET_MITRA_BULANAN_EXPORT = gql`
-  query GetMitraBulananExport($year: Int!) {
-    getMitraBulananExport(year: $year) {
+  query GetMitraBulananExport($year: Int!, $month: Int) {
+    getMitraBulananExport(year: $year, month: $month) {
       year
       month
       userId

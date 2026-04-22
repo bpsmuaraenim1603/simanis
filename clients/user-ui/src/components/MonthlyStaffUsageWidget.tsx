@@ -59,7 +59,7 @@ export default function MonthlyStaffUsageWidget() {
   const { data, loading, error, refetch } = useQuery(
     GET_MONTHLY_ACTIVITY_STAFF_USAGE,
     {
-      variables: { year: selectedYear },
+      variables: { year: selectedYear, month: selectedDate.getMonth() + 1 },
       fetchPolicy: "cache-and-network",
     },
   );
@@ -76,12 +76,12 @@ export default function MonthlyStaffUsageWidget() {
   };
 
   React.useEffect(() => {
-    refetch({ year: selectedYear });
-  }, [selectedYear, refetch]);
+    refetch({ year: selectedYear, month: selectedDate.getMonth() + 1 });
+  }, [selectedYear, selectedDate, refetch]);
 
   const rowsThisMonth = useMemo(() => {
     return rows
-      .filter((r) => r?.month === selectedMonthKey)
+      .filter((r) => !r?.month || r?.month === selectedMonthKey)
       .sort(
         (a, b) =>
           new Date(a.startDate).getTime() - new Date(b.startDate).getTime(),

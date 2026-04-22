@@ -2299,13 +2299,18 @@ export class SurveyActivityService {
     }
   }
 
-  async getMonthlyActivityStaffUsage(year: number, actor: any) {
+  async getMonthlyActivityStaffUsage(
+    year: number,
+    actor: any,
+    month?: number,
+  ) {
     actor = await this.enrichActor(actor);
     const actorId = actor?.id;
     if (!actorId) return [];
 
-    const from = new Date(year, 0, 1);
-    const to = new Date(year, 11, 31);
+    const monthFrom = typeof month === 'number' && month >= 1 && month <= 12;
+    const from = monthFrom ? new Date(year, month - 1, 1) : new Date(year, 0, 1);
+    const to = monthFrom ? new Date(year, month, 0) : new Date(year, 11, 31);
     to.setHours(23, 59, 59, 999);
 
     const canAccessAll = this.canAccessAll(actor);
@@ -2321,7 +2326,8 @@ export class SurveyActivityService {
 
     const subs = await this.prisma.subSurveyActivity.findMany({
       where: {
-        startDate: { gte: from, lte: to },
+        startDate: { lte: to },
+        endDate: { gte: from },
         ...accessWhere,
       },
       select: {
@@ -2337,38 +2343,65 @@ export class SurveyActivityService {
       orderBy: { startDate: 'asc' },
     });
 
+    if (!subs.length) return [];
+
+    const subIds = subs.map((s) => s.id);
+    const userProgresses = await this.prisma.userProgress.findMany({
+      where: {
+        subSurveyActivityId: { in: subIds },
+        progressRole: 'PETUGAS',
+      },
+      distinct: ['subSurveyActivityId', 'userId'],
+      select: {
+        subSurveyActivityId: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            primaryRole: true,
+          },
+        },
+      },
+    });
+
+    const usersBySubId = new Map<string, Array<{ id: string; name?: string; email?: string }>>();
+    for (const item of userProgresses) {
+      const subSurveyActivityId = item.subSurveyActivityId;
+      const user = item.user;
+      if (!subSurveyActivityId) continue;
+      if (!user?.id) continue;
+      if (String(user.primaryRole) !== 'User') continue;
+      if (!usersBySubId.has(subSurveyActivityId)) {
+        usersBySubId.set(subSurveyActivityId, []);
+      }
+      usersBySubId.get(subSurveyActivityId)!.push({
+        id: user.id,
+        name: user.name ?? '',
+        email: user.email ?? '',
+      });
+    }
+
     const pad2 = (n: number) => String(n).padStart(2, '0');
 
-    const rows = await Promise.all(
-      subs.map(async (s) => {
-        const ups = await this.prisma.userProgress.findMany({
-          where: { subSurveyActivityId: s.id },
-          distinct: ['userId'],
-          select: {
-            userId: true,
-            user: { select: { id: true, name: true, email: true } },
-          },
-        });
+    return subs.map((s) => {
+      const monthKey = `${s.startDate.getFullYear()}-${pad2(s.startDate.getMonth() + 1)}`;
+      const staffUsers = (usersBySubId.get(s.id) ?? []).sort((a, b) =>
+        String(a?.name ?? '').localeCompare(String(b?.name ?? ''), 'id'),
+      );
 
-        const month = `${s.startDate.getFullYear()}-${pad2(s.startDate.getMonth() + 1)}`;
-
-        const staffUsers = ups.map((x) => x.user).filter(Boolean);
-
-        return {
-          month,
-          subSurveyActivityId: s.id,
-          subSurveyName: s.name ?? '-',
-          subSurveySlug: s.slug,
-          surveyActivitySlug: s.surveyActivity?.slug ?? '',
-          startDate: s.startDate,
-          endDate: s.endDate,
-          staffCount: staffUsers.length,
-          staffUsers,
-        };
-      }),
-    );
-
-    return rows;
+      return {
+        month: monthKey,
+        subSurveyActivityId: s.id,
+        subSurveyName: s.name ?? '-',
+        subSurveySlug: s.slug,
+        surveyActivitySlug: s.surveyActivity?.slug ?? '',
+        startDate: s.startDate,
+        endDate: s.endDate,
+        staffCount: staffUsers.length,
+        staffUsers,
+      };
+    });
   }
 
   async getStaffYearlyExport(year: number) {
@@ -3117,9 +3150,14 @@ export class SurveyActivityService {
     };
   }
 
-  async getMitraBulananExport(year: number) {
-    const from = new Date(year, 0, 1);
-    const to = new Date(year, 11, 31, 23, 59, 59, 999);
+  async getMitraBulananExport(year: number, month?: number) {
+    const hasMonth = typeof month === 'number' && month >= 1 && month <= 12;
+    const from = hasMonth
+      ? new Date(year, month - 1, 1)
+      : new Date(year, 0, 1);
+    const to = hasMonth
+      ? new Date(year, month, 0, 23, 59, 59, 999)
+      : new Date(year, 11, 31, 23, 59, 59, 999);
 
     const rows = await this.prisma.userProgress.findMany({
       where: {
@@ -3142,6 +3180,7 @@ export class SurveyActivityService {
             job_name: true,
             limit_bill: true,
             district: { select: { name: true, city: true } },
+            roles: true,
             primaryRole: true,
           },
         },
@@ -3209,6 +3248,10 @@ export class SurveyActivityService {
     };
 
     for (const r of rows) {
+      const isPetugas =
+        String(r.user?.primaryRole ?? '') === 'User' ||
+        Array.isArray(r.user?.roles) && r.user.roles.includes('User');
+      if (!isPetugas) continue;
       const ssa = r.subSurveyActivity;
       if (!ssa?.startDate) continue;
 
