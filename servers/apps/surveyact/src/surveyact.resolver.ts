@@ -33,6 +33,7 @@ import {
   VillageType,
   MonthlyAdminDocRecapType,
   SampleTypeType,
+  MonthlyDocNumberSuggestionType,
 } from './types/surveyact.types';
 import {
   CreateContentIssueDto,
@@ -400,6 +401,15 @@ export class SurveyActivityResolver {
     @Args('year', { type: () => Int }) year: number,
   ) {
     return this.service.getMonthlyStaffDocPreview(userId, month, year);
+  }
+
+  @Query(() => MonthlyDocNumberSuggestionType)
+  monthlyDocNumberSuggestion(
+    @Args('userId', { type: () => ID }) userId: string,
+    @Args('month', { type: () => Int }) month: number,
+    @Args('year', { type: () => Int }) year: number,
+  ) {
+    return this.service.getMonthlyDocNumberSuggestion(userId, month, year);
   }
 
   @Mutation(() => String)

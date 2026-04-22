@@ -274,6 +274,75 @@ export class SurveyActivityService {
     });
   }
 
+  async getMonthlyDocNumberSuggestion(
+    userId: string,
+    month: number,
+    year: number,
+  ) {
+    const existing = await this.prisma.monthlyAdminDocRecap.findUnique({
+      where: {
+        userId_year_month: {
+          userId,
+          year,
+          month,
+        },
+      },
+      select: {
+        spkNumber: true,
+        bastNumber: true,
+      },
+    });
+
+    const existingSpk = String(existing?.spkNumber ?? '').trim();
+    const existingBast = String(existing?.bastNumber ?? '').trim();
+
+    if (existingSpk || existingBast) {
+      return {
+        nomorSPK: existingSpk || '',
+        nomorBAST: existingBast || '',
+      };
+    }
+
+    const [spkStartRow, spkCurrentRow, bastStartRow, bastCurrentRow] =
+      await Promise.all([
+        this.prisma.systemSetting.findUnique({
+          where: { key: this.MONTHLY_DOC_SPK_START_KEY },
+          select: { value: true },
+        }),
+        this.prisma.systemSetting.findUnique({
+          where: { key: this.MONTHLY_DOC_SPK_CURRENT_KEY },
+          select: { value: true },
+        }),
+        this.prisma.systemSetting.findUnique({
+          where: { key: this.MONTHLY_DOC_BAST_START_KEY },
+          select: { value: true },
+        }),
+        this.prisma.systemSetting.findUnique({
+          where: { key: this.MONTHLY_DOC_BAST_CURRENT_KEY },
+          select: { value: true },
+        }),
+      ]);
+
+    const spkStart = this.parsePositiveInt(spkStartRow?.value, 1);
+    const spkCurrent = this.parsePositiveInt(
+      spkCurrentRow?.value,
+      spkStart - 1,
+    );
+    const bastStart = this.parsePositiveInt(bastStartRow?.value, 1);
+    const bastCurrent = this.parsePositiveInt(
+      bastCurrentRow?.value,
+      bastStart - 1,
+    );
+
+    const nextSpk = Math.max(spkCurrent + 1, spkStart);
+    const nextBast = Math.max(bastCurrent + 1, bastStart);
+
+    return {
+      nomorSPK: this.buildAutoDocNumber(nextSpk, 'SPK', month, year),
+      nomorBAST: this.buildAutoDocNumber(nextBast, 'BAST', month, year),
+    };
+  }
+
   private canAccessAll(actor: any) {
     const role = actor?.primaryRole;
     return role === 'Superadmin' || role === 'Keuangan';
@@ -628,8 +697,8 @@ export class SurveyActivityService {
       select: { districtId: true, villageId: true, primaryRole: true },
     });
 
-    const supDistrictId = (supUser?.districtId ?? districtId) ?? null;
-    const supVillageId = (supUser?.villageId ?? villageId) ?? null;
+    const supDistrictId = supUser?.districtId ?? districtId ?? null;
+    const supVillageId = supUser?.villageId ?? villageId ?? null;
 
     const exists = await this.prisma.userProgress.findFirst({
       where: {
@@ -1009,9 +1078,37 @@ export class SurveyActivityService {
     if (progressRole) where.progressRole = progressRole;
     if (superVisorId) where.superVisorId = superVisorId;
     if (search && String(search).trim().length > 0) {
-      where.user = {
-        name: { contains: String(search).trim(), mode: 'insensitive' },
-      };
+      const keyword = String(search).trim();
+      where.OR = [
+        {
+          user: {
+            name: { contains: keyword, mode: 'insensitive' },
+          },
+        },
+        {
+          user: {
+            email: { contains: keyword, mode: 'insensitive' },
+          },
+        },
+        {
+          district: {
+            name: { contains: keyword, mode: 'insensitive' },
+          },
+        },
+        {
+          district: {
+            city: { contains: keyword, mode: 'insensitive' },
+          },
+        },
+        {
+          village: {
+            name: { contains: keyword, mode: 'insensitive' },
+          },
+        },
+        {
+          blockCount: { contains: keyword, mode: 'insensitive' },
+        },
+      ];
     }
 
     const [total, items] = await this.prisma.$transaction([
@@ -1104,31 +1201,39 @@ export class SurveyActivityService {
       if (!upBefore)
         throw new NotFoundException('UserProgress tidak ditemukan');
 
-      const nextUserIdRaw =
-        Object.prototype.hasOwnProperty.call(rest as any, 'userId')
-          ? (rest as any).userId
-          : upBefore.userId;
+      const nextUserIdRaw = Object.prototype.hasOwnProperty.call(
+        rest as any,
+        'userId',
+      )
+        ? (rest as any).userId
+        : upBefore.userId;
 
-      const nextUserId = nextUserIdRaw ? String(nextUserIdRaw) : upBefore.userId;
+      const nextUserId = nextUserIdRaw
+        ? String(nextUserIdRaw)
+        : upBefore.userId;
 
       const petugasUser = await tx.user.findUnique({
-       where: { id: nextUserId },
+        where: { id: nextUserId },
         select: { primaryRole: true },
       });
       const petugasIsSupervisor = petugasUser?.primaryRole === 'Supervisor';
       if (petugasIsSupervisor) {
         (rest as any).docsBill = '0';
-     }
+      }
 
-      const nextSupIdRaw =
-        Object.prototype.hasOwnProperty.call(rest as any, 'superVisorId')
-          ? (rest as any).superVisorId
-          : upBefore.superVisorId;
+      const nextSupIdRaw = Object.prototype.hasOwnProperty.call(
+        rest as any,
+        'superVisorId',
+      )
+        ? (rest as any).superVisorId
+        : upBefore.superVisorId;
 
       const nextSupId =
-        nextSupIdRaw === null || nextSupIdRaw === undefined || nextSupIdRaw === ''
+        nextSupIdRaw === null ||
+        nextSupIdRaw === undefined ||
+        nextSupIdRaw === ''
           ? null
-         : String(nextSupIdRaw);
+          : String(nextSupIdRaw);
 
       const pengawasUser = nextSupId
         ? await tx.user.findUnique({
@@ -2701,9 +2806,15 @@ export class SurveyActivityService {
       if (!noPetugas) continue;
 
       const nus = String(r['NUS'] ?? r['nus'] ?? '').trim();
-      const identity = String(r['Identitas Sampel'] ?? r['identity'] ?? '').trim();
-      const cacahStatus = String(r['Status Cacah'] ?? r['cacahStatus'] ?? '').trim();
-      const approvalStatus = String(r['Status Approval'] ?? r['approvalStatus'] ?? '').trim();
+      const identity = String(
+        r['Identitas Sampel'] ?? r['identity'] ?? '',
+      ).trim();
+      const cacahStatus = String(
+        r['Status Cacah'] ?? r['cacahStatus'] ?? '',
+      ).trim();
+      const approvalStatus = String(
+        r['Status Approval'] ?? r['approvalStatus'] ?? '',
+      ).trim();
       const geoLatRaw = String(r['GeoLat'] ?? r['geoLat'] ?? '').trim();
       const geoLngRaw = String(r['GeoLng'] ?? r['geoLng'] ?? '').trim();
 
@@ -2770,7 +2881,6 @@ export class SurveyActivityService {
         geoLat: s.geoLat ?? null,
         geoLng: s.geoLng ?? null,
       }));
-
 
     // ============ LOOP PER BARIS PETUGAS ============
 
@@ -3856,7 +3966,7 @@ export class SurveyActivityService {
         const unitName =
           String((r as any).unitName ?? 'Dokumen').trim() || 'Dokumen';
         const totalDocs = Number(r.totalDocs ?? base.totalDocs);
-         if (!Number.isFinite(totalDocs) || totalDocs <= 0) {
+        if (!Number.isFinite(totalDocs) || totalDocs <= 0) {
           throw new BadRequestException(
             `Jumlah satuan tidak valid untuk kegiatan "${base.activityName ?? '-'}".`,
           );

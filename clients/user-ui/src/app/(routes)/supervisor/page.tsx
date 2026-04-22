@@ -122,6 +122,8 @@ export default function SupervisorManagePage() {
     null,
   );
   const [qIdentity, setQIdentity] = useState("");
+  const [qActivity, setQActivity] = useState("");
+  const [qPetugas, setQPetugas] = useState("");
 
   useEffect(() => {
     async function loadAllSubs() {
@@ -173,8 +175,10 @@ export default function SupervisorManagePage() {
   const [fetchUPById, { data: upByIdData, loading: upDetailLoading }] =
     useLazyQuery(GET_USER_PROGRESS_BY_ID, { fetchPolicy: "network-only" });
 
-  const [patchUserSamples, { loading: patching }] =
-    useMutation(PATCH_USER_SAMPLES, { fetchPolicy: "no-cache" });
+  const [patchUserSamples, { loading: patching }] = useMutation(
+    PATCH_USER_SAMPLES,
+    { fetchPolicy: "no-cache" },
+  );
 
   const supervisorId = currentUser?.id ?? "";
 
@@ -241,24 +245,33 @@ export default function SupervisorManagePage() {
       isTodayInRange(s.startDate, s.endDate),
     );
 
-    if (isSuperadmin) {
-      return inSchedule.sort((a, b) => {
-        const aStart = a?.startDate ? new Date(a.startDate).getTime() : 0;
-        const bStart = b?.startDate ? new Date(b.startDate).getTime() : 0;
-        return bStart - aStart;
-      });
-    }
+    const scoped = isSuperadmin
+      ? inSchedule
+      : assignedSubIds.size
+        ? inSchedule.filter((s) => assignedSubIds.has(s.id))
+        : [];
 
-    const filtered = assignedSubIds.size
-      ? inSchedule.filter((s) => assignedSubIds.has(s.id))
-      : [];
+    const keyword = qActivity.trim().toLowerCase();
+    const filtered = !keyword
+      ? scoped
+      : scoped.filter((s) => {
+          const haystack = [
+            s.name,
+            s.activityType,
+            fmtDateRange(s.startDate, s.endDate),
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+          return haystack.includes(keyword);
+        });
 
     return filtered.sort((a, b) => {
       const aStart = a?.startDate ? new Date(a.startDate).getTime() : 0;
       const bStart = b?.startDate ? new Date(b.startDate).getTime() : 0;
       return bStart - aStart;
     });
-  }, [allSubActivities, assignedSubIds, isSuperadmin]);
+  }, [allSubActivities, assignedSubIds, isSuperadmin, qActivity]);
 
   function readStateFromUrl() {
     if (typeof window === "undefined") {
@@ -289,6 +302,19 @@ export default function SupervisorManagePage() {
     router.push(`?${p.toString()}`);
   }
 
+  function fetchBlocks(activityId: string, searchTerm = "") {
+    return fetchUPPage({
+      variables: {
+        subSurveyActivityId: activityId,
+        page: 1,
+        pageSize: PAGE_SIZE,
+        progressRole: "PETUGAS",
+        superVisorId: isSuperadmin ? null : supervisorId,
+        search: searchTerm.trim() || null,
+      },
+    });
+  }
+
   function openActivity(activityId: string) {
     setSubSurveyActivityId(activityId);
     setSelectedUserProgressId("");
@@ -296,15 +322,7 @@ export default function SupervisorManagePage() {
     pushStateToUrl({ mode: "blocks", sa: activityId, up: "" });
     setPage(1);
     setRowsCache([]);
-    fetchUPPage({
-      variables: {
-        subSurveyActivityId: activityId,
-        page: 1,
-        pageSize: PAGE_SIZE,
-        progressRole: "PETUGAS",
-        superVisorId: isSuperadmin ? null : supervisorId,
-      },
-    });
+    setQPetugas("");
   }
 
   const canLoadMore = myUPRows.length < pageTotal;
@@ -317,6 +335,7 @@ export default function SupervisorManagePage() {
         pageSize: PAGE_SIZE,
         progressRole: "PETUGAS",
         superVisorId: isSuperadmin ? null : supervisorId,
+        search: qPetugas.trim() || null,
       },
     });
     setPage(next);
@@ -326,6 +345,7 @@ export default function SupervisorManagePage() {
     setViewMode("activity");
     setSubSurveyActivityId("");
     setSelectedUserProgressId("");
+    setQPetugas("");
     pushStateToUrl({ mode: "activity", sa: "", up: "" });
   }
 
@@ -357,6 +377,15 @@ export default function SupervisorManagePage() {
 
     return rows;
   }, [myUPRows]);
+
+  useEffect(() => {
+    if (viewMode !== "blocks") return;
+    if (!subSurveyActivityId) return;
+
+    setPage(1);
+    setRowsCache([]);
+    fetchBlocks(subSurveyActivityId, qPetugas);
+  }, [viewMode, subSurveyActivityId, qPetugas, isSuperadmin, supervisorId]);
 
   const currentUP: UserProgressRow | undefined = useMemo(() => {
     const full = upByIdData?.userProgressById as UserProgressRow | undefined;
@@ -419,15 +448,6 @@ export default function SupervisorManagePage() {
         setSubSurveyActivityId(s.sa);
         setPage(1);
         setRowsCache([]);
-        fetchUPPage({
-          variables: {
-            subSurveyActivityId: s.sa,
-            page: 1,
-            pageSize: PAGE_SIZE,
-            progressRole: "PETUGAS",
-            superVisorId: isSuperadmin ? null : supervisorId,
-          },
-        });
       }
       if (s.mode === "detail" && s.up) {
         fetchUPById({ variables: { userProgressId: s.up } });
@@ -588,6 +608,15 @@ export default function SupervisorManagePage() {
             </div>
           </div>
 
+          <div className="bg-white border rounded-lg p-3">
+            <input
+              value={qActivity}
+              onChange={(e) => setQActivity(e.target.value)}
+              placeholder="Cari kegiatan"
+              className="w-full rounded-md border px-3 py-2 text-sm bg-white"
+            />
+          </div>
+
           {saLoading || subsLoading || assignedLoading ? (
             <div className="text-sm text-gray-600">Memuat kegiatan…</div>
           ) : activityCards.length === 0 ? (
@@ -658,6 +687,15 @@ export default function SupervisorManagePage() {
                 : {fmtDateRange(selectedSub?.startDate, selectedSub?.endDate)}
               </span>
             </p>
+          </div>
+
+          <div className="bg-white border rounded-lg p-3">
+            <input
+              value={qPetugas}
+              onChange={(e) => setQPetugas(e.target.value)}
+              placeholder="Cari petugas dalam kegiatan ini"
+              className="w-full rounded-md border px-3 py-2 text-sm bg-white"
+            />
           </div>
 
           {upLoading ? (
@@ -847,19 +885,15 @@ export default function SupervisorManagePage() {
                   <tbody>
                     <tr>
                       <td className="p-3 text-gray-500 text-center" colSpan={6}>
-                        <span>
-                          Memuat...
-                        </span>
+                        <span>Memuat...</span>
                       </td>
                     </tr>
                   </tbody>
-                ) :  approvedSamples.length === 0 ? (
+                ) : approvedSamples.length === 0 ? (
                   <tbody>
                     <tr>
                       <td className="p-3 text-gray-500 text-center" colSpan={6}>
-                        <span>
-                          Belum ada sampel untuk progres ini.
-                        </span>
+                        <span>Belum ada sampel untuk progres ini.</span>
                       </td>
                     </tr>
                   </tbody>

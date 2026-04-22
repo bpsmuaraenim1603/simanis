@@ -554,7 +554,7 @@ function MonthlyStaffUsagePanel({
   }, [defaultPpkId, selectedDefaultPpkId]);
 
   useEffect(() => {
-    const cfg = monthlyDocConfigData?.monthlyStaffDocNumberConfig;
+    const cfg = monthlyDocConfigData?.DocNumberConfig;
     if (!cfg) return;
     if (!spkStartNumberInput) {
       setSpkStartNumberInput(String(cfg.spkStartNumber ?? 1));
@@ -1128,14 +1128,14 @@ function MonthlyStaffUsagePanel({
               <div>
                 Nomor SPK terakhir:{" "}
                 <b>
-                  {monthlyDocConfigData?.monthlyStaffDocNumberConfig
+                  {monthlyDocConfigData?.DocNumberConfig
                     ?.currentSpkNumber ?? "-"}
                 </b>
               </div>
               <div>
                 Nomor BAST terakhir:{" "}
                 <b>
-                  {monthlyDocConfigData?.monthlyStaffDocNumberConfig
+                  {monthlyDocConfigData?.DocNumberConfig
                     ?.currentBastNumber ?? "-"}
                 </b>
               </div>
@@ -1143,13 +1143,13 @@ function MonthlyStaffUsagePanel({
                 Nomor berikutnya yang akan dipakai:{" "}
                 <b>
                   SPK{" "}
-                  {monthlyDocConfigData?.monthlyStaffDocNumberConfig
+                  {monthlyDocConfigData?.DocNumberConfig
                     ?.nextSpkNumber ?? "-"}
                 </b>
                 {" / "}
                 <b>
                   BAST{" "}
-                  {monthlyDocConfigData?.monthlyStaffDocNumberConfig
+                  {monthlyDocConfigData?.DocNumberConfig
                     ?.nextBastNumber ?? "-"}
                 </b>
               </div>

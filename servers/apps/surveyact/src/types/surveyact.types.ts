@@ -35,16 +35,16 @@ registerEnumType(ProgressRole, { name: 'ProgressRole' });
 @ObjectType()
 export class SurveyActivityType {
   @Field(() => ID)
-  id: string;
+  id!: string;
 
   @Field()
-  name: string;
+  name!: string;
 
   @Field()
-  slug: string;
+  slug!: string;
 
   @Field(() => ID)
-  chiefId: string;
+  chiefId!: string;
 
   @Field(() => UserType, { nullable: true })
   chief?: UserType;
@@ -53,79 +53,79 @@ export class SurveyActivityType {
 @ObjectType()
 export class DistrictType {
   @Field(() => ID)
-  id: string;
+  id!: string;
 
   @Field()
-  city: string;
+  city!: string;
 
   @Field()
-  name: string;
+  name!: string;
 
   @Field()
-  coderegion: string;
+  coderegion!: string;
 }
 
 @ObjectType()
 export class VillageType {
   @Field(() => ID)
-  id: string;
+  id!: string;
 
   @Field()
-  name: string;
+  name!: string;
 
   @Field()
-  coderegion: string;
+  coderegion!: string;
 
   @Field(() => ID)
-  districtId: string;
+  districtId!: string;
 }
 
 @ObjectType()
 export class SampleTypeType {
   @Field(() => ID)
-  id: string;
+  id!: string;
 
   @Field()
-  name: string;
+  name!: string;
 
   @Field()
-  createdAt: Date;
+  createdAt!: Date;
 
   @Field()
- updatedAt: Date;
+  updatedAt!: Date;
 }
 
 @ObjectType()
 export class SubSurveyActivityType {
   @Field(() => ID)
-  id: string;
+  id!: string;
 
   @Field()
-  name: string;
+  name!: string;
 
   @Field()
-  slug: string;
+  slug!: string;
 
   @Field(() => ID)
-  surveyActivityId: string;
+  surveyActivityId!: string;
 
   @Field()
-  startDate: Date;
+  startDate!: Date;
 
   @Field()
-  endDate: Date;
+  endDate!: Date;
 
   @Field()
-  targetSample: number;
+  targetSample!: number;
 
   @Field()
-  sampleType: string;
+  sampleType!: string;
 
   @Field()
-  activityType: string;
+  activityType!: string;
 
   @Field()
-  status: string;
+  status!: string;
 
   @Field(() => String, { nullable: true })
   budgetCode?: string | null;
@@ -134,19 +134,19 @@ export class SubSurveyActivityType {
   unitWorkPrice?: number | null;
 
   @Field()
-  priceCompareUnit: string;
+  priceCompareUnit!: string;
 }
 
 @ObjectType()
 export class UserProgressType {
   @Field(() => ID)
-  id: string;
+  id!: string;
 
   @Field(() => UserType, { nullable: true })
   user?: UserType;
 
   @Field(() => ID)
-  userId: string;
+  userId!: string;
 
   @Field(() => ID, { nullable: true })
   superVisorId?: string;
@@ -155,7 +155,7 @@ export class UserProgressType {
   supervisor?: UserType;
 
   @Field(() => ID)
-  subSurveyActivityId: string;
+  subSurveyActivityId!: string;
 
   @Field(() => SubSurveyActivityType, { nullable: true })
   subSurveyActivity?: SubSurveyActivityType;
@@ -167,16 +167,16 @@ export class UserProgressType {
   district?: DistrictType;
 
   @Field()
-  totalAssigned: number;
+  totalAssigned!: number;
 
   @Field()
-  submitCount: number;
+  submitCount!: number;
 
   @Field()
-  approvedCount: number;
+  approvedCount!: number;
 
   @Field()
-  rejectedCount: number;
+  rejectedCount!: number;
 
   @Field({ nullable: true })
   blockCount?: string;
@@ -194,46 +194,46 @@ export class UserProgressType {
   budgetCode?: string;
 
   @Field(() => ProgressRole)
-  progressRole: ProgressRole;
+  progressRole!: ProgressRole;
 
   @Field(() => [UserSampleType], { nullable: 'itemsAndList' })
   samples?: UserSampleType[];
 
   @Field()
-  lastUpdated: Date;
+  lastUpdated!: Date;
 }
 
 @ObjectType()
 export class UserProgressPageType {
   @Field(() => [UserProgressType])
-  items: UserProgressType[];
+  items!: UserProgressType[];
 
   @Field(() => Int)
-  total: number;
+  total!: number;
 
   @Field(() => Int)
-  page: number;
+  page!: number;
 
   @Field(() => Int)
-  pageSize: number;
+  pageSize!: number;
 }
 
 @ObjectType()
 export class UserSampleType {
   @Field(() => ID)
-  id: string;
+  id!: string;
 
   @Field()
-  nus: string;
+  nus!: string;
 
   @Field()
-  identity: string;
+  identity!: string;
 
   @Field(() => CacahStatus)
-  cacahStatus: CacahStatus;
+  cacahStatus!: CacahStatus;
 
   @Field(() => AgreeState)
-  approvalStatus: AgreeState;
+  approvalStatus!: AgreeState;
 
   @Field({ nullable: true })
   geoLat?: number;
@@ -257,10 +257,10 @@ export class UserSampleType {
 @ObjectType()
 export class SubSurveyProgressType {
   @Field(() => String)
-  name: string;
+  name!: string;
 
   @Field(() => ID)
-  subSurveyActivityId: string;
+  subSurveyActivityId!: string;
 
   @Field(() => Date, { nullable: true })
   startDate?: Date;
@@ -272,22 +272,22 @@ export class SubSurveyProgressType {
   targetSample?: number;
 
   @Field(() => Int)
-  totalPetugas: number;
+  totalPetugas!: number;
 
   @Field(() => Int)
-  submitCount: number;
+  submitCount!: number;
 
   @Field(() => Int)
-  approvedCount: number;
+  approvedCount!: number;
 
   @Field(() => Int)
-  rejectedCount: number;
+  rejectedCount!: number;
 
   @Field(() => String)
-  sampleType: string;
+  sampleType!: string;
 
   @Field(() => String)
-  activityType: string;
+  activityType!: string;
 
   @Field(() => [String], { nullable: true })
   district?: string[];
@@ -398,19 +398,19 @@ export class JobLetterType {
 @ObjectType()
 export class MonthlyStatsType {
   @Field(() => Int)
-  totalJobLetters: number;
+  totalJobLetters!: number;
 
   @Field(() => Int)
-  totalSPJ: number;
+  totalSPJ!: number;
 
   @Field(() => Int)
-  totalActiveUsers: number;
+  totalActiveUsers!: number;
 
   @Field(() => [ID])
-  activeUserIds: string[];
+  activeUserIds!: string[];
 
   @Field(() => [ID])
-  activeSubSurveyActivityIds: string[];
+  activeSubSurveyActivityIds!: string[];
 }
 
 @ObjectType()
@@ -452,61 +452,61 @@ export class MonthlyActivityStaffUsageRowType {
 @ObjectType()
 export class IssueCommentType {
   @Field(() => ID)
-  id: string;
+  id!: string;
 
   @Field()
-  message: string;
+  message!: string;
 
   @Field(() => ID)
-  contentId: string;
+  contentId!: string;
 
   @Field(() => UserType, { nullable: true })
   user?: UserType;
 
   @Field(() => ID)
-  userId: string;
+  userId!: string;
 
   @Field(() => SubSurveyActivityType, { nullable: true })
   subSurveyActivity?: SubSurveyActivityType;
 
   @Field(() => ID)
-  subSurveyActivityId: string;
+  subSurveyActivityId!: string;
 
   @Field()
-  createdAt: Date;
+  createdAt!: Date;
 }
 
 @ObjectType()
 export class ContentIssueType {
   @Field(() => ID)
-  id: string;
+  id!: string;
 
   @Field()
-  content: string;
+  content!: string;
 
   @Field(() => IssueStatus)
-  issueStatus: IssueStatus;
+  issueStatus!: IssueStatus;
 
   @Field(() => UserType, { nullable: true })
   reporter?: UserType;
 
   @Field(() => ID)
-  reporterId: string;
+  reporterId!: string;
 
   @Field(() => SubSurveyActivityType, { nullable: true })
   subSurveyActivity?: SubSurveyActivityType;
 
   @Field(() => ID)
-  subSurveyActivityId: string;
+  subSurveyActivityId!: string;
 
   @Field(() => [IssueCommentType], { nullable: true })
   IssueComment?: IssueCommentType[];
 
   @Field()
-  createdAt: Date;
+  createdAt!: Date;
 
   @Field()
-  updatedAt: Date;
+  updatedAt!: Date;
 }
 
 @ObjectType()
@@ -623,10 +623,10 @@ export class MitraBulananExportRowType {
 @ObjectType()
 export class ExportUserSamplePhotosResult {
   @Field()
-  zipUrl: string;
+  zipUrl!: string;
 
   @Field(() => Int)
-  totalPhotos: number;
+  totalPhotos!: number;
 }
 
 
@@ -640,28 +640,28 @@ registerEnumType(AdminDocType, { name: 'AdminDocType' });
 @ObjectType()
 export class MonthlyStaffDocPreviewRowType {
   @Field(() => ID)
-  subSurveyActivityId: string;
+  subSurveyActivityId!: string;
 
   @Field()
-  activityName: string;
+  activityName!: string;
 
   @Field(() => GraphQLISODateTime)
-  startDate: Date;
+  startDate!: Date;
 
   @Field(() => GraphQLISODateTime)
-  endDate: Date;
+  endDate!: Date;
 
   @Field()
-  eligible: boolean;
+  eligible!: boolean;
 
   @Field(() => Int)
-  totalDocs: number;
+  totalDocs!: number;
 
   @Field(() => Float)
-  totalHonor: number;
+  totalHonor!: number;
 
   @Field(() => Float)
-  unitCost: number;
+  unitCost!: number;
 
   @Field(() => String, { nullable: true })
   budgetCode?: string | null;
@@ -676,31 +676,40 @@ export class MonthlyStaffDocPreviewRowType {
 @ObjectType()
 export class MonthlyStaffDocsOutputType {
   @Field()
-  spkUrl: string;
+  spkUrl!: string;
 
   @Field()
-  bastUrl: string;
+  bastUrl!: string;
 
   @Field()
-  nomorSPK: string;
+  nomorSPK!: string;
 
   @Field()
-  nomorBAST: string;
+  nomorBAST!: string;
 
   @Field(() => GraphQLISODateTime, { nullable: true })
   expiresAt?: Date;
 }
 
 @ObjectType()
+export class MonthlyDocNumberSuggestionType {
+  @Field({ nullable: true })
+  nomorSPK?: string;
+
+  @Field({ nullable: true })
+  nomorBAST?: string;
+}
+
+@ObjectType()
 export class MonthlyAdminDocRecapType {
   @Field(() => ID)
-  userId: string;
+  userId!: string;
 
   @Field()
-  year: number;
+  year!: number;
 
   @Field()
-  month: number;
+  month!: number;
 
   @Field({ nullable: true })
   spkNumber?: string;

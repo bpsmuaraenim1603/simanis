@@ -12,6 +12,7 @@ import { GET_MONTHLY_STAFF_DOC_PREVIEW } from "@/src/graphql/actions/get-monthly
 import { GENERATE_MONTHLY_STAFF_DOCS } from "@/src/graphql/actions/generate-monthly-staff-docs.action";
 import { PPK_OPTIONS } from "@/src/graphql/actions/users.ppkOptions.gql";
 import { GET_MONTHLY_ADMIN_DOC_RECAP_BY_USER_MONTH } from "@/src/graphql/actions/get-monthly-admin-doc-recap-by-user-month.action";
+import { GET_MONTHLY_DOC_NUMBER_SUGGESTION } from "@/src/graphql/actions/get-monthly-doc-number-suggestion.action";
 
 type PreviewRow = {
   subSurveyActivityId: string;
@@ -93,6 +94,8 @@ export default function BastSpkPage() {
   const [ppkNip, setPpkNip] = useState<string>("");
   const [nomorSPK, setNomorSPK] = useState<string>("");
   const [nomorBAST, setNomorBAST] = useState<string>("");
+  const [nomorSPKTouched, setNomorSPKTouched] = useState<boolean>(false);
+  const [nomorBASTTouched, setNomorBASTTouched] = useState<boolean>(false);
   const [spkUrl, setSpkUrl] = useState<string | null>(null);
   const [bastUrl, setBastUrl] = useState<string | null>(null);
   const [expiresAtInfo, setExpiresAtInfo] = useState<string>("");
@@ -137,6 +140,8 @@ export default function BastSpkPage() {
         }
         setNomorSPK(out?.nomorSPK ?? "");
         setNomorBAST(out?.nomorBAST ?? "");
+        setNomorSPKTouched(false);
+        setNomorBASTTouched(false);
         if (out?.expiresAt) {
           const dt = new Date(out.expiresAt);
           setExpiresAtInfo(dt.toLocaleString());
@@ -171,17 +176,39 @@ export default function BastSpkPage() {
       setPpkName(recap.ppkUser?.name ?? recap.ppkName ?? "");
       setPpkNip(recap.ppkUser?.nip ?? recap.ppkNip ?? "");
 
-      setNomorSPK(recap.spkNumber ?? "");
-      setNomorBAST(recap.bastNumber ?? "");
+      if (!nomorSPKTouched) {
+        setNomorSPK(recap.spkNumber ?? "");
+      }
+      if (!nomorBASTTouched) {
+        setNomorBAST(recap.bastNumber ?? "");
+      } 
     },
     onError: () => {
       setPpkUserId("");
       setPpkName("");
       setPpkNip("");
-      setNomorSPK("");
-      setNomorBAST("");
+      if (!nomorSPKTouched) setNomorSPK("");
+      if (!nomorBASTTouched) setNomorBAST("");
     },
   });
+
+  const [loadNumberSuggestion] = useLazyQuery(
+    GET_MONTHLY_DOC_NUMBER_SUGGESTION,
+    {
+      fetchPolicy: "no-cache",
+      onCompleted: (res) => {
+        const suggestion = res?.monthlyDocNumberSuggestion;
+        if (!suggestion) return;
+
+        if (!nomorSPKTouched) {
+          setNomorSPK(String(suggestion.nomorSPK ?? ""));
+        }
+        if (!nomorBASTTouched) {
+          setNomorBAST(String(suggestion.nomorBAST ?? ""));
+        }
+      },
+    },
+  );
 
   const ppkOptions: HUOption[] = useMemo(() => {
     return (ppkData?.ppkOptions ?? []).map((p: any) => ({
@@ -224,18 +251,17 @@ export default function BastSpkPage() {
 
   useEffect(() => {
     if (!selectedUserId) return;
-    loadRecap({ variables: { userId: selectedUserId, year, month } });
-  }, [selectedUserId, year, month, loadRecap]);
-
-  useEffect(() => {
-    if (!selectedUserId) return;
 
     setSpkUrl(null);
     setBastUrl(null);
-    setExpiresAtInfo("");
+   setExpiresAtInfo("");
+
+    setNomorSPKTouched(false);
+    setNomorBASTTouched(false);
 
     loadRecap({ variables: { userId: selectedUserId, year, month } });
-  }, [selectedUserId, year, month, loadRecap]);
+    loadNumberSuggestion({ variables: { userId: selectedUserId, year, month } });
+  }, [selectedUserId, year, month, loadRecap, loadNumberSuggestion]);
 
   const onRecalcRow = (idx: number, next: Partial<EditableRow>) => {
     setRows((prev) => {
@@ -388,13 +414,16 @@ export default function BastSpkPage() {
               Nomor SPK
             </label>
             <input
-              className="w-full rounded-md border px-3 py-2 bg-gray-50"
+              className="w-full rounded-md border px-3 py-2 bg-white"
               value={nomorSPK}
-              readOnly
-              placeholder="Akan dibuat otomatis saat generate"
+              onChange={(e) => {
+                setNomorSPKTouched(true);
+                setNomorSPK(e.target.value);
+              }}
+              placeholder="Nomor SPK akan diusulkan otomatis"
             />
             <span className="text-sm text-gray-600">
-              Nomor SPK dibuat otomatis oleh sistem
+              Nomor SPK diusulkan otomatis oleh sistem
             </span>
           </div>
 
@@ -405,11 +434,14 @@ export default function BastSpkPage() {
             <input
               className="w-full rounded-md border px-3 py-2 bg-white"
               value={nomorBAST}
-              readOnly
-              placeholder="Akan dibuat otomatis saat generate"
+              onChange={(e) => {
+                setNomorBASTTouched(true);
+                setNomorBAST(e.target.value);
+              }}
+              placeholder="Nomor BAST akan diusulkan otomatis"
             />
             <span className="text-sm text-gray-600">
-              Nomor BAST dibuat otomatis oleh sistem
+              Nomor BAST diusulkan otomatis oleh sistem
             </span>
           </div>
         </div>
@@ -604,6 +636,8 @@ export default function BastSpkPage() {
                     ppkUserId,
                     ppkName,
                     ppkNip,
+                    nomorSPK: nomorSPK.trim() || null,
+                    nomorBAST: nomorBAST.trim() || null,
                     spkDocDate: new Date(spkDocDate),
                     bastDocDate: new Date(bastDocDate),
                     pekerjaanPetugas: petugasJobName,
