@@ -160,7 +160,111 @@ export class SurveyActivityService {
   ) {
     const mm = String(month).padStart(2, '0');
     const no = String(seq).padStart(3, '0');
-    return `B-${no}/BPS1603/PPK/${docType}/${mm}/${year}`;
+    return `B-${no}/16030/HK.600/${mm}/${docType}/${year}`;
+  }
+
+  private buildMonthlyDocNumberFromCode(
+    code: string,
+    docType: 'SPK' | 'BAST',
+    month: number,
+    year: number,
+  ) {
+    const mm = String(month).padStart(2, '0');
+    const safeCode = String(code || '').trim();
+    return `${safeCode}/16030/HK.600/${mm}/${docType}/${year}`;
+  }
+
+  private async getMonthlyStaffDocCode(input: {
+    userId: string;
+    month: number;
+    year: number;
+ }) {
+    const month = Number(input.month);
+    const year = Number(input.year);
+
+    if (!input.userId) throw new BadRequestException('userId wajib diisi');
+    if (!Number.isInteger(month) || month < 1 || month > 12) {
+      throw new BadRequestException('month harus 1-12');
+    }
+    if (!Number.isInteger(year) || year < 1900) {
+      throw new BadRequestException('year tidak valid');
+    }
+
+    const anchorYear = month === 12 ? year : year - 1;
+    const from = new Date(anchorYear, 11, 1);
+    const to = new Date(year, month, 0, 23, 59, 59, 999);
+
+    const rows = await this.prisma.userProgress.findMany({
+      where: {
+        progressRole: 'PETUGAS',
+        subSurveyActivity: {
+          startDate: { lte: to },
+          endDate: { gte: from },
+        },
+      },
+      select: {
+        userId: true,
+        user: {
+          select: {
+            name: true,
+            roles: true,
+            primaryRole: true,
+          },
+        },
+        subSurveyActivity: {
+          select: {
+            startDate: true,
+          },
+        },
+      },
+    });
+
+    const byUserMonth = new Map<string, { userId: string; name: string; year: number; month: number }>();
+
+    for (const r of rows) {
+      const isPetugas =
+        String(r.user?.primaryRole ?? '') === 'User' ||
+        (Array.isArray(r.user?.roles) && r.user.roles.includes('User'));
+      if (!isPetugas) continue;
+      const d = r.subSurveyActivity?.startDate;
+      if (!d) continue;
+
+      const rowYear = d.getFullYear();
+      const rowMonth = d.getMonth() + 1;
+      if (d < from || d > to) continue;
+
+      const key = `${rowYear}||${rowMonth}||${r.userId}`;
+      if (!byUserMonth.has(key)) {
+        byUserMonth.set(key, {
+          userId: r.userId,
+          name: String(r.user?.name ?? ''),
+          year: rowYear,
+          month: rowMonth,
+        });
+      }
+    }
+
+    const ordered = Array.from(byUserMonth.values()).sort((a, b) => {
+      const aTime = a.year * 100 + a.month;
+      const bTime = b.year * 100 + b.month;
+      if (aTime !== bTime) return aTime - bTime;
+      const nameCompare = a.name.localeCompare(b.name, 'id', { sensitivity: 'base' });
+      if (nameCompare !== 0) return nameCompare;
+      return a.userId.localeCompare(b.userId);
+    });
+
+    const targetKey = `${year}||${month}||${input.userId}`;
+    const idx = ordered.findIndex(
+      (x) => `${x.year}||${x.month}||${x.userId}` === targetKey,
+    );
+
+    if (idx < 0) {
+      throw new BadRequestException(
+        'Kode SPK/BAST tidak ditemukan untuk petugas dan bulan tersebut.',
+      );
+    }
+
+    return `B-${String(idx + 1).padStart(3, '0')}`;
   }
 
   private async reserveNextMonthlyDocSequence(
@@ -215,63 +319,26 @@ export class SurveyActivityService {
     nomorSPK?: string | null;
     nomorBAST?: string | null;
   }) {
-    const existing = await this.prisma.monthlyAdminDocRecap.findUnique({
-      where: {
-        userId_year_month: {
-          userId: input.userId,
-          year: input.year,
-          month: input.month,
-        },
-      },
-      select: {
-        spkNumber: true,
-        bastNumber: true,
-      },
+    const code = await this.getMonthlyStaffDocCode({
+      userId: input.userId,
+      year: input.year,
+      month: input.month,
     });
 
-    const manualSpk = String(input.nomorSPK ?? '').trim();
-    const manualBast = String(input.nomorBAST ?? '').trim();
-    const existingSpk = String(existing?.spkNumber ?? '').trim();
-    const existingBast = String(existing?.bastNumber ?? '').trim();
-
-    if (manualSpk && manualBast) {
-      return {
-        nomorSPK: manualSpk,
-        nomorBAST: manualBast,
-      };
-    }
-
-    if (existingSpk && existingBast) {
-      return {
-        nomorSPK: existingSpk,
-        nomorBAST: existingBast,
-      };
-    }
-
-    return this.prisma.$transaction(async (tx) => {
-      let nomorSPK = manualSpk || existingSpk;
-      let nomorBAST = manualBast || existingBast;
-
-      if (!nomorSPK) {
-        const seq = await this.reserveNextMonthlyDocSequence(tx, 'SPK');
-        nomorSPK = this.buildAutoDocNumber(seq, 'SPK', input.month, input.year);
-      }
-
-      if (!nomorBAST) {
-        const seq = await this.reserveNextMonthlyDocSequence(tx, 'BAST');
-        nomorBAST = this.buildAutoDocNumber(
-          seq,
-          'BAST',
-          input.month,
-          input.year,
-        );
-      }
-
-      return {
-        nomorSPK,
-        nomorBAST,
-      };
-    });
+    return {
+      nomorSPK: this.buildMonthlyDocNumberFromCode(
+        code,
+        'SPK',
+        input.month,
+        input.year,
+      ),
+      nomorBAST: this.buildMonthlyDocNumberFromCode(
+        code,
+        'BAST',
+        input.month,
+        input.year,
+      ),
+    };
   }
 
   async getMonthlyDocNumberSuggestion(
@@ -279,67 +346,11 @@ export class SurveyActivityService {
     month: number,
     year: number,
   ) {
-    const existing = await this.prisma.monthlyAdminDocRecap.findUnique({
-      where: {
-        userId_year_month: {
-          userId,
-          year,
-          month,
-        },
-      },
-      select: {
-        spkNumber: true,
-        bastNumber: true,
-      },
-    });
-
-    const existingSpk = String(existing?.spkNumber ?? '').trim();
-    const existingBast = String(existing?.bastNumber ?? '').trim();
-
-    if (existingSpk || existingBast) {
-      return {
-        nomorSPK: existingSpk || '',
-        nomorBAST: existingBast || '',
-      };
-    }
-
-    const [spkStartRow, spkCurrentRow, bastStartRow, bastCurrentRow] =
-      await Promise.all([
-        this.prisma.systemSetting.findUnique({
-          where: { key: this.MONTHLY_DOC_SPK_START_KEY },
-          select: { value: true },
-        }),
-        this.prisma.systemSetting.findUnique({
-          where: { key: this.MONTHLY_DOC_SPK_CURRENT_KEY },
-          select: { value: true },
-        }),
-        this.prisma.systemSetting.findUnique({
-          where: { key: this.MONTHLY_DOC_BAST_START_KEY },
-          select: { value: true },
-        }),
-        this.prisma.systemSetting.findUnique({
-          where: { key: this.MONTHLY_DOC_BAST_CURRENT_KEY },
-          select: { value: true },
-        }),
-      ]);
-
-    const spkStart = this.parsePositiveInt(spkStartRow?.value, 1);
-    const spkCurrent = this.parsePositiveInt(
-      spkCurrentRow?.value,
-      spkStart - 1,
-    );
-    const bastStart = this.parsePositiveInt(bastStartRow?.value, 1);
-    const bastCurrent = this.parsePositiveInt(
-      bastCurrentRow?.value,
-      bastStart - 1,
-    );
-
-    const nextSpk = Math.max(spkCurrent + 1, spkStart);
-    const nextBast = Math.max(bastCurrent + 1, bastStart);
+    const code = await this.getMonthlyStaffDocCode({ userId, month, year });
 
     return {
-      nomorSPK: this.buildAutoDocNumber(nextSpk, 'SPK', month, year),
-      nomorBAST: this.buildAutoDocNumber(nextBast, 'BAST', month, year),
+      nomorSPK: this.buildMonthlyDocNumberFromCode(code, 'SPK', month, year),
+      nomorBAST: this.buildMonthlyDocNumberFromCode(code, 'BAST', month, year),
     };
   }
 
@@ -3152,12 +3163,16 @@ export class SurveyActivityService {
 
   async getMitraBulananExport(year: number, month?: number) {
     const hasMonth = typeof month === 'number' && month >= 1 && month <= 12;
-    const from = hasMonth
+    const visibleFrom = hasMonth
       ? new Date(year, month - 1, 1)
       : new Date(year, 0, 1);
-    const to = hasMonth
+    const visibleTo = hasMonth
       ? new Date(year, month, 0, 23, 59, 59, 999)
       : new Date(year, 11, 31, 23, 59, 59, 999);
+
+      const anchorYear = hasMonth && month === 12 ? year : year - 1;
+    const from = new Date(anchorYear, 11, 1);
+    const to = visibleTo;
 
     const rows = await this.prisma.userProgress.findMany({
       where: {
@@ -3255,8 +3270,9 @@ export class SurveyActivityService {
       const ssa = r.subSurveyActivity;
       if (!ssa?.startDate) continue;
 
+      const rowYear = ssa.startDate.getFullYear();
       const month = ssa.startDate.getMonth() + 1;
-      const key = `${year}||${month}||${r.userId}||${r.subSurveyActivityId}`;
+      const key = `${rowYear}||${month}||${r.userId}||${r.subSurveyActivityId}`;
 
       const compare = String(ssa?.priceCompareUnit ?? 'SAMPEL');
       const bill = toNumberLoose(r.docsBill);
@@ -3264,7 +3280,7 @@ export class SurveyActivityService {
       const existing = map.get(key);
       if (!existing) {
         const row = {
-          year,
+          year: rowYear,
           month,
           userId: r.userId,
           subSurveyActivityId: r.subSurveyActivityId,
@@ -3319,22 +3335,73 @@ export class SurveyActivityService {
       if (end > curEnd) existing.endDate = ssa.endDate ?? ssa.startDate;
     }
 
+    const byUserMonth = new Map<string, any[]>();
     for (const r of out) {
       if (r?.__blocks) delete r.__blocks;
+      const k = `${r.year}||${r.month}||${r.userId}`;
+      if (!byUserMonth.has(k)) byUserMonth.set(k, []);
+      byUserMonth.get(k)!.push(r);
     }
 
-    out.sort((a, b) => {
+    const orderedUserMonths = Array.from(byUserMonth.entries())
+      .map(([key, list]) => {
+        const first = list[0] ?? {};
+        return {
+          key,
+          year: Number(first.year ?? 0),
+          month: Number(first.month ?? 0),
+          userId: String(first.userId ?? ''),
+          name: String(first.name ?? ''),
+        };
+      })
+      .sort((a, b) => {
+        const aTime = a.year * 100 + a.month;
+        const bTime = b.year * 100 + b.month;
+        if (aTime !== bTime) return aTime - bTime;
+        const nameCompare = a.name.localeCompare(b.name, 'id', { sensitivity: 'base' });
+        if (nameCompare !== 0) return nameCompare;
+        return a.userId.localeCompare(b.userId);
+      });
+
+    orderedUserMonths.forEach((item, idx) => {
+      const code = `B-${String(idx + 1).padStart(3, '0')}`;
+      const list = byUserMonth.get(item.key) ?? [];
+      for (const r of list) {
+        r.spkCode = code;
+        r.bastCode = code;
+        r.spkNumber = this.buildMonthlyDocNumberFromCode(
+          code,
+          'SPK',
+          Number(r.month),
+          Number(r.year),
+        );
+        r.bastNumber = this.buildMonthlyDocNumberFromCode(
+          code,
+          'BAST',
+          Number(r.month),
+          Number(r.year),
+        );
+      }
+    });
+
+    const visibleOut = out.filter((r) => {
+      const d = new Date(r.startDate);
+      return d >= visibleFrom && d <= visibleTo;
+    });
+
+    visibleOut.sort((a, b) => {
       if (a.month !== b.month) return a.month - b.month;
       const an = String(a.name ?? '');
       const bn = String(b.name ?? '');
-      if (an !== bn) return an.localeCompare(bn, 'id');
+      const nameCompare = an.localeCompare(bn, 'id', { sensitivity: 'base' });
+      if (nameCompare !== 0) return nameCompare;
       return String(a.subsurveyactivity ?? '').localeCompare(
         String(b.subsurveyactivity ?? ''),
         'id',
       );
     });
 
-    return out;
+    return visibleOut;
   }
 
   async exportUserSamplePhotos(
@@ -4058,17 +4125,6 @@ export class SurveyActivityService {
 
     const nomorSPK = String(resolvedNumbers.nomorSPK || '').trim();
     const nomorBAST = String(resolvedNumbers.nomorBAST || '').trim();
-
-    if (!nomorSPK.includes('/BPS1603/PPK/SPK/')) {
-      throw new BadRequestException(
-        'Format nomorSPK tidak sesuai (wajib mengandung /BPS1603/PPK/SPK/)',
-      );
-    }
-    if (!nomorBAST.includes('/BPS1603/PPK/BAST/')) {
-      throw new BadRequestException(
-        'Format nomorBAST tidak sesuai (wajib mengandung /BPS1603/PPK/BAST/)',
-      );
-    }
 
     const hariSpk = this.dayNameId(input.spkDocDate);
     const hariBast = this.dayNameId(input.bastDocDate);

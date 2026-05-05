@@ -22,6 +22,10 @@ export const GET_MITRA_BULANAN_EXPORT = gql`
       limit_bill
       chiefName
       dipa
+      spkCode
+      bastCode
+      spkNumber
+      bastNumber
     }
   }
 `;

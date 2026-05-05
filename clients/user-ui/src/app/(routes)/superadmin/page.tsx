@@ -25,8 +25,6 @@ import { GET_DAILY_SIGNUP_CODE } from "@/src/graphql/actions/get-daily-signup-co
 import { ROTATE_DAILY_SIGNUP_CODE } from "@/src/graphql/actions/rotate-daily-signup-code.action";
 import { getRoles } from "@/src/utils/roles";
 import { Search } from "lucide-react";
-import { GET_MONTHLY_STAFF_DOC_NUMBER_CONFIG } from "@/src/graphql/actions/get-monthly-staff-doc-number-config.action";
-import { SET_MONTHLY_STAFF_DOC_NUMBER_CONFIG } from "@/src/graphql/actions/set-monthly-staff-doc-number-config.action";
 
 function Tabs<T extends string>({
   tabs,
@@ -302,7 +300,8 @@ function SingleMonthMitraTable({
 
       {rowsMonth.length === 0 && (
         <div className="mb-3 text-sm text-gray-600">
-          Data kosong untuk bulan {monthNames[activeMonth - 1]} {year}. Tolong dicek kembali
+          Data kosong untuk bulan {monthNames[activeMonth - 1]} {year}. Tolong
+          dicek kembali
         </div>
       )}
 
@@ -311,6 +310,8 @@ function SingleMonthMitraTable({
           <thead className="bg-gray-50 sticky top-0">
             <tr className="border-b">
               <th className="px-2 py-2 text-left w-[40px]">No</th>
+              <th className="px-2 py-2 text-left">Kode SPK</th>
+              <th className="px-2 py-2 text-left">Kode BAST</th>
               <th className="px-2 py-2 text-left">Nama</th>
               <th className="px-2 py-2 text-left">Pekerjaan</th>
               <th className="px-2 py-2 text-left">Kecamatan</th>
@@ -362,6 +363,13 @@ function SingleMonthMitraTable({
                         <>
                           <td rowSpan={span} className="px-2 py-2 border">
                             {gi + 1}
+                          </td>
+                          <td rowSpan={span} className="px-2 py-2 border">
+                            {" "}
+                            {r?.spkCode ?? "-"}
+                          </td>
+                          <td rowSpan={span} className="px-2 py-2 border">
+                            {r?.bastCode ?? "-"}
                           </td>
                           <td rowSpan={span} className="px-2 py-2 border">
                             {r?.name ?? "-"}
@@ -429,7 +437,7 @@ function SingleMonthMitraTable({
               })
             ) : (
               <tr>
-                <td colSpan={15} className="px-2 py-2 text-center">
+                <td colSpan={19} className="px-2 py-2 text-center">
                   Pencarian "{q}" tidak ditemukan.
                 </td>
               </tr>
@@ -488,8 +496,8 @@ function MonthlyStaffUsagePanel({
     notifyOnNetworkStatusChange: true,
   });
 
-  const exportPreviewRowsRaw = ((exportPreviewData ?? exportPreviewPreviousData)?.getMitraBulananExport ??
-    []) as any[];
+  const exportPreviewRowsRaw = ((exportPreviewData ?? exportPreviewPreviousData)
+    ?.getMitraBulananExport ?? []) as any[];
 
   useEffect(() => {
     const now = new Date();
@@ -517,40 +525,14 @@ function MonthlyStaffUsagePanel({
     },
   );
 
-  const { data: monthlyDocConfigData } = useQuery(
-    GET_MONTHLY_STAFF_DOC_NUMBER_CONFIG,
-    {
-      fetchPolicy: "cache-and-network",
-    },
-  );
-
-  const [setMonthlyDocNumberConfig, { loading: savingDocNumberConfig }] =
-    useMutation(SET_MONTHLY_STAFF_DOC_NUMBER_CONFIG, {
-      refetchQueries: [{ query: GET_MONTHLY_STAFF_DOC_NUMBER_CONFIG }],
-    });
-
   const defaultPpkId =
     (ppkData?.ppkOptions ?? []).find((x: any) => x?.isDefault)?.id ?? "";
   const [selectedDefaultPpkId, setSelectedDefaultPpkId] = useState<string>("");
-  const [spkStartNumberInput, setSpkStartNumberInput] = useState<string>("");
-  const [bastStartNumberInput, setBastStartNumberInput] = useState<string>("");
-
   useEffect(() => {
     if (!selectedDefaultPpkId && defaultPpkId) {
       setSelectedDefaultPpkId(defaultPpkId);
     }
   }, [defaultPpkId, selectedDefaultPpkId]);
-
-  useEffect(() => {
-    const cfg = monthlyDocConfigData?.DocNumberConfig;
-    if (!cfg) return;
-    if (!spkStartNumberInput) {
-      setSpkStartNumberInput(String(cfg.spkStartNumber ?? 1));
-    }
-    if (!bastStartNumberInput) {
-      setBastStartNumberInput(String(cfg.bastStartNumber ?? 1));
-    }
-  }, [monthlyDocConfigData, spkStartNumberInput, bastStartNumberInput]);
 
   const rows = (data?.getMonthlyActivityStaffUsage ?? []) as Array<{
     month: string;
@@ -718,6 +700,8 @@ function MonthlyStaffUsagePanel({
 
       const columns = [
         { header: "NO", width: 5 },
+        { header: "KODE SPK", width: 12 },
+        { header: "KODE BAST", width: 12 },
         { header: "NAMA", width: 28 },
         { header: "PEKERJAAN", width: 24 },
         { header: "KECAMATAN", width: 18 },
@@ -751,6 +735,8 @@ function MonthlyStaffUsagePanel({
         // ===== Header baris 1 & 2 =====
         ws.getRow(1).values = [
           "NO",
+          "KODE SPK",
+          "KODE BAST",
           "NAMA",
           "PEKERJAAN",
           "KECAMATAN",
@@ -777,6 +763,8 @@ function MonthlyStaffUsagePanel({
           "",
           "",
           "",
+          "",
+          "",
           "VOL",
           "SATUAN",
           "",
@@ -790,13 +778,13 @@ function MonthlyStaffUsagePanel({
         ];
 
         const mergeDownCols = [
-          1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 13, 14, 15, 16, 17,
+          1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
         ];
         for (const c of mergeDownCols) {
           ws.mergeCells(1, c, 2, c);
         }
 
-        ws.mergeCells(1, 8, 1, 9);
+        ws.mergeCells(1, 10, 1, 11);
 
         for (let r = 1; r <= 2; r++) {
           const row = ws.getRow(r);
@@ -863,6 +851,8 @@ function MonthlyStaffUsagePanel({
 
             ws.getRow(currentRow).values = [
               no,
+              r.spkCode ?? "",
+              r.bastCode ?? "",
               r.name ?? "",
               r.job_name ?? "",
               r.district ?? "",
@@ -890,7 +880,7 @@ function MonthlyStaffUsagePanel({
               };
             });
 
-            [8, 10, 11, 13, 14, 15].forEach((c) => {
+            [10, 12, 13, 15, 16, 17].forEach((c) => {
               ws.getCell(currentRow, c).alignment = {
                 vertical: "middle",
                 horizontal: "right",
@@ -904,7 +894,7 @@ function MonthlyStaffUsagePanel({
           const span = endUserRow - startUserRow + 1;
 
           if (span > 1) {
-            [1, 2, 3, 4, 5, 14].forEach((c) => {
+            [1, 2, 3, 4, 5, 6, 7, 16].forEach((c) => {
               ws.mergeCells(startUserRow, c, endUserRow, c);
               ws.getCell(startUserRow, c).alignment = {
                 vertical: "top",
@@ -913,7 +903,7 @@ function MonthlyStaffUsagePanel({
               };
             });
 
-            [14].forEach((c) => {
+            [16].forEach((c) => {
               ws.getCell(startUserRow, c).alignment = {
                 vertical: "top",
                 horizontal: "right",
@@ -1043,116 +1033,6 @@ function MonthlyStaffUsagePanel({
                 ].join(" ")}
               >
                 {savingDefaultPpk ? "Menyimpan..." : "Simpan"}
-              </button>
-            </div>
-          </div>
-
-          <div className="border rounded-lg p-3 sm:p-4">
-            <div className="text-sm font-semibold mb-3">
-              Nomor Awal Otomatis SPK & BAST
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-gray-600 mb-1">
-                  Nomor awal SPK
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  className="w-full rounded-md border px-3 py-2 bg-white"
-                  value={spkStartNumberInput}
-                  onChange={(e) => setSpkStartNumberInput(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs text-gray-600 mb-1">
-                  Nomor awal BAST
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  className="w-full rounded-md border px-3 py-2 bg-white"
-                  value={bastStartNumberInput}
-                  onChange={(e) => setBastStartNumberInput(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="mt-3 text-xs text-gray-600 space-y-1">
-              <div>
-                Nomor SPK terakhir:{" "}
-                <b>
-                  {monthlyDocConfigData?.DocNumberConfig?.currentSpkNumber ??
-                    "-"}
-                </b>
-              </div>
-              <div>
-                Nomor BAST terakhir:{" "}
-                <b>
-                  {monthlyDocConfigData?.DocNumberConfig?.currentBastNumber ??
-                    "-"}
-                </b>
-              </div>
-              <div>
-                Nomor berikutnya yang akan dipakai:{" "}
-                <b>
-                  SPK{" "}
-                  {monthlyDocConfigData?.DocNumberConfig?.nextSpkNumber ?? "-"}
-                </b>
-                {" / "}
-                <b>
-                  BAST{" "}
-                  {monthlyDocConfigData?.DocNumberConfig?.nextBastNumber ?? "-"}
-                </b>
-              </div>
-            </div>
-
-            <div className="mt-3">
-              <button
-                type="button"
-                disabled={savingDocNumberConfig}
-                onClick={async () => {
-                  try {
-                    const spkStartNumber = Number(spkStartNumberInput || 0);
-                    const bastStartNumber = Number(bastStartNumberInput || 0);
-
-                    if (
-                      !Number.isFinite(spkStartNumber) ||
-                      spkStartNumber < 1
-                    ) {
-                      return toast.error("Nomor awal SPK harus minimal 1");
-                    }
-                    if (
-                      !Number.isFinite(bastStartNumber) ||
-                      bastStartNumber < 1
-                    ) {
-                      return toast.error("Nomor awal BAST harus minimal 1");
-                    }
-
-                    await setMonthlyDocNumberConfig({
-                      variables: {
-                        spkStartNumber,
-                        bastStartNumber,
-                      },
-                    });
-
-                    toast.success("Nomor awal SPK dan BAST berhasil disimpan");
-                  } catch (e: any) {
-                    toast.error(
-                      e?.message ?? "Gagal menyimpan nomor awal SPK/BAST",
-                    );
-                  }
-                }}
-                className={[
-                  "px-3 py-2 rounded-md text-sm font-semibold",
-                  savingDocNumberConfig
-                    ? "bg-gray-300 text-gray-700 cursor-not-allowed"
-                    : "bg-indigo-600 text-white hover:bg-indigo-700",
-                ].join(" ")}
-              >
-                {savingDocNumberConfig ? "Menyimpan..." : "Simpan Nomor Awal"}
               </button>
             </div>
           </div>

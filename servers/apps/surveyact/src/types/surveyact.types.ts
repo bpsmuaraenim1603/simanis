@@ -618,6 +618,18 @@ export class MitraBulananExportRowType {
 
   @Field(() => String)
   dipa!: string;
+
+  @Field(() => String, { nullable: true })
+  spkCode?: string | null;
+
+  @Field(() => String, { nullable: true })
+  bastCode?: string | null;
+
+  @Field(() => String, { nullable: true })
+  spkNumber?: string | null;
+
+  @Field(() => String, { nullable: true })
+  bastNumber?: string | null;
 }
 
 @ObjectType()

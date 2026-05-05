@@ -94,8 +94,6 @@ export default function BastSpkPage() {
   const [ppkNip, setPpkNip] = useState<string>("");
   const [nomorSPK, setNomorSPK] = useState<string>("");
   const [nomorBAST, setNomorBAST] = useState<string>("");
-  const [nomorSPKTouched, setNomorSPKTouched] = useState<boolean>(false);
-  const [nomorBASTTouched, setNomorBASTTouched] = useState<boolean>(false);
   const [spkUrl, setSpkUrl] = useState<string | null>(null);
   const [bastUrl, setBastUrl] = useState<string | null>(null);
   const [expiresAtInfo, setExpiresAtInfo] = useState<string>("");
@@ -112,7 +110,9 @@ export default function BastSpkPage() {
         const mapped: EditableRow[] = data.map((r) => {
           const editTotalDocs = toNumber(r.totalDocs);
           const editUnitCost = toNumber(r.unitCost);
-          const editTotalCost = Number((editTotalDocs * editUnitCost).toFixed(2));
+          const editTotalCost = Number(
+            (editTotalDocs * editUnitCost).toFixed(2),
+          );
           return {
             ...r,
             editTotalDocs,
@@ -140,8 +140,6 @@ export default function BastSpkPage() {
         }
         setNomorSPK(out?.nomorSPK ?? "");
         setNomorBAST(out?.nomorBAST ?? "");
-        setNomorSPKTouched(false);
-        setNomorBASTTouched(false);
         if (out?.expiresAt) {
           const dt = new Date(out.expiresAt);
           setExpiresAtInfo(dt.toLocaleString());
@@ -176,19 +174,15 @@ export default function BastSpkPage() {
       setPpkName(recap.ppkUser?.name ?? recap.ppkName ?? "");
       setPpkNip(recap.ppkUser?.nip ?? recap.ppkNip ?? "");
 
-      if (!nomorSPKTouched) {
-        setNomorSPK(recap.spkNumber ?? "");
-      }
-      if (!nomorBASTTouched) {
-        setNomorBAST(recap.bastNumber ?? "");
-      } 
+      setNomorSPK(recap.spkNumber ?? "");
+      setNomorBAST(recap.bastNumber ?? "");
     },
     onError: () => {
       setPpkUserId("");
       setPpkName("");
       setPpkNip("");
-      if (!nomorSPKTouched) setNomorSPK("");
-      if (!nomorBASTTouched) setNomorBAST("");
+      setNomorSPK("");
+      setNomorBAST("");
     },
   });
 
@@ -200,12 +194,8 @@ export default function BastSpkPage() {
         const suggestion = res?.monthlyDocNumberSuggestion;
         if (!suggestion) return;
 
-        if (!nomorSPKTouched) {
-          setNomorSPK(String(suggestion.nomorSPK ?? ""));
-        }
-        if (!nomorBASTTouched) {
-          setNomorBAST(String(suggestion.nomorBAST ?? ""));
-        }
+        setNomorSPK(String(suggestion.nomorSPK ?? ""));
+        setNomorBAST(String(suggestion.nomorBAST ?? ""));
       },
     },
   );
@@ -254,13 +244,12 @@ export default function BastSpkPage() {
 
     setSpkUrl(null);
     setBastUrl(null);
-   setExpiresAtInfo("");
-
-    setNomorSPKTouched(false);
-    setNomorBASTTouched(false);
+    setExpiresAtInfo("");
 
     loadRecap({ variables: { userId: selectedUserId, year, month } });
-    loadNumberSuggestion({ variables: { userId: selectedUserId, year, month } });
+    loadNumberSuggestion({
+      variables: { userId: selectedUserId, year, month },
+    });
   }, [selectedUserId, year, month, loadRecap, loadNumberSuggestion]);
 
   const onRecalcRow = (idx: number, next: Partial<EditableRow>) => {
@@ -409,40 +398,14 @@ export default function BastSpkPage() {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-semibold mb-1">
-              Nomor SPK
-            </label>
-            <input
-              className="w-full rounded-md border px-3 py-2 bg-white"
-              value={nomorSPK}
-              onChange={(e) => {
-                setNomorSPKTouched(true);
-                setNomorSPK(e.target.value);
-              }}
-              placeholder="Nomor SPK akan diusulkan otomatis"
-            />
-            <span className="text-sm text-gray-600">
-              Nomor SPK diusulkan otomatis oleh sistem
-            </span>
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold mb-1">
-              Nomor BAST
-            </label>
-            <input
-              className="w-full rounded-md border px-3 py-2 bg-white"
-              value={nomorBAST}
-              onChange={(e) => {
-                setNomorBASTTouched(true);
-                setNomorBAST(e.target.value);
-              }}
-              placeholder="Nomor BAST akan diusulkan otomatis"
-            />
-            <span className="text-sm text-gray-600">
-              Nomor BAST diusulkan otomatis oleh sistem
-            </span>
+          <div className="md:col-span-2 xl:col-span-3 rounded-md border bg-gray-50 px-3 py-2 text-sm text-gray-700">
+            Nomor SPK dan BAST akan dibuat otomatis dari kode pada tabel
+            Pemakaian Mitra Bulanan sesuai bulan yang dipilih.
+            {nomorSPK || nomorBAST ? (
+              <div className="mt-1 text-xs text-gray-600">
+                SPK: <b>{nomorSPK || "-"}</b> | BAST: <b>{nomorBAST || "-"}</b>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -636,8 +599,6 @@ export default function BastSpkPage() {
                     ppkUserId,
                     ppkName,
                     ppkNip,
-                    nomorSPK: nomorSPK.trim() || null,
-                    nomorBAST: nomorBAST.trim() || null,
                     spkDocDate: new Date(spkDocDate),
                     bastDocDate: new Date(bastDocDate),
                     pekerjaanPetugas: petugasJobName,
