@@ -201,6 +201,12 @@ export class DocNumberConfigResponse {
   @Field(() => Int)
   bastStartNumber!: number;
 
+  @Field(() => String)
+  spkFormat!: string;
+
+  @Field(() => String)
+  bastFormat!: string;
+
   @Field(() => Int)
   currentSpkNumber!: number;
 

@@ -465,16 +465,44 @@ export class UsersService {
     const skip = (page - 1) * pageSize;
     const keyword = String(input?.search ?? '').trim();
 
-    const where: Prisma.UserWhereInput = keyword
-      ? {
-          OR: [
-            { name: { contains: keyword, mode: 'insensitive' } },
-            { email: { contains: keyword, mode: 'insensitive' } },
-            { primaryRole: { equals: keyword as any } },
-            { roles: { has: keyword as any } },
-          ],
-        }
-      : {};
+    const normalizeRoleKeyword = (value: string) => {
+      const cleaned = value.trim().toLowerCase();
+      const aliases: Record<string, 'User' | 'Admin' | 'Superadmin' | 'Supervisor' | 'Keuangan'> = {
+        user: 'User',
+        petugas: 'User',
+        admin: 'Admin',
+        superadmin: 'Superadmin',
+        'super admin': 'Superadmin',
+        supervisor: 'Supervisor',
+        pengawas: 'Supervisor',
+        keuangan: 'Keuangan',
+      };
+      return aliases[cleaned] ?? null;
+    };
+
+    const roleKeyword = keyword ? normalizeRoleKeyword(keyword) : null;
+
+    const searchOr: Prisma.UserWhereInput[] = keyword
+      ? [
+          { name: { contains: keyword, mode: 'insensitive' } },
+          { email: { contains: keyword, mode: 'insensitive' } },
+          { nip: { contains: keyword, mode: 'insensitive' } },
+          { phone_number: { contains: keyword, mode: 'insensitive' } },
+          { job_name: { contains: keyword, mode: 'insensitive' } },
+          { address: { contains: keyword, mode: 'insensitive' } },
+          { district: { name: { contains: keyword, mode: 'insensitive' } } },
+          { village: { name: { contains: keyword, mode: 'insensitive' } } },
+        ]
+      : [];
+
+    if (roleKeyword) {
+      searchOr.push(
+        { primaryRole: { equals: roleKeyword } },
+        { roles: { has: roleKeyword } },
+      );
+    }
+
+    const where: Prisma.UserWhereInput = keyword ? { OR: searchOr } : {};
 
     const [total, items] = await this.prisma.$transaction([
       this.prisma.user.count({ where }),
@@ -724,21 +752,30 @@ export class UsersService {
     return updated.count;
   }
 
-  
   private readonly DEFAULT_PPK_SETTING_KEY = 'DEFAULT_PPK_USER_ID';
   private readonly MONTHLY_DOC_SPK_START_KEY = 'MONTHLY_DOC_SPK_START_NUMBER';
   private readonly MONTHLY_DOC_BAST_START_KEY = 'MONTHLY_DOC_BAST_START_NUMBER';
-  private readonly MONTHLY_DOC_SPK_CURRENT_KEY = 'MONTHLY_DOC_SPK_CURRENT_NUMBER';
-  private readonly MONTHLY_DOC_BAST_CURRENT_KEY = 'MONTHLY_DOC_BAST_CURRENT_NUMBER';
+  private readonly MONTHLY_DOC_SPK_CURRENT_KEY =
+    'MONTHLY_DOC_SPK_CURRENT_NUMBER';
+  private readonly MONTHLY_DOC_BAST_CURRENT_KEY =
+    'MONTHLY_DOC_BAST_CURRENT_NUMBER';
+  private readonly MONTHLY_DOC_SPK_FORMAT_KEY = 'MONTHLY_DOC_SPK_FORMAT';
+  private readonly MONTHLY_DOC_BAST_FORMAT_KEY = 'MONTHLY_DOC_BAST_FORMAT';
+  private readonly DEFAULT_SPK_FORMAT = '{KODE}/16030/HK.600/{MM}/SPK/{YYYY}';
+  private readonly DEFAULT_BAST_FORMAT = '{KODE}/16030/HK.600/{MM}/BAST/{YYYY}';
 
   private isEligibleDefaultPpkRole(role: any): boolean {
     // eligible roles for being selected as default PPK
-    return ['Keuangan', 'Admin', 'Supervisor', 'Superadmin'].includes(String(role));
+    return ['Keuangan', 'Admin', 'Supervisor', 'Superadmin'].includes(
+      String(role),
+    );
   }
 
   async setDefaultPpkUser(currentUser: User, userId: string) {
     if (String((currentUser as any)?.primaryRole) !== 'Superadmin') {
-      throw new BadRequestException('Hanya Superadmin yang dapat mengubah default PPK.');
+      throw new BadRequestException(
+        'Hanya Superadmin yang dapat mengubah default PPK.',
+      );
     }
 
     const target = await this.prisma.user.findUnique({
@@ -749,7 +786,9 @@ export class UsersService {
     if (!target) throw new BadRequestException('User PPK tidak ditemukan.');
 
     if (!this.isEligibleDefaultPpkRole((target as any).primaryRole)) {
-      throw new BadRequestException('Role user tersebut tidak memenuhi syarat sebagai default PPK.');
+      throw new BadRequestException(
+        'Role user tersebut tidak memenuhi syarat sebagai default PPK.',
+      );
     }
 
     await this.prisma.systemSetting.upsert({
@@ -776,6 +815,26 @@ export class UsersService {
     return this.parsePositiveInt(row?.value, fallback);
   }
 
+  private async getSettingString(key: string, fallback: string) {
+    const row = await this.prisma.systemSetting.findUnique({
+      where: { key },
+      select: { value: true },
+    });
+    const value = String(row?.value ?? '').trim();
+    return value || fallback;
+  }
+
+  private normalizeDocFormat(format: string, fallback: string) {
+    const value = String(format ?? '').trim();
+    if (!value) return fallback;
+    if (!value.includes('{KODE}') && !value.includes('{NO}')) {
+      throw new BadRequestException(
+        'Format nomor wajib memuat token {KODE} atau {NO}.',
+      );
+    }
+    return value;
+  }
+
   async getDocNumberConfig() {
     const spkStartNumber = await this.getSettingNumber(
       this.MONTHLY_DOC_SPK_START_KEY,
@@ -795,9 +854,19 @@ export class UsersService {
       bastStartNumber - 1,
     );
 
+    const spkFormat = await this.getSettingString(
+      this.MONTHLY_DOC_SPK_FORMAT_KEY,
+      this.DEFAULT_SPK_FORMAT,
+    );
+    const bastFormat = await this.getSettingString(
+      this.MONTHLY_DOC_BAST_FORMAT_KEY,
+      this.DEFAULT_BAST_FORMAT,
+    );
+
     return {
       spkStartNumber,
       bastStartNumber,
+      spkFormat,
       currentSpkNumber,
       currentBastNumber,
       nextSpkNumber: Math.max(currentSpkNumber + 1, spkStartNumber),
@@ -808,7 +877,9 @@ export class UsersService {
   async setDocNumberConfig(
     currentUser: User,
     spkStartNumber: number,
-    bastStartNumber: number
+    bastStartNumber: number,
+    spkFormat?: string,
+    bastFormat?: string,
   ) {
     if (String((currentUser as any)?.primaryRole) !== 'Superadmin') {
       throw new BadRequestException(
@@ -818,6 +889,14 @@ export class UsersService {
 
     const nextSpkStart = this.parsePositiveInt(spkStartNumber, 1);
     const nextBastStart = this.parsePositiveInt(bastStartNumber, 1);
+    const nextSpkFormat = this.normalizeDocFormat(
+      spkFormat ?? this.DEFAULT_SPK_FORMAT,
+      this.DEFAULT_SPK_FORMAT,
+    );
+    const nextBastFormat = this.normalizeDocFormat(
+      bastFormat ?? this.DEFAULT_BAST_FORMAT,
+      this.DEFAULT_BAST_FORMAT,
+    );
 
     await this.prisma.$transaction(async (tx) => {
       const currentSpk = await tx.systemSetting.findUnique({
@@ -847,6 +926,18 @@ export class UsersService {
         update: { value: String(nextBastStart) },
       });
 
+      await tx.systemSetting.upsert({
+        where: { key: this.MONTHLY_DOC_SPK_FORMAT_KEY },
+        create: { key: this.MONTHLY_DOC_SPK_FORMAT_KEY, value: nextSpkFormat },
+        update: { value: nextSpkFormat },
+      });
+
+      await tx.systemSetting.upsert({
+        where: { key: this.MONTHLY_DOC_BAST_FORMAT_KEY },
+        create: { key: this.MONTHLY_DOC_BAST_FORMAT_KEY, value: nextBastFormat },
+        update: { value: nextBastFormat },
+      });
+
       const currentSpkNumber = this.parsePositiveInt(
         currentSpk?.value,
         nextSpkStart - 1,
@@ -870,7 +961,7 @@ export class UsersService {
       if (currentBastNumber < nextBastStart - 1) {
         await tx.systemSetting.upsert({
           where: { key: this.MONTHLY_DOC_BAST_CURRENT_KEY },
-         create: {
+          create: {
             key: this.MONTHLY_DOC_BAST_CURRENT_KEY,
             value: String(nextBastStart - 1),
           },

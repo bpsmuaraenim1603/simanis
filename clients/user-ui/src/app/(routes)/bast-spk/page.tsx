@@ -399,13 +399,32 @@ export default function BastSpkPage() {
           </div>
 
           <div className="md:col-span-2 xl:col-span-3 rounded-md border bg-gray-50 px-3 py-2 text-sm text-gray-700">
-            Nomor SPK dan BAST akan dibuat otomatis dari kode pada tabel
-            Pemakaian Mitra Bulanan sesuai bulan yang dipilih.
+            Format nomor otomatis tampil setelah petugas dan bulan dipilih.
             {nomorSPK || nomorBAST ? (
               <div className="mt-1 text-xs text-gray-600">
                 SPK: <b>{nomorSPK || "-"}</b> | BAST: <b>{nomorBAST || "-"}</b>
               </div>
             ) : null}
+          </div>\<div>
+            <label className="block text-sm font-semibold mb-1">Nomor SPK</label>
+            <input
+              className="w-full rounded-md border px-3 py-2 bg-white"
+              value={nomorSPK}
+              onChange={(e) => setNomorSPK(e.target.value)}
+              placeholder="Nomor SPK otomatis, bisa diubah"
+              disabled={!selectedUserId}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold mb-1">Nomor BAST</label>
+            <input
+              className="w-full rounded-md border px-3 py-2 bg-white"
+              value={nomorBAST}
+              onChange={(e) => setNomorBAST(e.target.value)}
+              placeholder="Nomor BAST otomatis, bisa diubah"
+              disabled={!selectedUserId}
+            />
           </div>
         </div>
 
@@ -599,6 +618,8 @@ export default function BastSpkPage() {
                     ppkUserId,
                     ppkName,
                     ppkNip,
+                    nomorSPK: nomorSPK.trim(),
+                    nomorBAST: nomorBAST.trim(),
                     spkDocDate: new Date(spkDocDate),
                     bastDocDate: new Date(bastDocDate),
                     pekerjaanPetugas: petugasJobName,

@@ -306,11 +306,15 @@ export class UsersResolver {
     @CurrentUser() user: User,
     @Args('spkStartNumber', { type: () => Int }) spkStartNumber: number,
     @Args('bastStartNumber', { type: () => Int }) bastStartNumber: number,
+    @Args('spkFormat', { type: () => String, nullable: true }) spkFormat?: string,
+    @Args('bastFormat', { type: () => String, nullable: true }) bastFormat?: string,
   ) {
     return this.usersService.setDocNumberConfig(
       user as any,
       spkStartNumber,
       bastStartNumber,
+      spkFormat,
+      bastFormat
     );
   }
 }

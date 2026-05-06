@@ -5,6 +5,8 @@ export const GET_MONTHLY_STAFF_DOC_NUMBER_CONFIG = gql`
     DocNumberConfig {
       spkStartNumber
       bastStartNumber
+      spkFormat
+      bastFormat
       currentSpkNumber
       currentBastNumber
       nextSpkNumber

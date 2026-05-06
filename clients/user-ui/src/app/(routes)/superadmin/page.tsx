@@ -20,6 +20,8 @@ import { GET_MONTHLY_ACTIVITY_STAFF_USAGE } from "@/src/graphql/actions/get-mont
 import { GET_MITRA_BULANAN_EXPORT } from "@/src/graphql/actions/get-mitra-bulanan-export.action";
 import { PPK_OPTIONS } from "@/src/graphql/actions/users.ppkOptions.gql";
 import { SET_DEFAULT_PPK_USER } from "@/src/graphql/actions/set-default-ppk-user.action";
+import { GET_MONTHLY_STAFF_DOC_NUMBER_CONFIG } from "@/src/graphql/actions/get-monthly-staff-doc-number-config.action";
+import { SET_MONTHLY_STAFF_DOC_NUMBER_CONFIG } from "@/src/graphql/actions/set-monthly-staff-doc-number-config.action";
 import HUSelect, { HUSelectOption } from "@/src/components/HUSelect";
 import { GET_DAILY_SIGNUP_CODE } from "@/src/graphql/actions/get-daily-signup-code.action";
 import { ROTATE_DAILY_SIGNUP_CODE } from "@/src/graphql/actions/rotate-daily-signup-code.action";
@@ -176,6 +178,15 @@ function SingleMonthMitraTable({
 
   const rowsMonth = rowsByMonth.get(activeMonth) ?? [];
 
+  const monthOptions: HUSelectOption[] = useMemo(
+    () =>
+      monthNames.map((name, idx) => ({
+        value: String(idx + 1),
+        label: `${name} ${year}`,
+      })),
+    [monthNames, year],
+  );
+
   const jumpMonth = (dir: -1 | 1) => {
     const next = activeMonth + dir;
     if (next < 1) {
@@ -262,39 +273,50 @@ function SingleMonthMitraTable({
 
   return (
     <div className="mt-3">
-      <div className="flex items-center justify-between gap-2 mb-2">
-        <div className="flex items-center gap-2 border rounded-md">
-          <IconButton
-            label="Bulan sebelumnya"
-            onClick={() => jumpMonth(-1)}
-            className="border-0"
-          >
-            <span className="text-xl text-gray-700">‹</span>
-          </IconButton>
-          <div className="text-sm font-semibold">
-            {monthNames[activeMonth - 1]} {year}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2 mb-2">
+        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+          <div className="flex items-center gap-2 border rounded-md w-fit">
+            <IconButton
+              label="Bulan sebelumnya"
+              onClick={() => jumpMonth(-1)}
+              className="border-0"
+            >
+              <span className="text-xl text-gray-700">‹</span>
+            </IconButton>
+            <div className="text-sm font-semibold min-w-[125px] text-center">
+              {monthNames[activeMonth - 1]} {year}
+            </div>
+            <IconButton
+              label="Bulan berikutnya"
+              onClick={() => jumpMonth(1)}
+              className="border-0"
+            >
+              <span className="text-xl text-gray-700">›</span>
+            </IconButton>
           </div>
-          <IconButton
-            label="Bulan berikutnya"
-            onClick={() => jumpMonth(1)}
-            className="border-0"
-          >
-            <span className="text-xl text-gray-700">›</span>
-          </IconButton>
+          <HUSelect
+            value={String(activeMonth)}
+            onValueChange={(v: string | null) => {
+              if (!v) return;
+              setActiveMonth(Number(v));
+            }}
+            options={monthOptions}
+            placeholder="Pilih bulan…"
+            className="w-full sm:w-[210px]"
+            buttonClassName="text-sm"
+          />
         </div>
-        <div>
-          <div className="relative w-full">
-            <Search
-              size={16}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-            />
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Pencarian"
-              className="w-full max-w-md rounded-md border border-gray-200 pl-9 pr-3 py-2 text-sm outline-none bg-white"
-            />
-          </div>
+        <div className="relative w-full lg:max-w-md">
+          <Search
+            size={16}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+          />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Cari nama, kegiatan, kecamatan, anggaran…"
+            className="w-full rounded-md border border-gray-200 pl-9 pr-3 py-2 text-sm outline-none bg-white"
+          />
         </div>
       </div>
 
@@ -306,12 +328,10 @@ function SingleMonthMitraTable({
       )}
 
       <div className="w-full overflow-auto max-h-[800px] border rounded-md">
-        <table className="min-w-[1150px] w-full text-[12px]">
+        <table className="min-w-[1050px] w-full text-[12px]">
           <thead className="bg-gray-50 sticky top-0">
             <tr className="border-b">
               <th className="px-2 py-2 text-left w-[40px]">No</th>
-              <th className="px-2 py-2 text-left">Kode SPK</th>
-              <th className="px-2 py-2 text-left">Kode BAST</th>
               <th className="px-2 py-2 text-left">Nama</th>
               <th className="px-2 py-2 text-left">Pekerjaan</th>
               <th className="px-2 py-2 text-left">Kecamatan</th>
@@ -363,13 +383,6 @@ function SingleMonthMitraTable({
                         <>
                           <td rowSpan={span} className="px-2 py-2 border">
                             {gi + 1}
-                          </td>
-                          <td rowSpan={span} className="px-2 py-2 border">
-                            {" "}
-                            {r?.spkCode ?? "-"}
-                          </td>
-                          <td rowSpan={span} className="px-2 py-2 border">
-                            {r?.bastCode ?? "-"}
                           </td>
                           <td rowSpan={span} className="px-2 py-2 border">
                             {r?.name ?? "-"}
@@ -437,7 +450,7 @@ function SingleMonthMitraTable({
               })
             ) : (
               <tr>
-                <td colSpan={19} className="px-2 py-2 text-center">
+                <td colSpan={17} className="px-2 py-2 text-center">
                   Pencarian "{q}" tidak ditemukan.
                 </td>
               </tr>
@@ -445,6 +458,80 @@ function SingleMonthMitraTable({
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+function SingleMonthDocCodeTable({
+  year,
+  activeMonth,
+  rowsByMonth,
+}: {
+  year: number;
+  activeMonth: number;
+  rowsByMonth: Map<number, any[]>;
+}) {
+  const rowsMonth = rowsByMonth.get(activeMonth) ?? [];
+  const rows = useMemo(() => {
+    const map = new Map<string, any>();
+    for (const r of rowsMonth) {
+      const key = String(r?.userId ?? r?.name ?? "-");
+      if (!map.has(key)) {
+        map.set(key, {
+          userId: r?.userId,
+          name: r?.name ?? "-",
+          job_name: r?.job_name ?? "-",
+          district: r?.district ?? "-",
+          city: r?.city ?? "-",
+          spkCode: r?.spkCode ?? "-",
+          bastCode: r?.bastCode ?? "-",
+        });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) =>
+      String(a.name ?? "").localeCompare(String(b.name ?? ""), "id"),
+    );
+  }, [rowsMonth]);
+
+  return (
+    <div className="mt-3 overflow-auto border rounded-md overflow-y-auto max-h-[400px]">
+      <table className="min-w-[760px] w-full text-[12px]">
+        <thead className="bg-gray-50">
+          <tr className="border-b">
+            <th className="px-2 py-2 text-left w-[40px]">No</th>
+            <th className="px-2 py-2 text-left">Nama Mitra</th>
+            <th className="px-2 py-2 text-left">Pekerjaan</th>
+            <th className="px-2 py-2 text-left">Kecamatan</th>
+            <th className="px-2 py-2 text-left">Kabupaten</th>
+            <th className="px-2 py-2 text-left">Kode SPK</th>
+            <th className="px-2 py-2 text-left">Kode BAST</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length ? (
+            rows.map((r, i) => (
+              <tr
+                key={`${r.userId ?? r.name}-${i}`}
+                className="border-b hover:bg-gray-50"
+              >
+                <td className="px-2 py-2 border">{i + 1}</td>
+                <td className="px-2 py-2 border">{r.name}</td>
+                <td className="px-2 py-2 border">{r.job_name}</td>
+                <td className="px-2 py-2 border">{r.district}</td>
+                <td className="px-2 py-2 border">{r.city}</td>
+                <td className="px-2 py-2 border font-mono">{r.spkCode}</td>
+                <td className="px-2 py-2 border font-mono">{r.bastCode}</td>
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td colSpan={7} className="px-2 py-2 text-center text-gray-600">
+                Belum ada kode SPK/BAST untuk bulan {activeMonth}/{year}.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -518,6 +605,16 @@ function MonthlyStaffUsagePanel({
     fetchPolicy: "cache-and-network",
   });
 
+  const { data: docNumberConfigData } = useQuery(
+    GET_MONTHLY_STAFF_DOC_NUMBER_CONFIG,
+    { fetchPolicy: "cache-and-network" },
+  );
+
+  const [setDocNumberConfig, { loading: savingDocNumberConfig }] = useMutation(
+    SET_MONTHLY_STAFF_DOC_NUMBER_CONFIG,
+    { refetchQueries: [{ query: GET_MONTHLY_STAFF_DOC_NUMBER_CONFIG }] },
+  );
+
   const [setDefaultPpkUser, { loading: savingDefaultPpk }] = useMutation(
     SET_DEFAULT_PPK_USER,
     {
@@ -528,11 +625,32 @@ function MonthlyStaffUsagePanel({
   const defaultPpkId =
     (ppkData?.ppkOptions ?? []).find((x: any) => x?.isDefault)?.id ?? "";
   const [selectedDefaultPpkId, setSelectedDefaultPpkId] = useState<string>("");
+  const [spkStartNumber, setSpkStartNumber] = useState<number>(1);
+  const [bastStartNumber, setBastStartNumber] = useState<number>(1);
+  const [spkFormat, setSpkFormat] = useState<string>(
+    "{KODE}/16030/HK.600/{MM}/SPK/{YYYY}",
+  );
+  const [bastFormat, setBastFormat] = useState<string>(
+    "{KODE}/16030/HK.600/{MM}/BAST/{YYYY}",
+  );
   useEffect(() => {
     if (!selectedDefaultPpkId && defaultPpkId) {
       setSelectedDefaultPpkId(defaultPpkId);
     }
   }, [defaultPpkId, selectedDefaultPpkId]);
+
+  useEffect(() => {
+    const cfg = docNumberConfigData?.DocNumberConfig;
+    if (!cfg) return;
+    setSpkStartNumber(Number(cfg.spkStartNumber ?? 1));
+    setBastStartNumber(Number(cfg.bastStartNumber ?? 1));
+    setSpkFormat(
+      String(cfg.spkFormat ?? "{KODE}/16030/HK.600/{MM}/SPK/{YYYY}"),
+    );
+    setBastFormat(
+      String(cfg.bastFormat ?? "{KODE}/16030/HK.600/{MM}/BAST/{YYYY}"),
+    );
+  }, [docNumberConfigData]);
 
   const rows = (data?.getMonthlyActivityStaffUsage ?? []) as Array<{
     month: string;
@@ -1036,6 +1154,87 @@ function MonthlyStaffUsagePanel({
               </button>
             </div>
           </div>
+          <div className="border rounded-lg p-3 sm:p-4 space-y-3">
+            <div>
+              <div className="text-sm font-semibold">
+                Format Nomor SPK dan BAST
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                Token: {"{KODE}"} contoh B-001, {"{NO}"} contoh 001, {"{MM}"},{" "}
+                {"{YYYY}"}, {"{DOC}"}.
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold mb-1">
+                  Nomor awal SPK
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={spkStartNumber}
+                  onChange={(e) => setSpkStartNumber(Number(e.target.value))}
+                  className="w-full rounded-md border px-3 py-2 text-sm bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold mb-1">
+                  Nomor awal BAST
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={bastStartNumber}
+                  onChange={(e) => setBastStartNumber(Number(e.target.value))}
+                  className="w-full rounded-md border px-3 py-2 text-sm bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold mb-1">
+                  Format SPK
+                </label>
+                <input
+                  value={spkFormat}
+                  onChange={(e) => setSpkFormat(e.target.value)}
+                  className="w-full rounded-md border px-3 py-2 text-sm font-mono bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold mb-1">
+                  Format BAST
+                </label>
+                <input
+                  value={bastFormat}
+                  onChange={(e) => setBastFormat(e.target.value)}
+                  className="w-full rounded-md border px-3 py-2 text-sm font-mono bg-white"
+                />
+              </div>
+            </div>
+
+            <button
+              type="button"
+              disabled={savingDocNumberConfig}
+              onClick={async () => {
+                try {
+                  await setDocNumberConfig({
+                    variables: {
+                      spkStartNumber,
+                      bastStartNumber,
+                      spkFormat,
+                      bastFormat,
+                    },
+                  });
+                  toast.success("Format nomor SPK/BAST berhasil disimpan");
+                } catch (e: any) {
+                  toast.error(e?.message ?? "Gagal menyimpan format nomor");
+                }
+              }}
+              className="px-3 py-2 rounded-md text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+            >
+              {savingDocNumberConfig ? "Menyimpan..." : "Simpan Format Nomor"}
+            </button>
+          </div>
         </div>
       )}
 
@@ -1192,6 +1391,15 @@ function MonthlyStaffUsagePanel({
           </div>
         </div>
       )}
+
+      <div className="border rounded-lg p-3 sm:p-4">
+        <div className="font-semibold">Kode SPK dan BAST Mitra Bulanan</div>
+        <SingleMonthDocCodeTable
+          year={year}
+          activeMonth={activeMonth}
+          rowsByMonth={mitraRowsByMonth}
+        />
+      </div>
 
       {showUsersModal && (
         <div

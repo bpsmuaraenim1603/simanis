@@ -144,6 +144,10 @@ export class SurveyActivityService {
     'MONTHLY_DOC_SPK_CURRENT_NUMBER';
   private readonly MONTHLY_DOC_BAST_CURRENT_KEY =
     'MONTHLY_DOC_BAST_CURRENT_NUMBER';
+  private readonly MONTHLY_DOC_SPK_FORMAT_KEY = 'MONTHLY_DOC_SPK_FORMAT';
+  private readonly MONTHLY_DOC_BAST_FORMAT_KEY = 'MONTHLY_DOC_BAST_FORMAT';
+  private readonly DEFAULT_SPK_FORMAT = '{KODE}/16030/HK.600/{MM}/SPK/{YYYY}';
+  private readonly DEFAULT_BAST_FORMAT = '{KODE}/16030/HK.600/{MM}/BAST/{YYYY}';
 
   private parsePositiveInt(value: any, fallback: number) {
     const n = Number(value);
@@ -168,17 +172,42 @@ export class SurveyActivityService {
     docType: 'SPK' | 'BAST',
     month: number,
     year: number,
+    format?: string,
   ) {
     const mm = String(month).padStart(2, '0');
+    const yyyy = String(year);
     const safeCode = String(code || '').trim();
-    return `${safeCode}/16030/HK.600/${mm}/${docType}/${year}`;
+    const no = safeCode.replace(/^B-/i, '');
+    const template = String(
+      format ||
+        (docType === 'SPK'
+          ? this.DEFAULT_SPK_FORMAT
+          : this.DEFAULT_BAST_FORMAT),
+    );
+    return template
+      .replaceAll('{KODE}', safeCode)
+      .replaceAll('{NO}', no)
+      .replaceAll('{MM}', mm)
+      .replaceAll('{M}', String(month))
+      .replaceAll('{YYYY}', yyyy)
+      .replaceAll('{YY}', yyyy.slice(-2))
+      .replaceAll('{DOC}', docType);
+  }
+
+  private async getSettingString(key: string, fallback: string) {
+    const row = await this.prisma.systemSetting.findUnique({
+      where: { key },
+      select: { value: true },
+    });
+    const value = String(row?.value ?? '').trim();
+    return value || fallback;
   }
 
   private async getMonthlyStaffDocCode(input: {
     userId: string;
     month: number;
     year: number;
- }) {
+  }) {
     const month = Number(input.month);
     const year = Number(input.year);
 
@@ -197,6 +226,9 @@ export class SurveyActivityService {
     const rows = await this.prisma.userProgress.findMany({
       where: {
         progressRole: 'PETUGAS',
+        user: {
+          primaryRole: { not: 'Supervisor' },
+        },
         subSurveyActivity: {
           startDate: { lte: to },
           endDate: { gte: from },
@@ -219,7 +251,10 @@ export class SurveyActivityService {
       },
     });
 
-    const byUserMonth = new Map<string, { userId: string; name: string; year: number; month: number }>();
+    const byUserMonth = new Map<
+      string,
+      { userId: string; name: string; year: number; month: number }
+    >();
 
     for (const r of rows) {
       const isPetugas =
@@ -248,7 +283,9 @@ export class SurveyActivityService {
       const aTime = a.year * 100 + a.month;
       const bTime = b.year * 100 + b.month;
       if (aTime !== bTime) return aTime - bTime;
-      const nameCompare = a.name.localeCompare(b.name, 'id', { sensitivity: 'base' });
+      const nameCompare = a.name.localeCompare(b.name, 'id', {
+        sensitivity: 'base',
+      });
       if (nameCompare !== 0) return nameCompare;
       return a.userId.localeCompare(b.userId);
     });
@@ -319,25 +356,47 @@ export class SurveyActivityService {
     nomorSPK?: string | null;
     nomorBAST?: string | null;
   }) {
+    const manualSPK = String(input.nomorSPK ?? '').trim();
+    const manualBAST = String(input.nomorBAST ?? '').trim();
+    if (manualSPK && manualBAST) {
+      return { nomorSPK: manualSPK, nomorBAST: manualBAST };
+    }
     const code = await this.getMonthlyStaffDocCode({
       userId: input.userId,
       year: input.year,
       month: input.month,
     });
 
+    const [spkFormat, bastFormat] = await Promise.all([
+      this.getSettingString(
+        this.MONTHLY_DOC_SPK_FORMAT_KEY,
+        this.DEFAULT_SPK_FORMAT,
+      ),
+      this.getSettingString(
+        this.MONTHLY_DOC_BAST_FORMAT_KEY,
+        this.DEFAULT_BAST_FORMAT,
+      ),
+    ]);
+
     return {
-      nomorSPK: this.buildMonthlyDocNumberFromCode(
-        code,
-        'SPK',
-        input.month,
-        input.year,
-      ),
-      nomorBAST: this.buildMonthlyDocNumberFromCode(
-        code,
-        'BAST',
-        input.month,
-        input.year,
-      ),
+      nomorSPK:
+        manualSPK ||
+        this.buildMonthlyDocNumberFromCode(
+          code,
+          'SPK',
+          input.month,
+          input.year,
+          spkFormat,
+        ),
+      nomorBAST:
+        manualBAST ||
+        this.buildMonthlyDocNumberFromCode(
+          code,
+          'BAST',
+          input.month,
+          input.year,
+          bastFormat,
+        ),
     };
   }
 
@@ -347,10 +406,14 @@ export class SurveyActivityService {
     year: number,
   ) {
     const code = await this.getMonthlyStaffDocCode({ userId, month, year });
+    const [spkFormat, bastFormat] = await Promise.all([
+      this.getSettingString(this.MONTHLY_DOC_SPK_FORMAT_KEY, this.DEFAULT_SPK_FORMAT),
+      this.getSettingString(this.MONTHLY_DOC_BAST_FORMAT_KEY, this.DEFAULT_BAST_FORMAT),
+    ]);
 
     return {
-      nomorSPK: this.buildMonthlyDocNumberFromCode(code, 'SPK', month, year),
-      nomorBAST: this.buildMonthlyDocNumberFromCode(code, 'BAST', month, year),
+      nomorSPK: this.buildMonthlyDocNumberFromCode(code, 'SPK', month, year, spkFormat),
+      nomorBAST: this.buildMonthlyDocNumberFromCode(code, 'BAST', month, year, bastFormat),
     };
   }
 
@@ -2310,17 +2373,15 @@ export class SurveyActivityService {
     }
   }
 
-  async getMonthlyActivityStaffUsage(
-    year: number,
-    actor: any,
-    month?: number,
-  ) {
+  async getMonthlyActivityStaffUsage(year: number, actor: any, month?: number) {
     actor = await this.enrichActor(actor);
     const actorId = actor?.id;
     if (!actorId) return [];
 
     const monthFrom = typeof month === 'number' && month >= 1 && month <= 12;
-    const from = monthFrom ? new Date(year, month - 1, 1) : new Date(year, 0, 1);
+    const from = monthFrom
+      ? new Date(year, month - 1, 1)
+      : new Date(year, 0, 1);
     const to = monthFrom ? new Date(year, month, 0) : new Date(year, 11, 31);
     to.setHours(23, 59, 59, 999);
 
@@ -2376,7 +2437,10 @@ export class SurveyActivityService {
       },
     });
 
-    const usersBySubId = new Map<string, Array<{ id: string; name?: string; email?: string }>>();
+    const usersBySubId = new Map<
+      string,
+      Array<{ id: string; name?: string; email?: string }>
+    >();
     for (const item of userProgresses) {
       const subSurveyActivityId = item.subSurveyActivityId;
       const user = item.user;
@@ -3170,13 +3234,16 @@ export class SurveyActivityService {
       ? new Date(year, month, 0, 23, 59, 59, 999)
       : new Date(year, 11, 31, 23, 59, 59, 999);
 
-      const anchorYear = hasMonth && month === 12 ? year : year - 1;
+    const anchorYear = hasMonth && month === 12 ? year : year - 1;
     const from = new Date(anchorYear, 11, 1);
     const to = visibleTo;
 
     const rows = await this.prisma.userProgress.findMany({
       where: {
         progressRole: 'PETUGAS',
+        user: {
+          primaryRole: { not: 'Supervisor' },
+        },
         subSurveyActivity: {
           startDate: { lte: to },
           endDate: { gte: from },
@@ -3263,9 +3330,11 @@ export class SurveyActivityService {
     };
 
     for (const r of rows) {
+      const primaryRole = String(r.user?.primaryRole ?? '');
+      if (primaryRole === 'Supervisor') continue;
       const isPetugas =
-        String(r.user?.primaryRole ?? '') === 'User' ||
-        Array.isArray(r.user?.roles) && r.user.roles.includes('User');
+        primaryRole === 'User' ||
+        (Array.isArray(r.user?.roles) && r.user.roles.includes('User'));
       if (!isPetugas) continue;
       const ssa = r.subSurveyActivity;
       if (!ssa?.startDate) continue;
@@ -3358,7 +3427,9 @@ export class SurveyActivityService {
         const aTime = a.year * 100 + a.month;
         const bTime = b.year * 100 + b.month;
         if (aTime !== bTime) return aTime - bTime;
-        const nameCompare = a.name.localeCompare(b.name, 'id', { sensitivity: 'base' });
+        const nameCompare = a.name.localeCompare(b.name, 'id', {
+          sensitivity: 'base',
+        });
         if (nameCompare !== 0) return nameCompare;
         return a.userId.localeCompare(b.userId);
       });
