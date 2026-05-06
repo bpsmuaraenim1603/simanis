@@ -614,6 +614,9 @@ export class MitraBulananExportRowType {
   limit_bill?: number | null;
 
   @Field(() => String, { nullable: true })
+  primaryRole?: string | null;
+
+  @Field(() => String, { nullable: true })
   chiefName?: string | null;
 
   @Field(() => String)

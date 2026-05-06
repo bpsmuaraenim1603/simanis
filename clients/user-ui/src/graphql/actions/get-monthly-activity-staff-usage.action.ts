@@ -15,6 +15,7 @@ export const GET_MONTHLY_ACTIVITY_STAFF_USAGE = gql`
         id
         name
         email
+        primaryRole
       }
     }
   }

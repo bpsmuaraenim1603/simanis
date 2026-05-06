@@ -227,7 +227,7 @@ export class SurveyActivityService {
       where: {
         progressRole: 'PETUGAS',
         user: {
-          primaryRole: { not: 'Supervisor' },
+          primaryRole: 'User',
         },
         subSurveyActivity: {
           startDate: { lte: to },
@@ -257,10 +257,7 @@ export class SurveyActivityService {
     >();
 
     for (const r of rows) {
-      const isPetugas =
-        String(r.user?.primaryRole ?? '') === 'User' ||
-        (Array.isArray(r.user?.roles) && r.user.roles.includes('User'));
-      if (!isPetugas) continue;
+      if (String(r.user?.primaryRole ?? '') !== 'User') continue;
       const d = r.subSurveyActivity?.startDate;
       if (!d) continue;
 
@@ -2422,6 +2419,9 @@ export class SurveyActivityService {
       where: {
         subSurveyActivityId: { in: subIds },
         progressRole: 'PETUGAS',
+        user: {
+          primaryRole: 'User',
+        },
       },
       distinct: ['subSurveyActivityId', 'userId'],
       select: {
@@ -3242,7 +3242,7 @@ export class SurveyActivityService {
       where: {
         progressRole: 'PETUGAS',
         user: {
-          primaryRole: { not: 'Supervisor' },
+          primaryRole: 'User',
         },
         subSurveyActivity: {
           startDate: { lte: to },
@@ -3331,11 +3331,7 @@ export class SurveyActivityService {
 
     for (const r of rows) {
       const primaryRole = String(r.user?.primaryRole ?? '');
-      if (primaryRole === 'Supervisor') continue;
-      const isPetugas =
-        primaryRole === 'User' ||
-        (Array.isArray(r.user?.roles) && r.user.roles.includes('User'));
-      if (!isPetugas) continue;
+      if (primaryRole !== 'User') continue;
       const ssa = r.subSurveyActivity;
       if (!ssa?.startDate) continue;
 
@@ -3371,6 +3367,7 @@ export class SurveyActivityService {
           unitWorkPrice: ssa?.unitWorkPrice ?? null,
           budgetCode: ssa?.budgetCode ?? null,
           limit_bill: toNumberLoose(r.user?.limit_bill),
+          primaryRole,
           chiefName: ssa?.surveyActivity?.chief?.name ?? null,
           dipa,
 

@@ -73,6 +73,20 @@ const ALL_ROLES = ["User", "Supervisor", "Admin", "Keuangan", "Superadmin"];
 const getRoleLabel = (val?: string | null) =>
   ROLE_OPTIONS.find((r) => r.value === val)?.label ?? val ?? "";
 
+const getPrimaryRoleValue = (item: any) =>
+  String(
+    item?.primaryRole ??
+      item?.user?.primaryRole ??
+      item?.primary_role ??
+      item?.user?.primary_role ??
+      "",
+  );
+
+const isPrimaryRoleUser = (item: any) => getPrimaryRoleValue(item) === "User";
+
+const filterPrimaryRoleUserRows = <T,>(rows: T[] = []) =>
+  rows.filter((row: any) => isPrimaryRoleUser(row));
+
 const fmtID = new Intl.NumberFormat("id-ID");
 const digitsOnly = (v: string) => v.replace(/\D+/g, "");
 const toInt = (v: any) => {
@@ -598,7 +612,10 @@ function MonthlyStaffUsagePanel({
     },
   );
 
-  const exportPreviewRows = exportPreviewRowsRaw;
+ const exportPreviewRows = useMemo(
+    () => filterPrimaryRoleUserRows(exportPreviewRowsRaw),
+    [exportPreviewRowsRaw],
+  );
 
   // ===== Default PPK (ditentukan Superadmin) =====
   const { data: ppkData } = useQuery(PPK_OPTIONS, {
@@ -659,10 +676,30 @@ function MonthlyStaffUsagePanel({
     startDate: string;
     endDate: string;
     staffCount: number;
-    staffUsers?: Array<{ id: string; name?: string; email?: string }>;
+    staffUsers?: Array<{
+      id: string;
+      name?: string;
+      email?: string;
+      primaryRole?: string;
+    }>;
   }>;
 
-  const totalActivities = rows.length;
+  const rowsUserOnly = useMemo(
+    () =>
+      rows
+        .map((r) => {
+          const staffUsers = filterPrimaryRoleUserRows(r.staffUsers ?? []);
+          return {
+            ...r,
+            staffUsers,
+            staffCount: staffUsers.length,
+          };
+        })
+        .filter((r) => r.staffUsers.length > 0),
+    [rows],
+  );
+
+  const totalActivities = rowsUserOnly.length;
 
   const mitraRowsByMonth = useMemo(() => {
     const map = new Map<number, any[]>();
@@ -681,12 +718,12 @@ function MonthlyStaffUsagePanel({
   const uniqueUsersYear = useMemo(() => {
     const set = new Set<string>();
 
-    for (const r of rows) {
+    for (const r of rowsUserOnly) {
       (r.staffUsers ?? []).forEach((u) => u?.id && set.add(u.id));
     }
 
     return set.size;
-  }, [rows]);
+  }, [rowsUserOnly]);
 
   const uniqueUsersList = useMemo(() => {
     const map = new Map<
@@ -694,7 +731,7 @@ function MonthlyStaffUsagePanel({
       { id: string; name?: string; email?: string }
     >();
 
-    for (const r of rows) {
+    for (const r of rowsUserOnly) {
       for (const u of r.staffUsers ?? []) {
         if (!u?.id) continue;
         if (!map.has(u.id)) map.set(u.id, u);
@@ -704,7 +741,7 @@ function MonthlyStaffUsagePanel({
     return Array.from(map.values()).sort((a, b) =>
       (a.name ?? "").localeCompare(b.name ?? "", "id"),
     );
-  }, [rows]);
+  }, [rowsUserOnly]);
 
   const [selectedActivity, setSelectedActivity] = useState<null | {
     month: string;
@@ -712,7 +749,12 @@ function MonthlyStaffUsagePanel({
     subSurveyName: string;
     startDate: string;
     endDate: string;
-    staffUsers?: Array<{ id: string; name?: string; email?: string }>;
+    staffUsers?: Array<{
+      id: string;
+      name?: string;
+      email?: string;
+      primaryRole?: string;
+    }>;
   }>(null);
 
   const [showActivitiesModal, setShowActivitiesModal] = useState(false);
@@ -761,7 +803,7 @@ function MonthlyStaffUsagePanel({
         );
 
       const rowsRaw = (res.data?.getMitraBulananExport ?? []) as any[];
-      const rowsUserOnly = rowsRaw;
+      const rowsUserOnly = filterPrimaryRoleUserRows(rowsRaw);
 
       const monthNames = [
         "JANUARI",
@@ -1318,7 +1360,7 @@ function MonthlyStaffUsagePanel({
                   Daftar Kegiatan — {year}
                 </div>
                 <div className="text-sm text-gray-600">
-                  Total kegiatan: <b>{rows.length}</b>
+                  Total kegiatan: <b>{rowsUserOnly.length}</b>
                 </div>
               </div>
 
@@ -1344,7 +1386,7 @@ function MonthlyStaffUsagePanel({
                     </tr>
                   </thead>
                   <tbody className="bg-white">
-                    {rows.map((r, i) => (
+                    {rowsUserOnly.map((r, i) => (
                       <tr
                         key={r.subSurveyActivityId}
                         className="border-b last:border-b-0"
@@ -1374,7 +1416,7 @@ function MonthlyStaffUsagePanel({
                         </td>
                       </tr>
                     ))}
-                    {rows.length === 0 && (
+                    {rowsUserOnly.length === 0 && (
                       <tr>
                         <td
                           colSpan={5}
@@ -1577,17 +1619,17 @@ function MonthlyStaffUsagePanel({
             <div className="px-4 sm:px-6 py-4">
               <div className="text-sm text-gray-700 mb-3">
                 Total petugas:{" "}
-                <b>{(selectedActivity.staffUsers ?? []).length}</b>
+                <b>{filterPrimaryRoleUserRows(selectedActivity.staffUsers ?? []).length}</b>
               </div>
 
               <div className="border rounded-lg overflow-hidden">
                 <div className="max-h-[420px] overflow-y-auto">
-                  {(selectedActivity.staffUsers ?? []).length === 0 ? (
+                  {filterPrimaryRoleUserRows(selectedActivity.staffUsers ?? []).length === 0 ? (
                     <div className="p-4 text-sm text-gray-500">
                       Tidak ada data petugas untuk kegiatan ini.
                     </div>
                   ) : (
-                    (selectedActivity.staffUsers ?? [])
+                    filterPrimaryRoleUserRows(selectedActivity.staffUsers ?? [])
                       .slice()
                       .sort((a, b) =>
                         (a.name ?? "").localeCompare(b.name ?? "", "id"),

@@ -20,6 +20,7 @@ export const GET_MITRA_BULANAN_EXPORT = gql`
       docsBill
       budgetCode
       limit_bill
+      primaryRole
       chiefName
       dipa
       spkCode

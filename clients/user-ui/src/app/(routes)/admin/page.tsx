@@ -121,6 +121,15 @@ function toMoney(v: any) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function isPrimaryRoleUser(user?: Pick<User, "primaryRole"> | null) {
+  return String(user?.primaryRole ?? "") === "User";
+}
+
+function isPrimaryRoleUserById(users: User[], userId?: string | null) {
+  if (!userId) return false;
+  return isPrimaryRoleUser(users.find((u) => u.id === userId));
+}
+
 function uniq<T>(arr: T[]) {
   return Array.from(new Set(arr));
 }
@@ -349,7 +358,7 @@ export default function Admin() {
   const petugasOptions = useMemo(
     () =>
       users
-        .filter((u) => u.roles.includes("User"))
+        .filter((u) => isPrimaryRoleUser(u))
         .slice()
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((u) => ({ value: u.id, label: `${u.name} (${u.email})` })),
@@ -359,17 +368,15 @@ export default function Admin() {
   const pengawasOptions = useMemo(
     () =>
       users
-        .filter((u) => u.roles.includes("Supervisor"))
+        .filter((u) => isPrimaryRoleUser(u))
         .slice()
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((u) => ({ value: u.id, label: `${u.name} (${u.email})` })),
     [users],
   );
 
-  function isPrimarySupervisor(userId?: string | null) {
-    if (!userId) return false;
-    const u = users.find((x) => x.id === userId);
-    return String(u?.primaryRole ?? "") === "Supervisor";
+  function canReceiveHonor(userId?: string | null) {
+    return isPrimaryRoleUserById(users, userId);
   }
 
   function getUserLocation(userId?: string | null) {
@@ -794,7 +801,12 @@ export default function Admin() {
 
   async function handleAddPair() {
     if (!selectedKegiatanId) return toast.error("Pilih kegiatan dulu.");
-    if (!addPairPetugasId) return toast.error("Petugas wajib dipilih.");
+    if (!canReceiveHonor(addPairPetugasId)) {
+      return toast.error("Petugas harus memiliki primary role User.");
+    }
+    if (addPairPengawasId && !canReceiveHonor(addPairPengawasId)) {
+      return toast.error("Pengawas harus memiliki primary role User agar honor/dok dihitung.");
+    }
     if (!addPairDistrictId) return toast.error("Kecamatan wajib dipilih.");
     if (!addPairVillageId) return toast.error("Desa wajib dipilih.");
     const n = Number(addPairSampleCount);
@@ -808,14 +820,16 @@ export default function Admin() {
 
     const blockCount = nextBlockName(addPairPetugasId, addPairPengawasId || "");
 
-    const petugasIsSup = isPrimarySupervisor(addPairPetugasId);
-    const pengawasIsSup = isPrimarySupervisor(addPairPengawasId);
+    const petugasCanReceiveHonor = canReceiveHonor(addPairPetugasId);
+    const pengawasCanReceiveHonor = canReceiveHonor(addPairPengawasId);
 
-    const unitPetugas = petugasIsSup ? 0 : toMoney(addPairHonorDokPetugas);
+    const unitPetugas = petugasCanReceiveHonor
+      ? toMoney(addPairHonorDokPetugas)
+      : 0;
     const unitPengawas =
-      !addPairPengawasId || pengawasIsSup
-        ? 0
-        : toMoney(addPairHonorDokPengawas);
+      addPairPengawasId && pengawasCanReceiveHonor
+        ? toMoney(addPairHonorDokPengawas)
+        : 0;
 
     const districtId = addPairDistrictId || null;
     const villageId = addPairVillageId || null;
@@ -864,18 +878,22 @@ export default function Admin() {
   useEffect(() => {
     if (!addPairOpen) return;
 
-    const petugasIsSup = isPrimarySupervisor(addPairPetugasId);
-    const pengawasIsSup = isPrimarySupervisor(addPairPengawasId);
+    const petugasCanReceiveHonor = canReceiveHonor(addPairPetugasId);
+    const pengawasCanReceiveHonor = canReceiveHonor(addPairPengawasId);
 
     if (!addPairHonorTouchedPetugas) {
       setAddPairHonorDokPetugas(
-        String(petugasIsSup ? 0 : defaultUnitWorkPrice),
+        String(petugasCanReceiveHonor ? defaultUnitWorkPrice : 0),
       );
     }
 
     if (!addPairHonorTouchedPengawas) {
       setAddPairHonorDokPengawas(
-        String(!addPairPengawasId || pengawasIsSup ? 0 : defaultUnitWorkPrice),
+        String(
+          addPairPengawasId && pengawasCanReceiveHonor
+            ? defaultUnitWorkPrice
+            : 0,
+        ),
       );
     }
   }, [
@@ -964,12 +982,12 @@ export default function Admin() {
     );
   }, [activePairKey, pairEdits, pairs]);
 
-  const activePetugasIsSup = useMemo(
-    () => isPrimarySupervisor(activeEditPair.userId),
+  const activePetugasCanReceiveHonor = useMemo(
+    () => canReceiveHonor(activeEditPair.userId),
     [activeEditPair.userId, users.length],
   );
-  const activePengawasIsSup = useMemo(
-    () => isPrimarySupervisor(activeEditPair.superVisorId),
+  const activePengawasCanReceiveHonor = useMemo(
+    () => canReceiveHonor(activeEditPair.superVisorId),
     [activeEditPair.superVisorId, users.length],
   );
 
@@ -981,14 +999,16 @@ export default function Admin() {
       superVisorId: pair?.superVisorId ?? "",
     };
 
-    const petugasIsSup = isPrimarySupervisor(editPair.userId);
-    const pengawasIsSup = isPrimarySupervisor(editPair.superVisorId);
+    const petugasCanReceiveHonor = canReceiveHonor(editPair.userId);
+    const pengawasCanReceiveHonor = canReceiveHonor(editPair.superVisorId);
 
-    const perPetugas = petugasIsSup ? 0 : toMoney(blockForm.honorDokPetugas);
+    const perPetugas = petugasCanReceiveHonor
+      ? toMoney(blockForm.honorDokPetugas)
+      : 0;
     const perPengawas =
-      !editPair.superVisorId || pengawasIsSup
-        ? 0
-        : toMoney(blockForm.honorDokPengawas);
+       editPair.superVisorId && pengawasCanReceiveHonor
+        ? toMoney(blockForm.honorDokPengawas)
+        : 0;
 
     setBlockForm((p) => ({
       ...p,
@@ -1024,8 +1044,8 @@ export default function Admin() {
       superVisorId: pair?.superVisorId ?? "",
     };
 
-    const petugasIsSup = isPrimarySupervisor(edit.userId);
-    const pengawasIsSup = isPrimarySupervisor(edit.superVisorId);
+    const petugasCanReceiveHonor = canReceiveHonor(edit.userId);
+    const pengawasCanReceiveHonor = canReceiveHonor(edit.superVisorId);
 
     const { districtId, villageId } = getUserLocation(edit.userId);
 
@@ -1035,9 +1055,11 @@ export default function Admin() {
       villageId: villageId ?? "",
       honorPetugas: "",
       honorPengawas: "",
-      honorDokPetugas: String(petugasIsSup ? 0 : defaultUnitWorkPrice),
+      honorDokPetugas: String(
+        petugasCanReceiveHonor ? defaultUnitWorkPrice : 0,
+      ),
       honorDokPengawas: String(
-        !edit.superVisorId || pengawasIsSup ? 0 : defaultUnitWorkPrice,
+        edit.superVisorId && pengawasCanReceiveHonor ? defaultUnitWorkPrice : 0,
       ),
     });
     setSamples([
@@ -1066,20 +1088,20 @@ export default function Admin() {
       approvalStatus: (s.approvalStatus as any) ?? "Menunggu",
     }));
     const count = list.length || 0;
-    const petugasIsSup = isPrimarySupervisor(petugas.userId);
-    const pengawasIsSup = isPrimarySupervisor(pengawas?.userId);
+    const petugasCanReceiveHonor = canReceiveHonor(petugas.userId);
+    const pengawasCanReceiveHonor = canReceiveHonor(pengawas?.userId);
 
-    const unitPetugas = petugasIsSup
-      ? "0"
-      : count > 0 && toMoney(petugas.docsBill) > 0
+    const unitPetugas = petugasCanReceiveHonor
+      ? count > 0 && toMoney(petugas.docsBill) > 0
         ? safePerSample(petugas.docsBill, count)
-        : String(defaultUnitWorkPrice);
+        : String(defaultUnitWorkPrice)
+      : "0";
     const unitPengawas =
-      !pengawas || pengawasIsSup
-        ? "0"
-        : count > 0 && toMoney(pengawas.docsBill) > 0
+      pengawas && pengawasCanReceiveHonor
+        ? count > 0 && toMoney(pengawas.docsBill) > 0
           ? safePerSample(pengawas?.docsBill, count)
-          : String(defaultUnitWorkPrice);
+          : String(defaultUnitWorkPrice)
+        : "0";
     setBlockForm({
       blockCount: String(petugas.blockCount ?? ""),
       districtId: String(petugas.districtId ?? ""),
@@ -1109,6 +1131,12 @@ export default function Admin() {
   async function savePair(pairKey: string) {
     const edit = pairEdits[pairKey];
     if (!edit?.userId) return toast.error("Petugas wajib dipilih.");
+    if (!canReceiveHonor(edit.userId)) {
+      return toast.error("Petugas harus memiliki primary role User.");
+    }
+    if (edit.superVisorId && !canReceiveHonor(edit.superVisorId)) {
+      return toast.error("Pengawas harus memiliki primary role User agar honor/dok dihitung.");
+    }
     const pair = pairs.find((p) => p.key === pairKey);
     if (!pair) return;
 
@@ -1181,6 +1209,12 @@ export default function Admin() {
     const villageId = blockForm.villageId || null;
     if (!blockCount) return toast.error("Nama blok wajib diisi.");
     if (!editPair.userId) return toast.error("Petugas wajib dipilih.");
+    if (!canReceiveHonor(editPair.userId)) {
+      return toast.error("Petugas harus memiliki primary role User.");
+    }
+    if (editPair.superVisorId && !canReceiveHonor(editPair.superVisorId)) {
+      return toast.error("Pengawas harus memiliki primary role User agar honor/dok dihitung.");
+    }
 
     const sampleCount = Math.max(0, samples.length);
     const honorPetugas = Number(blockForm.honorPetugas);
@@ -2122,7 +2156,7 @@ export default function Admin() {
                     if (!addPairHonorTouchedPetugas) {
                       setAddPairHonorDokPetugas(
                         String(
-                          isPrimarySupervisor(id) ? 0 : defaultUnitWorkPrice,
+                          canReceiveHonor(id) ? defaultUnitWorkPrice : 0,
                         ),
                       );
                     }
@@ -2139,9 +2173,9 @@ export default function Admin() {
                     if (!addPairHonorTouchedPengawas) {
                       setAddPairHonorDokPengawas(
                         String(
-                          !id || isPrimarySupervisor(id)
-                            ? 0
-                            : defaultUnitWorkPrice,
+                          id && canReceiveHonor(id)
+                            ? defaultUnitWorkPrice
+                            : 0,
                         ),
                       );
                     }
@@ -2203,11 +2237,11 @@ export default function Admin() {
                     className="w-full px-3 py-2 border rounded-md bg-white"
                     placeholder="Honor/dok petugas"
                     inputMode="numeric"
-                    disabled={isPrimarySupervisor(addPairPetugasId)}
+                    disabled={!canReceiveHonor(addPairPetugasId)}
                     value={
-                      isPrimarySupervisor(addPairPetugasId)
-                        ? "0"
-                        : String(addPairHonorDokPetugas)
+                      canReceiveHonor(addPairPetugasId)
+                        ? String(addPairHonorDokPetugas)
+                        : "0"
                     }
                     onChange={(e) => {
                       setAddPairHonorTouchedPetugas(true);
@@ -2229,13 +2263,12 @@ export default function Admin() {
                     inputMode="numeric"
                     disabled={
                       !addPairPengawasId ||
-                      isPrimarySupervisor(addPairPengawasId)
+                      !canReceiveHonor(addPairPengawasId)
                     }
                     value={
-                      !addPairPengawasId ||
-                      isPrimarySupervisor(addPairPengawasId)
-                        ? "0"
-                        : String(addPairHonorDokPengawas)
+                      addPairPengawasId && canReceiveHonor(addPairPengawasId)
+                        ? String(addPairHonorDokPengawas)
+                        : "0"
                     }
                     onChange={(e) => {
                       setAddPairHonorTouchedPengawas(true);
@@ -2257,9 +2290,9 @@ export default function Admin() {
                 Total honor petugas:{" "}
                 <b>
                   {(
-                    (isPrimarySupervisor(addPairPetugasId)
-                      ? 0
-                      : toMoney(addPairHonorDokPetugas)) *
+                    (canReceiveHonor(addPairPetugasId)
+                      ? toMoney(addPairHonorDokPetugas)
+                      : 0) *
                     (Number(addPairSampleCount) || 0)
                   ).toLocaleString("id-ID")}
                 </b>
@@ -2268,11 +2301,11 @@ export default function Admin() {
                 <b>
                   {(
                     (!addPairPengawasId ||
-                    isPrimarySupervisor(addPairPengawasId)
-                      ? 0
-                      : toMoney(addPairHonorDokPengawas)) *
+                    (addPairPengawasId && canReceiveHonor(addPairPengawasId)
+                      ? toMoney(addPairHonorDokPengawas)
+                      : 0) *
                     (Number(addPairSampleCount) || 0)
-                  ).toLocaleString("id-ID")}
+                  ).toLocaleString("id-ID"))}
                 </b>
               </div>
 
@@ -2598,13 +2631,13 @@ export default function Admin() {
                         className="w-full px-3 py-2 border rounded bg-white"
                         inputMode="numeric"
                         pattern="[0-9]*"
-                        disabled={activePetugasIsSup}
+                        disabled={!activePetugasCanReceiveHonor}
                         value={
-                          activePetugasIsSup
-                            ? "0"
-                            : (toMoney(
+                          activePetugasCanReceiveHonor
+                            ? (toMoney(
                                 blockForm.honorDokPetugas,
                               ).toLocaleString("id-ID") ?? "")
+                            : "0"
                         }
                         onChange={(e) => {
                           const raw = e.target.value.replace(/[^0-9]/g, "");
@@ -2625,14 +2658,14 @@ export default function Admin() {
                         inputMode="numeric"
                         pattern="[0-9]*"
                         disabled={
-                          !activeEditPair.superVisorId || activePengawasIsSup
+                          !activeEditPair.superVisorId || !activePengawasCanReceiveHonor
                         }
                         value={
-                          !activeEditPair.superVisorId || activePengawasIsSup
-                            ? "0"
-                            : (toMoney(
+                          activeEditPair.superVisorId && activePengawasCanReceiveHonor
+                            ? (toMoney(
                                 blockForm.honorDokPengawas,
                               ).toLocaleString("id-ID") ?? "")
+                            : "0"
                         }
                         onChange={(e) => {
                           const raw = e.target.value.replace(/[^0-9]/g, "");
