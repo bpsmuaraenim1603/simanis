@@ -39,7 +39,7 @@ export default function UpdateActivityStatusModal({
 
         <label className="mb-2 block text-sm">Status</label>
         <select
-          className="w-full rounded border p-2"
+          className="w-full rounded border p-2 bg-white"
           value={status}
           onChange={(e) => setStatus(e.target.value)}
         >

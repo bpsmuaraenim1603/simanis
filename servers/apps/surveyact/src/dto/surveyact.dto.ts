@@ -38,7 +38,7 @@ registerEnumType(SubSurveyStatus, {
 @InputType()
 export class PatchUserSampleInput {
   @Field()
-  id: string;
+  id!: string;
 
   @Field(() => CacahStatus, { nullable: true })
   cacahStatus?: CacahStatus;
@@ -68,7 +68,7 @@ export class PatchUserSampleInput {
 @InputType()
 export class PatchUserSamplesDTO {
   @Field()
-  userProgressId: string;
+  userProgressId!: string;
 
   @Field(() => [PatchUserSampleInput], { nullable: true })
   updateSamples?: PatchUserSampleInput[];
@@ -85,17 +85,17 @@ export class CreateSurveyActivityDTO {
   @Field()
   @IsNotEmpty({ message: 'Nama kategori survei wajib diisi' })
   @IsString()
-  name: string;
+  name!: string;
 
   @Field()
   @IsNotEmpty({ message: 'Slug wajib diisi' })
   @IsString()
-  slug: string;
+  slug!: string;
 
   @Field()
   @IsNotEmpty({ message: 'Ketua Tim wajib diisi' })
   @IsString()
-  chiefId: string;
+  chiefId!: string;
 }
 
 @InputType()
@@ -103,50 +103,53 @@ export class UpdateSurveyActivityDTO {
   @Field()
   @IsNotEmpty({ message: 'Nama kategori survei wajib diisi' })
   @IsString()
-  name: string;
+  name!: string;
 
   @Field()
   @IsNotEmpty({ message: 'Slug wajib diisi' })
   @IsString()
-  slug: string;
+  slug!: string;
 
   @Field()
   @IsNotEmpty({ message: 'Ketua Tim wajib diisi' })
   @IsString()
-  chiefId: string;
+  chiefId!: string;
 }
 
 @InputType()
 export class CreateSampleTypeDTO {
   @Field()
-  name: string;
+  name!: string;
 }
 
 @InputType()
 export class CreateSubSurveyActivityDTO {
   @Field()
-  name: string;
+  name!: string;
 
   @Field()
-  slug: string;
+  slug!: string;
 
   @Field()
-  surveyActivityId: string;
+  surveyActivityId!: string;
 
   @Field()
-  startDate: Date;
+  startDate!: Date;
 
   @Field()
-  endDate: Date;
+  endDate!: Date;
+
+  @Field(() => Int, { nullable: true })
+  handoverMonth?: number;
 
   @Field()
-  targetSample: number;
+  targetSample!: number;
 
   @Field()
-  sampleType: string;
+  sampleType!: string;
 
   @Field()
-  activityType: string;
+  activityType!: string;
 
 
   @Field({ nullable: true })
@@ -156,34 +159,37 @@ export class CreateSubSurveyActivityDTO {
   unitWorkPrice?: number;
 
   @Field()
-  priceCompareUnit: 'SAMPEL' | 'BLOK';
+  priceCompareUnit!: 'SAMPEL' | 'BLOK';
 }
 
 @InputType()
 export class UpdateSubSurveyActivityDTO {
   @Field()
-  name: string;
+  name!: string;
 
   @Field()
-  slug: string;
+  slug!: string;
 
   @Field()
-  surveyActivityId: string;
+  surveyActivityId!: string;
 
   @Field()
-  startDate: Date;
+  startDate!: Date;
 
   @Field()
-  endDate: Date;
+  endDate!: Date;
+
+  @Field(() => Int, { nullable: true })
+  handoverMonth?: number;
 
   @Field()
-  targetSample: number;
+  targetSample!: number;
 
   @Field()
-  sampleType: string;
+  sampleType!: string;
 
   @Field()
-  activityType: string;
+  activityType!: string;
 
 
   @Field({ nullable: true })
@@ -193,7 +199,7 @@ export class UpdateSubSurveyActivityDTO {
   unitWorkPrice?: number;
 
   @Field()
-  priceCompareUnit: 'SAMPEL' | 'BLOK';
+  priceCompareUnit!: 'SAMPEL' | 'BLOK';
 
   @Field({ nullable: true })
   status?: 'BERJALAN' | 'SELESAI';
@@ -202,13 +208,13 @@ export class UpdateSubSurveyActivityDTO {
 @InputType()
 export class CreateUserProgressDTO {
   @Field()
-  subSurveyActivityId: string;
+  subSurveyActivityId!: string;
 
   @Field()
-  userId: string;
+  userId!: string;
 
   @Field()
-  superVisorId: string;
+  superVisorId!: string;
 
   @Field({ nullable: true })
   totalAssigned?: number;
@@ -250,16 +256,16 @@ export class UserSampleInput {
   id?: string;
 
   @Field()
-  nus: string;
+  nus!: string;
 
   @Field()
-  identity: string;
+  identity!: string;
 
   @Field(() => CacahStatus, { defaultValue: CacahStatus.Belum_Cacah })
-  cacahStatus: CacahStatus;
+  cacahStatus!: CacahStatus;
 
   @Field(() => AgreeState, { defaultValue: AgreeState.Menunggu })
-  approvalStatus: AgreeState;
+  approvalStatus!: AgreeState;
 
   @Field({ nullable: true })
   geoLat?: number;
@@ -274,7 +280,7 @@ export class UserSampleInput {
 @InputType()
 export class UpdateUserProgressDTO {
   @Field()
-  id: string;
+  id!: string;
 
   @Field({ nullable: true })
   userId?: string;
@@ -322,36 +328,36 @@ export class UpdateUserProgressDTO {
 @InputType()
 export class CreateDistrictDTO {
   @Field()
-  city: string;
+  city!: string;
 
   @Field()
-  name: string;
+  name!: string;
 
   @Field()
-  coderegion: string;
+  coderegion!: string;
 }
 
 @InputType()
 export class CreateVillageDTO {
   @Field()
-  name: string;
+  name!: string;
 
   @Field()
-  coderegion: string;
+  coderegion!: string;
 
   @Field(() => ID)
-  districtId: string;
+  districtId!: string;
 }
 
 @InputType()
 export class CreateSPJDTO {
   @Field(() => ID)
   @IsUUID()
-  userId: string;
+  userId!: string;
 
   @Field(() => ID)
   @IsUUID()
-  subSurveyActivityId: string;
+  subSurveyActivityId!: string;
 
   @Field({ nullable: true })
   verifyNote?: string;
@@ -360,10 +366,10 @@ export class CreateSPJDTO {
 @InputType()
 export class UpdateSPJStatusDTO {
   @Field(() => ID)
-  id: string;
+  id!: string;
 
   @Field(() => AgreeState)
-  status: AgreeState;
+  status!: AgreeState;
 
   @Field({ nullable: true })
   verifyNote?: string;
@@ -378,18 +384,18 @@ export class UpdateSPJStatusDTO {
 export class CreateJobLetterDTO {
   @Field(() => ID)
   @IsUUID()
-  userId: string;
+  userId!: string;
 
   @Field(() => ID)
   @IsUUID()
-  subSurveyActivityId: string;
+  subSurveyActivityId!: string;
 
   @Field()
   @IsString()
-  region: string;
+  region!: string;
 
   @Field(() => GraphQLISODateTime)
-  submitDate: string;
+  submitDate!: string;
 
   @Field({ nullable: true })
   @IsString()
@@ -403,10 +409,10 @@ export class CreateJobLetterDTO {
 @InputType()
 export class UpdateJobLetterStatusDTO {
   @Field(() => ID)
-  id: string;
+  id!: string;
 
   @Field(() => AgreeState)
-  status: AgreeState;
+  status!: AgreeState;
 
   @Field({ nullable: true })
   rejectNote?: string;
@@ -416,71 +422,71 @@ export class UpdateJobLetterStatusDTO {
 export class CreateContentIssueDto {
   @Field()
   @IsString()
-  content: string;
+  content!: string;
 
   @Field(() => ID)
   @IsUUID()
-  reporterId: string;
+  reporterId!: string;
 
   @Field(() => ID)
   @IsUUID()
-  subSurveyActivityId: string;
+  subSurveyActivityId!: string;
 
   @Field(() => IssueStatus)
-  issueStatus: IssueStatus;
+  issueStatus!: IssueStatus;
 }
 
 @InputType()
 export class UpdateContentIssueDto {
   @Field(() => ID)
   @IsUUID()
-  id: string;
+  id!: string;
 
   @Field()
   @IsString()
-  content: string;
+  content!: string;
 
   @Field(() => IssueStatus)
-  issueStatus: IssueStatus;
+  issueStatus!: IssueStatus;
 }
 
 @InputType()
 export class createIssueCommentDto {
   @Field()
   @IsString()
-  message: string;
+  message!: string;
 
   @Field(() => ID)
   @IsUUID()
-  contentId: string;
+  contentId!: string;
 
   @Field(() => ID)
   @IsUUID()
-  userId: string;
+  userId!: string;
 
   @Field(() => ID)
   @IsUUID()
-  subSurveyActivityId: string;
+  subSurveyActivityId!: string;
 }
 
 @InputType()
 export class updateIssueCommentDto {
   @Field(() => ID)
   @IsUUID()
-  id: string;
+  id!: string;
 
   @Field()
   @IsString()
-  message: string;
+  message!: string;
 }
 
 @InputType()
 export class MonthlyStaffDocRowInput {
   @Field(() => ID)
-  subSurveyActivityId: string;
+  subSurveyActivityId!: string;
 
   @Field(() => Int)
-  totalDocs: number;
+  totalDocs!: number;
 
   @Field({ nullable: true })
   unitName?: string;
@@ -492,16 +498,16 @@ export class MonthlyStaffDocRowInput {
 @InputType()
 export class GenerateMonthlyStaffDocInput {
   @Field(() => ID)
-  userId: string;
+  userId!: string;
 
   @Field(() => Int)
-  month: number;
+  month!: number;
 
   @Field(() => Int)
-  year: number;
+  year!: number;
 
   @Field()
-  docType: string;
+  docType!: string;
 
   @Field(() => ID, { nullable: true })
   ppkUserId?: string;
@@ -519,25 +525,25 @@ export class GenerateMonthlyStaffDocInput {
   nomorSPK?: string;
 
   @Field(() => GraphQLISODateTime)
-  spkDocDate: Date;
+  spkDocDate!: Date;
 
   @Field(() => GraphQLISODateTime)
-  bastDocDate: Date;
+  bastDocDate!: Date;
 
   @Field(() => [MonthlyStaffDocRowInput])
-  rows: MonthlyStaffDocRowInput[];
+  rows!: MonthlyStaffDocRowInput[];
 }
 
 @InputType()
 export class GenerateMonthlyStaffDocsInput {
   @Field(() => ID)
-  userId: string;
+  userId!: string;
 
   @Field(() => Int)
-  month: number;
+  month!: number;
 
   @Field(() => Int)
-  year: number;
+  year!: number;
 
   @Field(() => ID, { nullable: true })
   ppkUserId?: string;
@@ -555,10 +561,10 @@ export class GenerateMonthlyStaffDocsInput {
   nomorBAST?: string;
 
   @Field(() => GraphQLISODateTime)
-  spkDocDate: Date;
+  spkDocDate!: Date;
 
   @Field(() => GraphQLISODateTime)
-  bastDocDate: Date;
+  bastDocDate!: Date;
 
   @Field({ nullable: true })
   pekerjaanPetugas?: string;
@@ -567,14 +573,14 @@ export class GenerateMonthlyStaffDocsInput {
   desaTinggalPetugas?: string;
 
   @Field(() => [MonthlyStaffDocRowInput])
-  rows: MonthlyStaffDocRowInput[];
+  rows!: MonthlyStaffDocRowInput[];
 }
 
 @InputType()
 export class UpdateSubSurveyActivityStatusDTO {
   @Field(() => String)
-  subSurveyActivityId: string;
+  subSurveyActivityId!: string;
 
   @Field(() => SubSurveyStatus)
-  status: SubSurveyStatus;
+  status!: SubSurveyStatus;
 }

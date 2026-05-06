@@ -938,7 +938,7 @@ function MonthlyStaffUsagePanel({
         ];
 
         const mergeDownCols = [
-          1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+          1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 15, 16, 17, 18, 19,
         ];
         for (const c of mergeDownCols) {
           ws.mergeCells(1, c, 2, c);
@@ -1281,7 +1281,7 @@ function MonthlyStaffUsagePanel({
       )}
 
       {/* ringkasan */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      {/* <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <button
           type="button"
           onClick={() => setShowActivitiesModal(true)}
@@ -1311,7 +1311,7 @@ function MonthlyStaffUsagePanel({
             Lihat daftar petugas →
           </div>
         </button>
-      </div>
+      </div> */}
 
       {/* detail mitra bulanan */}
       <div className="border rounded-lg p-3 sm:p-4">

@@ -127,6 +127,9 @@ export class SubSurveyActivityType {
   @Field()
   status!: string;
 
+  @Field(() => Int, { nullable: true })
+  handoverMonth?: number | null;
+
   @Field(() => String, { nullable: true })
   budgetCode?: string | null;
 

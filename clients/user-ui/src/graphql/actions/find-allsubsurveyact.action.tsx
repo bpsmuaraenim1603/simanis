@@ -11,6 +11,7 @@ export const GET_ALL_SUB_SURVEY_ACTIVITIES: DocumentNode = gql`
       surveyActivityId
       startDate
       endDate
+      handoverMonth
       targetSample
       sampleType
       priceCompareUnit

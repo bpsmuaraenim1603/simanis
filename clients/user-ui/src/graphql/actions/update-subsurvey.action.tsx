@@ -8,6 +8,7 @@ export const UPDATE_SUB_SURVEY_ACTIVITY = gql`
       slug
       startDate
       endDate
+      handoverMonth
       targetSample
       sampleType
       priceCompareUnit

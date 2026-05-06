@@ -20,7 +20,7 @@ import { TokenSender } from './utils/sendToken';
 import { Prisma, User } from '@prisma/client';
 import * as crypto from 'crypto';
 import * as XLSX from 'xlsx';
-import dayjs from 'dayjs';
+import dayjs = require('dayjs');
 import { BulkSpjDefaultsInput, BulkSpjResult } from './dto/bulk-spj.dto';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';

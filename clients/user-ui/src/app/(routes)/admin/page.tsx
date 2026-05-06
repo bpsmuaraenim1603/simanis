@@ -69,6 +69,7 @@ type SubSurveyActivity = {
   surveyActivityId: string;
   startDate: string;
   endDate: string;
+  handoverMonth?: number | null;
   targetSample: number;
   sampleType: string;
   priceCompareUnit?: "SAMPEL" | "BLOK" | string;
@@ -358,20 +359,24 @@ export default function Admin() {
   const petugasOptions = useMemo(
     () =>
       users
-        .filter((u) => isPrimaryRoleUser(u))
         .slice()
         .sort((a, b) => a.name.localeCompare(b.name))
-        .map((u) => ({ value: u.id, label: `${u.name} (${u.email})` })),
+        .map((u) => ({
+          value: u.id,
+          label: `${u.name} (${u.email}) - ${u.primaryRole}`,
+        })),
     [users],
   );
 
   const pengawasOptions = useMemo(
     () =>
       users
-        .filter((u) => isPrimaryRoleUser(u))
         .slice()
         .sort((a, b) => a.name.localeCompare(b.name))
-        .map((u) => ({ value: u.id, label: `${u.name} (${u.email})` })),
+        .map((u) => ({
+          value: u.id,
+          label: `${u.name} (${u.email}) - ${u.primaryRole}`,
+        })),
     [users],
   );
 
@@ -475,6 +480,7 @@ export default function Admin() {
     slug: "",
     startDate: "",
     endDate: "",
+    handoverMonth: null,
     targetSample: 0,
     sampleType: "",
     priceCompareUnit: "SAMPEL",
@@ -554,6 +560,7 @@ export default function Admin() {
       slug: "",
       startDate: "",
       endDate: "",
+      handoverMonth: null,
       targetSample: 0,
       sampleType: "",
       priceCompareUnit: "SAMPEL",
@@ -581,6 +588,8 @@ export default function Admin() {
     );
     const startDate = String(kegiatanDraft.startDate ?? "");
     const endDate = String(kegiatanDraft.endDate ?? "");
+    const handoverMonthRaw = kegiatanDraft.handoverMonth;
+    const handoverMonth = handoverMonthRaw ? Number(handoverMonthRaw) : null;
     const targetSample = Number(kegiatanDraft.targetSample ?? 0);
     const sampleType = String(kegiatanDraft.sampleType ?? "").trim();
     const priceCompareUnit = String(
@@ -612,6 +621,10 @@ export default function Admin() {
               surveyActivityId: selectedTimId,
               startDate: new Date(startDate),
               endDate: new Date(endDate),
+              handoverMonth:
+                handoverMonth && handoverMonth >= 1 && handoverMonth <= 12
+                  ? handoverMonth
+                  : null,
               targetSample: Number.isFinite(targetSample) ? targetSample : 0,
               sampleType,
               priceCompareUnit: (priceCompareUnit as any) || "SAMPEL",
@@ -633,6 +646,10 @@ export default function Admin() {
               surveyActivityId: selectedTimId,
               startDate: new Date(startDate),
               endDate: new Date(endDate),
+              handoverMonth:
+                handoverMonth && handoverMonth >= 1 && handoverMonth <= 12
+                  ? handoverMonth
+                  : null,
               targetSample: Number.isFinite(targetSample) ? targetSample : 0,
               sampleType,
               priceCompareUnit: (priceCompareUnit as any) || "SAMPEL",
@@ -698,6 +715,7 @@ export default function Admin() {
             surveyActivityId: k.surveyActivityId,
             startDate: new Date(k.startDate),
             endDate: new Date(k.endDate),
+            handoverMonth: k.handoverMonth ?? null,
             targetSample: Number(k.targetSample ?? 0),
             sampleType: k.sampleType,
             activityType: k.activityType,
@@ -801,12 +819,7 @@ export default function Admin() {
 
   async function handleAddPair() {
     if (!selectedKegiatanId) return toast.error("Pilih kegiatan dulu.");
-    if (!canReceiveHonor(addPairPetugasId)) {
-      return toast.error("Petugas harus memiliki primary role User.");
-    }
-    if (addPairPengawasId && !canReceiveHonor(addPairPengawasId)) {
-      return toast.error("Pengawas harus memiliki primary role User agar honor/dok dihitung.");
-    }
+    if (!addPairPetugasId) return toast.error("Petugas wajib dipilih.");
     if (!addPairDistrictId) return toast.error("Kecamatan wajib dipilih.");
     if (!addPairVillageId) return toast.error("Desa wajib dipilih.");
     const n = Number(addPairSampleCount);
@@ -1131,12 +1144,6 @@ export default function Admin() {
   async function savePair(pairKey: string) {
     const edit = pairEdits[pairKey];
     if (!edit?.userId) return toast.error("Petugas wajib dipilih.");
-    if (!canReceiveHonor(edit.userId)) {
-      return toast.error("Petugas harus memiliki primary role User.");
-    }
-    if (edit.superVisorId && !canReceiveHonor(edit.superVisorId)) {
-      return toast.error("Pengawas harus memiliki primary role User agar honor/dok dihitung.");
-    }
     const pair = pairs.find((p) => p.key === pairKey);
     if (!pair) return;
 
@@ -1209,16 +1216,15 @@ export default function Admin() {
     const villageId = blockForm.villageId || null;
     if (!blockCount) return toast.error("Nama blok wajib diisi.");
     if (!editPair.userId) return toast.error("Petugas wajib dipilih.");
-    if (!canReceiveHonor(editPair.userId)) {
-      return toast.error("Petugas harus memiliki primary role User.");
-    }
-    if (editPair.superVisorId && !canReceiveHonor(editPair.superVisorId)) {
-      return toast.error("Pengawas harus memiliki primary role User agar honor/dok dihitung.");
-    }
 
     const sampleCount = Math.max(0, samples.length);
-    const honorPetugas = Number(blockForm.honorPetugas);
-    const honorPengawas = Number(blockForm.honorPengawas);
+    const petugasCanReceiveHonor = canReceiveHonor(editPair.userId);
+    const pengawasCanReceiveHonor = canReceiveHonor(editPair.superVisorId);
+    const honorPetugas = petugasCanReceiveHonor ? Number(blockForm.honorPetugas) : 0;
+    const honorPengawas =
+      editPair.superVisorId && pengawasCanReceiveHonor
+        ? Number(blockForm.honorPengawas)
+        : 0;
     const docsBillPetugas = String(honorPetugas);
     const docsBillPengawas = String(honorPengawas);
 
@@ -1702,6 +1708,9 @@ export default function Admin() {
                   <th className="py-2 px-3 w-32 sticky top-0 bg-gray-50 z-10 font-semibold text-gray-700">
                     Status
                   </th>
+                  <th className="py-2 px-3 w-36 sticky top-0 bg-gray-50 z-10 font-semibold text-gray-700">
+                    Bulan Penyerahan
+                  </th>
                   <th className="py-2 px-3 w-40 sticky top-0 bg-gray-50 z-10 font-semibold text-gray-700">
                     Aksi
                   </th>
@@ -1736,6 +1745,11 @@ export default function Admin() {
                           {k.status ?? "-"}
                         </span>
                       )}
+                    </td>
+                    <td className="py-2 px-3">
+                      {k.handoverMonth
+                        ? new Date(2026, Number(k.handoverMonth) - 1, 1).toLocaleString("id-ID", { month: "long" })
+                        : "Ikut bulan mulai"}
                     </td>
                     <td className="py-2 px-3">
                       <div className="flex gap-2">
@@ -1856,6 +1870,35 @@ export default function Admin() {
                           endDate: e.target.value,
                         }))
                       }
+                    />
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold mb-1">
+                      Bulan penyerahan
+                    </div>
+                    <HUSelect
+                      value={kegiatanDraft.handoverMonth ? String(kegiatanDraft.handoverMonth) : null}
+                      onValueChange={(v) =>
+                        setKegiatanDraft((p) => ({
+                          ...p,
+                          handoverMonth: v ? Number(v) : null,
+                        }))
+                      }
+                      options={[
+                        { value: "1", label: "Januari" },
+                        { value: "2", label: "Februari" },
+                        { value: "3", label: "Maret" },
+                        { value: "4", label: "April" },
+                        { value: "5", label: "Mei" },
+                        { value: "6", label: "Juni" },
+                        { value: "7", label: "Juli" },
+                        { value: "8", label: "Agustus" },
+                        { value: "9", label: "September" },
+                        { value: "10", label: "Oktober" },
+                        { value: "11", label: "November" },
+                        { value: "12", label: "Desember" },
+                      ]}
+                      placeholder="Ikut bulan mulai"
                     />
                   </div>
                   <div>
@@ -2237,9 +2280,9 @@ export default function Admin() {
                     className="w-full px-3 py-2 border rounded-md bg-white"
                     placeholder="Honor/dok petugas"
                     inputMode="numeric"
-                    disabled={!canReceiveHonor(addPairPetugasId)}
+                    disabled={!!addPairPetugasId && !canReceiveHonor(addPairPetugasId)}
                     value={
-                      canReceiveHonor(addPairPetugasId)
+                      !addPairPetugasId || canReceiveHonor(addPairPetugasId)
                         ? String(addPairHonorDokPetugas)
                         : "0"
                     }
@@ -2261,12 +2304,9 @@ export default function Admin() {
                     className="w-full px-3 py-2 border rounded-md bg-white"
                     placeholder="Honor/dok pengawas"
                     inputMode="numeric"
-                    disabled={
-                      !addPairPengawasId ||
-                      !canReceiveHonor(addPairPengawasId)
-                    }
+                    disabled={!!addPairPengawasId && !canReceiveHonor(addPairPengawasId)}
                     value={
-                      addPairPengawasId && canReceiveHonor(addPairPengawasId)
+                      !addPairPengawasId || canReceiveHonor(addPairPengawasId)
                         ? String(addPairHonorDokPengawas)
                         : "0"
                     }
@@ -2300,12 +2340,11 @@ export default function Admin() {
                 Total honor pengawas:{" "}
                 <b>
                   {(
-                    (!addPairPengawasId ||
                     (addPairPengawasId && canReceiveHonor(addPairPengawasId)
                       ? toMoney(addPairHonorDokPengawas)
                       : 0) *
                     (Number(addPairSampleCount) || 0)
-                  ).toLocaleString("id-ID"))}
+                  ).toLocaleString("id-ID")}
                 </b>
               </div>
 

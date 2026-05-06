@@ -225,7 +225,7 @@ export class SurveyActivityService {
 
     const rows = await this.prisma.userProgress.findMany({
       where: {
-        progressRole: 'PETUGAS',
+        progressRole: { in: ['PETUGAS', 'PENGAWAS'] },
         user: {
           primaryRole: 'User',
         },
@@ -246,6 +246,8 @@ export class SurveyActivityService {
         subSurveyActivity: {
           select: {
             startDate: true,
+            endDate: true,
+            handoverMonth: true,
           },
         },
       },
@@ -258,12 +260,14 @@ export class SurveyActivityService {
 
     for (const r of rows) {
       if (String(r.user?.primaryRole ?? '') !== 'User') continue;
-      const d = r.subSurveyActivity?.startDate;
-      if (!d) continue;
+      const ssa = r.subSurveyActivity;
+      const d = ssa?.startDate;
+      if (!d || !ssa) continue;
 
-      const rowYear = d.getFullYear();
-      const rowMonth = d.getMonth() + 1;
-      if (d < from || d > to) continue;
+      const rowYear = this.getActivityReportYear(ssa);
+      const rowMonth = this.getActivityReportMonth(ssa);
+      const reportDate = new Date(rowYear, rowMonth - 1, 1);
+      if (reportDate < from || reportDate > to) continue;
 
       const key = `${rowYear}||${rowMonth}||${r.userId}`;
       if (!byUserMonth.has(key)) {
@@ -404,13 +408,31 @@ export class SurveyActivityService {
   ) {
     const code = await this.getMonthlyStaffDocCode({ userId, month, year });
     const [spkFormat, bastFormat] = await Promise.all([
-      this.getSettingString(this.MONTHLY_DOC_SPK_FORMAT_KEY, this.DEFAULT_SPK_FORMAT),
-      this.getSettingString(this.MONTHLY_DOC_BAST_FORMAT_KEY, this.DEFAULT_BAST_FORMAT),
+      this.getSettingString(
+        this.MONTHLY_DOC_SPK_FORMAT_KEY,
+        this.DEFAULT_SPK_FORMAT,
+      ),
+      this.getSettingString(
+        this.MONTHLY_DOC_BAST_FORMAT_KEY,
+        this.DEFAULT_BAST_FORMAT,
+      ),
     ]);
 
     return {
-      nomorSPK: this.buildMonthlyDocNumberFromCode(code, 'SPK', month, year, spkFormat),
-      nomorBAST: this.buildMonthlyDocNumberFromCode(code, 'BAST', month, year, bastFormat),
+      nomorSPK: this.buildMonthlyDocNumberFromCode(
+        code,
+        'SPK',
+        month,
+        year,
+        spkFormat,
+      ),
+      nomorBAST: this.buildMonthlyDocNumberFromCode(
+        code,
+        'BAST',
+        month,
+        year,
+        bastFormat,
+      ),
     };
   }
 
@@ -643,8 +665,17 @@ export class SurveyActivityService {
   }
 
   async createSubSurveyActivity(input: CreateSubSurveyActivityDTO) {
+    const handoverMonth = Number((input as any).handoverMonth ?? 0);
     return this.prisma.subSurveyActivity.create({
-      data: input,
+      data: {
+        ...input,
+        handoverMonth:
+          Number.isInteger(handoverMonth) &&
+          handoverMonth >= 1 &&
+          handoverMonth <= 12
+            ? handoverMonth
+            : null,
+      },
     });
   }
 
@@ -659,9 +690,18 @@ export class SurveyActivityService {
     if (!existing)
       throw new NotFoundException('SubSurveyActivity tidak ditemukan');
 
-    const cleanedData = Object.fromEntries(
-      Object.entries(updateData).filter(([_, value]) => value != null),
+    const cleanedData: any = Object.fromEntries(
+      Object.entries(updateData).filter(([_, value]) => value !== undefined),
     );
+    if ('handoverMonth' in cleanedData) {
+      const handoverMonth = Number(cleanedData.handoverMonth ?? 0);
+      cleanedData.handoverMonth =
+        Number.isInteger(handoverMonth) &&
+        handoverMonth >= 1 &&
+        handoverMonth <= 12
+          ? handoverMonth
+          : null;
+    }
     return this.prisma.subSurveyActivity.update({
       where: { id: subSurveyActivityId },
       data: cleanedData,
@@ -883,8 +923,8 @@ export class SurveyActivityService {
       where: { id: input.userId },
       select: { primaryRole: true },
     });
-    const petugasIsSupervisor = petugasUser?.primaryRole === 'Supervisor';
-    if (petugasIsSupervisor) {
+    const petugasCanReceiveHonor = petugasUser?.primaryRole === 'User';
+    if (!petugasCanReceiveHonor) {
       (rest as any).docsBill = '0';
     }
 
@@ -894,8 +934,8 @@ export class SurveyActivityService {
         where: { id: rest.superVisorId },
         select: { primaryRole: true },
       });
-      const pengawasIsSupervisor = pengawasUser?.primaryRole === 'Supervisor';
-      if (pengawasIsSupervisor) {
+      const pengawasCanReceiveHonor = pengawasUser?.primaryRole === 'User';
+      if (!pengawasCanReceiveHonor) {
         forcedDocsBillPengawas = '0';
       }
     }
@@ -970,7 +1010,7 @@ export class SurveyActivityService {
           progressRole: 'PENGAWAS',
           blockCount: created.blockCount ?? null,
         },
-        data: { docsBill: String(docsBillPengawas).trim() },
+        data: { docsBill: String(forcedDocsBillPengawas ?? '0').trim() },
       });
     }
 
@@ -1287,8 +1327,8 @@ export class SurveyActivityService {
         where: { id: nextUserId },
         select: { primaryRole: true },
       });
-      const petugasIsSupervisor = petugasUser?.primaryRole === 'Supervisor';
-      if (petugasIsSupervisor) {
+      const petugasCanReceiveHonor = petugasUser?.primaryRole === 'User';
+      if (!petugasCanReceiveHonor) {
         (rest as any).docsBill = '0';
       }
 
@@ -1313,11 +1353,11 @@ export class SurveyActivityService {
           })
         : null;
 
-      const pengawasIsSupervisor = pengawasUser?.primaryRole === 'Supervisor';
+      const pengawasCanReceiveHonor = pengawasUser?.primaryRole === 'User';
 
-      // Jika pengawas "Supervisor", paksa honor pengawas 0 (walaupun payload isi angka).
+      // Jika pengawas bukan primaryRole User, paksa honor pengawas 0 (walaupun payload isi angka).
       const forcedDocsBillPengawas =
-        nextSupId && pengawasIsSupervisor ? '0' : docsBillPengawas;
+        nextSupId && !pengawasCanReceiveHonor ? '0' : docsBillPengawas;
 
       if (
         Object.prototype.hasOwnProperty.call(rest as any, 'docsBill') &&
@@ -2312,56 +2352,99 @@ export class SurveyActivityService {
   }) {
     const { userId, subSurveyActivityId } = params;
     const addAmount = Number(params.addAmount ?? 0);
+
     if (!Number.isFinite(addAmount) || addAmount <= 0) return;
 
     const now = params.now ?? new Date();
-    const { from, to } = this.monthRange(now.getMonth() + 1, now.getFullYear());
 
     const [u, sub] = await Promise.all([
       this.prisma.user.findUnique({
         where: { id: userId },
-        select: { limit_bill: true, name: true },
+        select: {
+          limit_bill: true,
+          name: true,
+          primaryRole: true,
+        },
       }),
       this.prisma.subSurveyActivity.findUnique({
         where: { id: subSurveyActivityId },
-        select: { startDate: true, endDate: true, name: true },
+        select: {
+          startDate: true,
+          endDate: true,
+          name: true,
+          handoverMonth: true,
+        },
       }),
     ]);
 
     if (!u) throw new NotFoundException('User tidak ditemukan');
     if (!sub) throw new NotFoundException('SubSurveyActivity tidak ditemukan');
 
+    // Selain primaryRole User tidak dihitung honor.
+    // Jadi tidak perlu dicek batas honor.
+    if (u.primaryRole !== 'User') return;
+
     const limit = this.parseMoney(u.limit_bill);
     if (!Number.isFinite(limit) || limit <= 0) return;
 
-    const overlap =
-      new Date(sub.startDate).getTime() <= to.getTime() &&
-      new Date(sub.endDate).getTime() >= from.getTime();
-    if (!overlap) return;
+    const activityStart = new Date(sub.startDate);
+
+    const billMonth =
+      Number(sub.handoverMonth) ||
+      activityStart.getMonth() + 1 ||
+      now.getMonth() + 1;
+
+    const billYear = activityStart.getFullYear() || now.getFullYear();
+
+    const { from, to } = this.monthRange(billMonth, billYear);
+
+    const yearStart = new Date(billYear, 0, 1);
+    const yearEnd = new Date(billYear, 11, 31, 23, 59, 59, 999);
 
     const excludeIds = (params.excludeProgressIds ?? []).filter(Boolean);
 
     const progresses = await this.prisma.userProgress.findMany({
       where: {
         userId,
-        ...(excludeIds.length ? { NOT: excludeIds.map((id) => ({ id })) } : {}),
+        progressRole: { in: ['PETUGAS', 'PENGAWAS'] },
+        user: {
+          primaryRole: 'User',
+        },
+        ...(excludeIds.length
+          ? {
+              NOT: excludeIds.map((id) => ({ id })),
+            }
+          : {}),
         subSurveyActivity: {
-          startDate: { lte: to },
-          endDate: { gte: from },
+          OR: [
+            {
+              handoverMonth: billMonth,
+              startDate: { lte: yearEnd },
+              endDate: { gte: yearStart },
+            },
+            {
+              handoverMonth: null,
+              startDate: { lte: to },
+              endDate: { gte: from },
+            },
+          ],
         },
       },
-      select: { docsBill: true },
+      select: {
+        docsBill: true,
+      },
     });
 
     const currentTotal = progresses.reduce(
       (acc, p) => acc + this.parseMoney(p.docsBill),
       0,
     );
+
     const nextTotal = currentTotal + addAmount;
 
     if (nextTotal > limit) {
       throw new BadRequestException(
-        `Batas honor bulan ini terlampaui untuk ${u.name || 'user'}: ` +
+        `Batas honor bulan penyerahan terlampaui untuk ${u.name || 'user'}: ` +
           `batas ${this.formatNumberID(limit)}, ` +
           `total saat ini ${this.formatNumberID(currentTotal)}, ` +
           `penambahan ${this.formatNumberID(addAmount)}. ` +
@@ -2376,10 +2459,8 @@ export class SurveyActivityService {
     if (!actorId) return [];
 
     const monthFrom = typeof month === 'number' && month >= 1 && month <= 12;
-    const from = monthFrom
-      ? new Date(year, month - 1, 1)
-      : new Date(year, 0, 1);
-    const to = monthFrom ? new Date(year, month, 0) : new Date(year, 11, 31);
+    const from = new Date(year, 0, 1);
+    const to = new Date(year, 11, 31);
     to.setHours(23, 59, 59, 999);
 
     const canAccessAll = this.canAccessAll(actor);
@@ -2405,6 +2486,7 @@ export class SurveyActivityService {
         slug: true,
         startDate: true,
         endDate: true,
+        handoverMonth: true,
         surveyActivity: {
           select: { slug: true, chiefId: true },
         },
@@ -2412,13 +2494,17 @@ export class SurveyActivityService {
       orderBy: { startDate: 'asc' },
     });
 
-    if (!subs.length) return [];
+    const visibleSubs = subs.filter((s) =>
+      this.activityMatchesReportPeriod(s, monthFrom ? month : undefined, year),
+    );
 
-    const subIds = subs.map((s) => s.id);
+    if (!visibleSubs.length) return [];
+
+    const subIds = visibleSubs.map((s) => s.id);
     const userProgresses = await this.prisma.userProgress.findMany({
       where: {
         subSurveyActivityId: { in: subIds },
-        progressRole: 'PETUGAS',
+        progressRole: { in: ['PETUGAS', 'PENGAWAS'] },
         user: {
           primaryRole: 'User',
         },
@@ -2459,8 +2545,10 @@ export class SurveyActivityService {
 
     const pad2 = (n: number) => String(n).padStart(2, '0');
 
-    return subs.map((s) => {
-      const monthKey = `${s.startDate.getFullYear()}-${pad2(s.startDate.getMonth() + 1)}`;
+    return visibleSubs.map((s) => {
+      const reportMonth = this.getActivityReportMonth(s);
+      const reportYear = this.getActivityReportYear(s);
+      const monthKey = `${reportYear}-${pad2(reportMonth)}`;
       const staffUsers = (usersBySubId.get(s.id) ?? []).sort((a, b) =>
         String(a?.name ?? '').localeCompare(String(b?.name ?? ''), 'id'),
       );
@@ -3240,7 +3328,7 @@ export class SurveyActivityService {
 
     const rows = await this.prisma.userProgress.findMany({
       where: {
-        progressRole: 'PETUGAS',
+        progressRole: { in: ['PETUGAS', 'PENGAWAS'] },
         user: {
           primaryRole: 'User',
         },
@@ -3271,6 +3359,7 @@ export class SurveyActivityService {
             name: true,
             startDate: true,
             endDate: true,
+            handoverMonth: true,
             sampleType: true,
             priceCompareUnit: true,
             unitWorkPrice: true,
@@ -3335,8 +3424,8 @@ export class SurveyActivityService {
       const ssa = r.subSurveyActivity;
       if (!ssa?.startDate) continue;
 
-      const rowYear = ssa.startDate.getFullYear();
-      const month = ssa.startDate.getMonth() + 1;
+      const rowYear = this.getActivityReportYear(ssa);
+      const month = this.getActivityReportMonth(ssa);
       const key = `${rowYear}||${month}||${r.userId}||${r.subSurveyActivityId}`;
 
       const compare = String(ssa?.priceCompareUnit ?? 'SAMPEL');
@@ -3453,8 +3542,8 @@ export class SurveyActivityService {
     });
 
     const visibleOut = out.filter((r) => {
-      const d = new Date(r.startDate);
-      return d >= visibleFrom && d <= visibleTo;
+      if (hasMonth) return Number(r.year) === year && Number(r.month) === month;
+      return Number(r.year) === year;
     });
 
     visibleOut.sort((a, b) => {
@@ -3585,6 +3674,52 @@ export class SurveyActivityService {
     return { from, to };
   }
 
+  private getActivityReportMonth(activity: {
+    startDate: Date;
+    handoverMonth?: number | null;
+  }) {
+    const hm = Number(activity?.handoverMonth ?? 0);
+    if (Number.isInteger(hm) && hm >= 1 && hm <= 12) return hm;
+    return new Date(activity.startDate).getMonth() + 1;
+  }
+
+  private getActivityReportYear(activity: {
+    startDate: Date;
+    endDate?: Date | null;
+    handoverMonth?: number | null;
+  }) {
+    const start = new Date(activity.startDate);
+    const end = new Date(activity.endDate ?? activity.startDate);
+    const hm = Number(activity?.handoverMonth ?? 0);
+
+    if (!Number.isInteger(hm) || hm < 1 || hm > 12) {
+      return start.getFullYear();
+    }
+
+    for (let y = start.getFullYear(); y <= end.getFullYear(); y += 1) {
+      const firstMonth = y === start.getFullYear() ? start.getMonth() + 1 : 1;
+      const lastMonth = y === end.getFullYear() ? end.getMonth() + 1 : 12;
+      if (hm >= firstMonth && hm <= lastMonth) return y;
+    }
+
+    return start.getFullYear();
+  }
+
+  private activityMatchesReportPeriod(
+    activity: {
+      startDate: Date;
+      endDate?: Date | null;
+      handoverMonth?: number | null;
+    },
+    month: number | undefined,
+    year: number,
+  ) {
+    const reportYear = this.getActivityReportYear(activity);
+    if (reportYear !== year) return false;
+    if (typeof month !== 'number') return true;
+    return this.getActivityReportMonth(activity) === month;
+  }
+
   private parseMoney(input?: string | number | null): number {
     if (input === null || input === undefined) return 0;
 
@@ -3657,9 +3792,13 @@ export class SurveyActivityService {
     const progresses = await this.prisma.userProgress.findMany({
       where: {
         userId,
+        progressRole: { in: ['PETUGAS', 'PENGAWAS'] },
+        user: {
+          primaryRole: 'User',
+        },
         subSurveyActivity: {
-          startDate: { lte: to },
-          endDate: { gte: from },
+          startDate: { lte: new Date(year, 11, 31, 23, 59, 59, 999) },
+          endDate: { gte: new Date(year, 0, 1) },
         },
       },
       select: {
@@ -3673,6 +3812,7 @@ export class SurveyActivityService {
             name: true,
             startDate: true,
             endDate: true,
+            handoverMonth: true,
             budgetCode: true,
             unitWorkPrice: true,
           },
@@ -3685,13 +3825,19 @@ export class SurveyActivityService {
       where: {
         superVisorId: userId,
         progressRole: 'PETUGAS',
+        user: {
+          primaryRole: 'User',
+        },
         subSurveyActivity: {
-          startDate: { lte: to },
-          endDate: { gte: from },
+          startDate: { lte: new Date(year, 11, 31, 23, 59, 59, 999) },
+          endDate: { gte: new Date(year, 0, 1) },
         },
       },
       select: {
         subSurveyActivityId: true,
+        subSurveyActivity: {
+          select: { startDate: true, endDate: true, handoverMonth: true },
+        },
         _count: { select: { samples: true } },
       },
     });
@@ -3700,14 +3846,15 @@ export class SurveyActivityService {
     for (const x of supervisedPetugas) {
       const ssaId = x.subSurveyActivityId;
       if (!ssaId) continue;
+      if (!x.subSurveyActivity) continue;
+      if (!this.activityMatchesReportPeriod(x.subSurveyActivity, month, year))
+        continue;
       supervisedDocsBySSA.set(
         ssaId,
         (supervisedDocsBySSA.get(ssaId) ?? 0) + (x._count?.samples ?? 0),
       );
     }
     const upIds = progresses.map((p) => p.id);
-    const clipStart = (d: Date) => (d < from ? from : d);
-    const clipEnd = (d: Date) => (d > to ? to : d);
 
     const map = new Map<
       string,
@@ -3726,6 +3873,7 @@ export class SurveyActivityService {
     for (const p of progresses) {
       const ssa = p.subSurveyActivity;
       if (!ssa?.id) continue;
+      if (!this.activityMatchesReportPeriod(ssa, month, year)) continue;
 
       const key = ssa.id;
       const docs =
@@ -3735,10 +3883,8 @@ export class SurveyActivityService {
       const unitCost = Number((ssa as any).unitWorkPrice ?? 0);
       const honor = unitCost * docs;
 
-      const startInMonth = clipStart(new Date(ssa.startDate));
-      const endInMonth = clipEnd(new Date(ssa.endDate));
-
-      if (endInMonth < from || startInMonth > to) continue;
+      const startInMonth = new Date(ssa.startDate);
+      const endInMonth = new Date(ssa.endDate);
 
       const ssaBudget = ssa.budgetCode ?? null;
       const existing = map.get(key);

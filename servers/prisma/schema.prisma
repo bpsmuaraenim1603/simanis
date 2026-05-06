@@ -127,6 +127,7 @@ model SubSurveyActivity {
   startDate        DateTime
   endDate          DateTime
   status           SubSurveyStatus @default(BERJALAN)
+  handoverMonth    Int?
   targetSample     Int
   sampleType       String
   activityType     String

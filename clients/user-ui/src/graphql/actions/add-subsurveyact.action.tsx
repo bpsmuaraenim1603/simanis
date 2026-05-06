@@ -10,6 +10,7 @@ mutation AddSubSurveyActivity($input: CreateSubSurveyActivityDTO!) {
     surveyActivityId
     startDate
     endDate
+    handoverMonth
     targetSample
     sampleType
     priceCompareUnit
