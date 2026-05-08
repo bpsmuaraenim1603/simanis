@@ -11,6 +11,8 @@ mutation AddSubSurveyActivity($input: CreateSubSurveyActivityDTO!) {
     startDate
     endDate
     handoverMonth
+    spkHandoverMonth
+    bastHandoverMonth
     targetSample
     sampleType
     priceCompareUnit

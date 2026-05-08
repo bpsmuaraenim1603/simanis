@@ -12,6 +12,8 @@ export const GET_ALL_SUB_SURVEY_ACTIVITIES: DocumentNode = gql`
       startDate
       endDate
       handoverMonth
+      spkHandoverMonth
+      bastHandoverMonth
       targetSample
       sampleType
       priceCompareUnit

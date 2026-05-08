@@ -70,6 +70,8 @@ type SubSurveyActivity = {
   startDate: string;
   endDate: string;
   handoverMonth?: number | null;
+  spkHandoverMonth?: number | null;
+  bastHandoverMonth?: number | null;
   targetSample: number;
   sampleType: string;
   priceCompareUnit?: "SAMPEL" | "BLOK" | string;
@@ -481,6 +483,8 @@ export default function Admin() {
     startDate: "",
     endDate: "",
     handoverMonth: null,
+    spkHandoverMonth: null,
+    bastHandoverMonth: null,
     targetSample: 0,
     sampleType: "",
     priceCompareUnit: "SAMPEL",
@@ -561,6 +565,8 @@ export default function Admin() {
       startDate: "",
       endDate: "",
       handoverMonth: null,
+      spkHandoverMonth: null,
+      bastHandoverMonth: null,
       targetSample: 0,
       sampleType: "",
       priceCompareUnit: "SAMPEL",
@@ -588,8 +594,16 @@ export default function Admin() {
     );
     const startDate = String(kegiatanDraft.startDate ?? "");
     const endDate = String(kegiatanDraft.endDate ?? "");
-    const handoverMonthRaw = kegiatanDraft.handoverMonth;
-    const handoverMonth = handoverMonthRaw ? Number(handoverMonthRaw) : null;
+    const spkHandoverMonthRaw =
+      kegiatanDraft.spkHandoverMonth ?? kegiatanDraft.handoverMonth;
+    const bastHandoverMonthRaw =
+      kegiatanDraft.bastHandoverMonth ?? kegiatanDraft.handoverMonth;
+    const spkHandoverMonth = spkHandoverMonthRaw
+      ? Number(spkHandoverMonthRaw)
+      : null;
+    const bastHandoverMonth = bastHandoverMonthRaw
+      ? Number(bastHandoverMonthRaw)
+      : null;
     const targetSample = Number(kegiatanDraft.targetSample ?? 0);
     const sampleType = String(kegiatanDraft.sampleType ?? "").trim();
     const priceCompareUnit = String(
@@ -621,9 +635,18 @@ export default function Admin() {
               surveyActivityId: selectedTimId,
               startDate: new Date(startDate),
               endDate: new Date(endDate),
-              handoverMonth:
-                handoverMonth && handoverMonth >= 1 && handoverMonth <= 12
-                  ? handoverMonth
+              handoverMonth: null,
+              spkHandoverMonth:
+                spkHandoverMonth &&
+                spkHandoverMonth >= 1 &&
+                spkHandoverMonth <= 12
+                  ? spkHandoverMonth
+                  : null,
+              bastHandoverMonth:
+                bastHandoverMonth &&
+                bastHandoverMonth >= 1 &&
+                bastHandoverMonth <= 12
+                  ? bastHandoverMonth
                   : null,
               targetSample: Number.isFinite(targetSample) ? targetSample : 0,
               sampleType,
@@ -646,9 +669,18 @@ export default function Admin() {
               surveyActivityId: selectedTimId,
               startDate: new Date(startDate),
               endDate: new Date(endDate),
-              handoverMonth:
-                handoverMonth && handoverMonth >= 1 && handoverMonth <= 12
-                  ? handoverMonth
+              handoverMonth: null,
+              spkHandoverMonth:
+                spkHandoverMonth &&
+                spkHandoverMonth >= 1 &&
+                spkHandoverMonth <= 12
+                  ? spkHandoverMonth
+                  : null,
+              bastHandoverMonth:
+                bastHandoverMonth &&
+                bastHandoverMonth >= 1 &&
+                bastHandoverMonth <= 12
+                  ? bastHandoverMonth
                   : null,
               targetSample: Number.isFinite(targetSample) ? targetSample : 0,
               sampleType,
@@ -1019,7 +1051,7 @@ export default function Admin() {
       ? toMoney(blockForm.honorDokPetugas)
       : 0;
     const perPengawas =
-       editPair.superVisorId && pengawasCanReceiveHonor
+      editPair.superVisorId && pengawasCanReceiveHonor
         ? toMoney(blockForm.honorDokPengawas)
         : 0;
 
@@ -1220,7 +1252,9 @@ export default function Admin() {
     const sampleCount = Math.max(0, samples.length);
     const petugasCanReceiveHonor = canReceiveHonor(editPair.userId);
     const pengawasCanReceiveHonor = canReceiveHonor(editPair.superVisorId);
-    const honorPetugas = petugasCanReceiveHonor ? Number(blockForm.honorPetugas) : 0;
+    const honorPetugas = petugasCanReceiveHonor
+      ? Number(blockForm.honorPetugas)
+      : 0;
     const honorPengawas =
       editPair.superVisorId && pengawasCanReceiveHonor
         ? Number(blockForm.honorPengawas)
@@ -1747,9 +1781,24 @@ export default function Admin() {
                       )}
                     </td>
                     <td className="py-2 px-3">
-                      {k.handoverMonth
-                        ? new Date(2026, Number(k.handoverMonth) - 1, 1).toLocaleString("id-ID", { month: "long" })
+                      {(k.spkHandoverMonth ?? k.handoverMonth)
+                        ? new Date(
+                            2026,
+                            Number(k.spkHandoverMonth ?? k.handoverMonth) - 1,
+                            1,
+                          ).toLocaleString("id-ID", { month: "long" })
                         : "Ikut bulan mulai"}
+                      <div className="text-xs text-gray-500">
+                        BAST:{" "}
+                        {(k.bastHandoverMonth ?? k.handoverMonth)
+                          ? new Date(
+                              2026,
+                              Number(k.bastHandoverMonth ?? k.handoverMonth) -
+                                1,
+                              1,
+                            ).toLocaleString("id-ID", { month: "long" })
+                          : "Ikut bulan mulai"}
+                      </div>
                     </td>
                     <td className="py-2 px-3">
                       <div className="flex gap-2">
@@ -1874,14 +1923,22 @@ export default function Admin() {
                   </div>
                   <div>
                     <div className="text-sm font-semibold mb-1">
-                      Bulan penyerahan
+                      Bulan penyerahan SPK
                     </div>
                     <HUSelect
-                      value={kegiatanDraft.handoverMonth ? String(kegiatanDraft.handoverMonth) : null}
+                      value={
+                        (kegiatanDraft.spkHandoverMonth ??
+                        kegiatanDraft.handoverMonth)
+                          ? String(
+                              kegiatanDraft.spkHandoverMonth ??
+                                kegiatanDraft.handoverMonth,
+                            )
+                          : null
+                      }
                       onValueChange={(v) =>
                         setKegiatanDraft((p) => ({
                           ...p,
-                          handoverMonth: v ? Number(v) : null,
+                          spkHandoverMonth: v ? Number(v) : null,
                         }))
                       }
                       options={[
@@ -1899,6 +1956,43 @@ export default function Admin() {
                         { value: "12", label: "Desember" },
                       ]}
                       placeholder="Ikut bulan mulai"
+                    />
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold mb-1">
+                      Bulan penyerahan BAST
+                    </div>
+                    <HUSelect
+                      value={
+                        (kegiatanDraft.bastHandoverMonth ??
+                        kegiatanDraft.handoverMonth)
+                          ? String(
+                              kegiatanDraft.bastHandoverMonth ??
+                                kegiatanDraft.handoverMonth,
+                            )
+                          : null
+                      }
+                      onValueChange={(v) =>
+                        setKegiatanDraft((p) => ({
+                          ...p,
+                          bastHandoverMonth: v ? Number(v) : null,
+                        }))
+                      }
+                      options={[
+                        { value: "1", label: "Januari" },
+                        { value: "2", label: "Februari" },
+                        { value: "3", label: "Maret" },
+                        { value: "4", label: "April" },
+                        { value: "5", label: "Mei" },
+                        { value: "6", label: "Juni" },
+                        { value: "7", label: "Juli" },
+                        { value: "8", label: "Agustus" },
+                        { value: "9", label: "September" },
+                        { value: "10", label: "Oktober" },
+                        { value: "11", label: "November" },
+                        { value: "12", label: "Desember" },
+                      ]}
+                      placeholder="Ikut bulan SPK"
                     />
                   </div>
                   <div>
@@ -2198,9 +2292,7 @@ export default function Admin() {
 
                     if (!addPairHonorTouchedPetugas) {
                       setAddPairHonorDokPetugas(
-                        String(
-                          canReceiveHonor(id) ? defaultUnitWorkPrice : 0,
-                        ),
+                        String(canReceiveHonor(id) ? defaultUnitWorkPrice : 0),
                       );
                     }
                   }}
@@ -2216,9 +2308,7 @@ export default function Admin() {
                     if (!addPairHonorTouchedPengawas) {
                       setAddPairHonorDokPengawas(
                         String(
-                          id && canReceiveHonor(id)
-                            ? defaultUnitWorkPrice
-                            : 0,
+                          id && canReceiveHonor(id) ? defaultUnitWorkPrice : 0,
                         ),
                       );
                     }
@@ -2280,7 +2370,9 @@ export default function Admin() {
                     className="w-full px-3 py-2 border rounded-md bg-white"
                     placeholder="Honor/dok petugas"
                     inputMode="numeric"
-                    disabled={!!addPairPetugasId && !canReceiveHonor(addPairPetugasId)}
+                    disabled={
+                      !!addPairPetugasId && !canReceiveHonor(addPairPetugasId)
+                    }
                     value={
                       !addPairPetugasId || canReceiveHonor(addPairPetugasId)
                         ? String(addPairHonorDokPetugas)
@@ -2304,7 +2396,9 @@ export default function Admin() {
                     className="w-full px-3 py-2 border rounded-md bg-white"
                     placeholder="Honor/dok pengawas"
                     inputMode="numeric"
-                    disabled={!!addPairPengawasId && !canReceiveHonor(addPairPengawasId)}
+                    disabled={
+                      !!addPairPengawasId && !canReceiveHonor(addPairPengawasId)
+                    }
                     value={
                       !addPairPengawasId || canReceiveHonor(addPairPengawasId)
                         ? String(addPairHonorDokPengawas)
@@ -2332,8 +2426,7 @@ export default function Admin() {
                   {(
                     (canReceiveHonor(addPairPetugasId)
                       ? toMoney(addPairHonorDokPetugas)
-                      : 0) *
-                    (Number(addPairSampleCount) || 0)
+                      : 0) * (Number(addPairSampleCount) || 0)
                   ).toLocaleString("id-ID")}
                 </b>
                 {" • "}
@@ -2342,8 +2435,7 @@ export default function Admin() {
                   {(
                     (addPairPengawasId && canReceiveHonor(addPairPengawasId)
                       ? toMoney(addPairHonorDokPengawas)
-                      : 0) *
-                    (Number(addPairSampleCount) || 0)
+                      : 0) * (Number(addPairSampleCount) || 0)
                   ).toLocaleString("id-ID")}
                 </b>
               </div>
@@ -2697,10 +2789,12 @@ export default function Admin() {
                         inputMode="numeric"
                         pattern="[0-9]*"
                         disabled={
-                          !activeEditPair.superVisorId || !activePengawasCanReceiveHonor
+                          !activeEditPair.superVisorId ||
+                          !activePengawasCanReceiveHonor
                         }
                         value={
-                          activeEditPair.superVisorId && activePengawasCanReceiveHonor
+                          activeEditPair.superVisorId &&
+                          activePengawasCanReceiveHonor
                             ? (toMoney(
                                 blockForm.honorDokPengawas,
                               ).toLocaleString("id-ID") ?? "")

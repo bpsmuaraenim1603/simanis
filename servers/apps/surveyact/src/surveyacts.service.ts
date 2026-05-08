@@ -207,9 +207,11 @@ export class SurveyActivityService {
     userId: string;
     month: number;
     year: number;
+    docType?: 'SPK' | 'BAST';
   }) {
     const month = Number(input.month);
     const year = Number(input.year);
+    const docType = input.docType === 'BAST' ? 'BAST' : 'SPK';
 
     if (!input.userId) throw new BadRequestException('userId wajib diisi');
     if (!Number.isInteger(month) || month < 1 || month > 12) {
@@ -248,6 +250,8 @@ export class SurveyActivityService {
             startDate: true,
             endDate: true,
             handoverMonth: true,
+            spkHandoverMonth: true,
+            bastHandoverMonth: true,
           },
         },
       },
@@ -264,8 +268,8 @@ export class SurveyActivityService {
       const d = ssa?.startDate;
       if (!d || !ssa) continue;
 
-      const rowYear = this.getActivityReportYear(ssa);
-      const rowMonth = this.getActivityReportMonth(ssa);
+      const rowYear = this.getActivityReportYear(ssa, docType);
+      const rowMonth = this.getActivityReportMonth(ssa, docType);
       const reportDate = new Date(rowYear, rowMonth - 1, 1);
       if (reportDate < from || reportDate > to) continue;
 
@@ -298,7 +302,7 @@ export class SurveyActivityService {
 
     if (idx < 0) {
       throw new BadRequestException(
-        'Kode SPK/BAST tidak ditemukan untuk petugas dan bulan tersebut.',
+        `Kode ${docType} tidak ditemukan untuk petugas dan bulan tersebut.`,
       );
     }
 
@@ -354,6 +358,10 @@ export class SurveyActivityService {
     userId: string;
     year: number;
     month: number;
+    spkMonth?: number | null;
+    spkYear?: number | null;
+    bastMonth?: number | null;
+    bastYear?: number | null;
     nomorSPK?: string | null;
     nomorBAST?: string | null;
   }) {
@@ -362,13 +370,24 @@ export class SurveyActivityService {
     if (manualSPK && manualBAST) {
       return { nomorSPK: manualSPK, nomorBAST: manualBAST };
     }
-    const code = await this.getMonthlyStaffDocCode({
-      userId: input.userId,
-      year: input.year,
-      month: input.month,
-    });
+    const spkMonth = Number(input.spkMonth ?? input.month);
+    const spkYear = Number(input.spkYear ?? input.year);
+    const bastMonth = Number(input.bastMonth ?? input.month);
+    const bastYear = Number(input.bastYear ?? input.year);
 
-    const [spkFormat, bastFormat] = await Promise.all([
+    const [spkCode, bastCode, spkFormat, bastFormat] = await Promise.all([
+      this.getMonthlyStaffDocCode({
+        userId: input.userId,
+        year: spkYear,
+        month: spkMonth,
+        docType: 'SPK',
+      }),
+      this.getMonthlyStaffDocCode({
+        userId: input.userId,
+        year: bastYear,
+        month: bastMonth,
+        docType: 'BAST',
+      }),
       this.getSettingString(
         this.MONTHLY_DOC_SPK_FORMAT_KEY,
         this.DEFAULT_SPK_FORMAT,
@@ -383,19 +402,19 @@ export class SurveyActivityService {
       nomorSPK:
         manualSPK ||
         this.buildMonthlyDocNumberFromCode(
-          code,
+          spkCode,
           'SPK',
-          input.month,
-          input.year,
+          spkMonth,
+          spkYear,
           spkFormat,
         ),
       nomorBAST:
         manualBAST ||
         this.buildMonthlyDocNumberFromCode(
-          code,
+          bastCode,
           'BAST',
-          input.month,
-          input.year,
+          bastMonth,
+          bastYear,
           bastFormat,
         ),
     };
@@ -406,8 +425,19 @@ export class SurveyActivityService {
     month: number,
     year: number,
   ) {
-    const code = await this.getMonthlyStaffDocCode({ userId, month, year });
-    const [spkFormat, bastFormat] = await Promise.all([
+    const bastPeriod = await this.getMonthlyBastPeriodForUser(
+      userId,
+      month,
+      year,
+    );
+    const [spkCode, bastCode, spkFormat, bastFormat] = await Promise.all([
+      this.getMonthlyStaffDocCode({ userId, month, year, docType: 'SPK' }),
+      this.getMonthlyStaffDocCode({
+        userId,
+        month: bastPeriod.month,
+        year: bastPeriod.year,
+        docType: 'BAST',
+      }),
       this.getSettingString(
         this.MONTHLY_DOC_SPK_FORMAT_KEY,
         this.DEFAULT_SPK_FORMAT,
@@ -420,17 +450,17 @@ export class SurveyActivityService {
 
     return {
       nomorSPK: this.buildMonthlyDocNumberFromCode(
-        code,
+        spkCode,
         'SPK',
         month,
         year,
         spkFormat,
       ),
       nomorBAST: this.buildMonthlyDocNumberFromCode(
-        code,
+        bastCode,
         'BAST',
-        month,
-        year,
+        bastPeriod.month,
+        bastPeriod.year,
         bastFormat,
       ),
     };
@@ -665,16 +695,21 @@ export class SurveyActivityService {
   }
 
   async createSubSurveyActivity(input: CreateSubSurveyActivityDTO) {
-    const handoverMonth = Number((input as any).handoverMonth ?? 0);
+    const handoverMonth = this.normalizeMonthOrNull(
+      (input as any).handoverMonth,
+    );
+    const spkHandoverMonth = this.normalizeMonthOrNull(
+      (input as any).spkHandoverMonth ?? handoverMonth,
+    );
+    const bastHandoverMonth = this.normalizeMonthOrNull(
+      (input as any).bastHandoverMonth ?? handoverMonth,
+    );
     return this.prisma.subSurveyActivity.create({
       data: {
         ...input,
-        handoverMonth:
-          Number.isInteger(handoverMonth) &&
-          handoverMonth >= 1 &&
-          handoverMonth <= 12
-            ? handoverMonth
-            : null,
+        handoverMonth: null,
+        spkHandoverMonth,
+        bastHandoverMonth,
       },
     });
   }
@@ -693,14 +728,19 @@ export class SurveyActivityService {
     const cleanedData: any = Object.fromEntries(
       Object.entries(updateData).filter(([_, value]) => value !== undefined),
     );
-    if ('handoverMonth' in cleanedData) {
-      const handoverMonth = Number(cleanedData.handoverMonth ?? 0);
-      cleanedData.handoverMonth =
-        Number.isInteger(handoverMonth) &&
-        handoverMonth >= 1 &&
-        handoverMonth <= 12
-          ? handoverMonth
-          : null;
+    const legacyHandoverMonth = this.normalizeMonthOrNull(
+      cleanedData.handoverMonth,
+    );
+    if ('handoverMonth' in cleanedData) cleanedData.handoverMonth = null;
+    if ('spkHandoverMonth' in cleanedData) {
+      cleanedData.spkHandoverMonth = this.normalizeMonthOrNull(
+        cleanedData.spkHandoverMonth ?? legacyHandoverMonth,
+      );
+    }
+    if ('bastHandoverMonth' in cleanedData) {
+      cleanedData.bastHandoverMonth = this.normalizeMonthOrNull(
+        cleanedData.bastHandoverMonth ?? legacyHandoverMonth,
+      );
     }
     return this.prisma.subSurveyActivity.update({
       where: { id: subSurveyActivityId },
@@ -2373,6 +2413,8 @@ export class SurveyActivityService {
           endDate: true,
           name: true,
           handoverMonth: true,
+          spkHandoverMonth: true,
+          bastHandoverMonth: true,
         },
       }),
     ]);
@@ -2487,6 +2529,8 @@ export class SurveyActivityService {
         startDate: true,
         endDate: true,
         handoverMonth: true,
+        spkHandoverMonth: true,
+        bastHandoverMonth: true,
         surveyActivity: {
           select: { slug: true, chiefId: true },
         },
@@ -3360,6 +3404,8 @@ export class SurveyActivityService {
             startDate: true,
             endDate: true,
             handoverMonth: true,
+            spkHandoverMonth: true,
+            bastHandoverMonth: true,
             sampleType: true,
             priceCompareUnit: true,
             unitWorkPrice: true,
@@ -3424,8 +3470,10 @@ export class SurveyActivityService {
       const ssa = r.subSurveyActivity;
       if (!ssa?.startDate) continue;
 
-      const rowYear = this.getActivityReportYear(ssa);
-      const month = this.getActivityReportMonth(ssa);
+      const rowYear = this.getActivityReportYear(ssa, 'SPK');
+      const month = this.getActivityReportMonth(ssa, 'SPK');
+      const bastYear = this.getActivityReportYear(ssa, 'BAST');
+      const bastMonth = this.getActivityReportMonth(ssa, 'BAST');
       const key = `${rowYear}||${month}||${r.userId}||${r.subSurveyActivityId}`;
 
       const compare = String(ssa?.priceCompareUnit ?? 'SAMPEL');
@@ -3436,6 +3484,10 @@ export class SurveyActivityService {
         const row = {
           year: rowYear,
           month,
+          spkYear: rowYear,
+          spkMonth: month,
+          bastYear,
+          bastMonth,
           userId: r.userId,
           subSurveyActivityId: r.subSurveyActivityId,
 
@@ -3490,53 +3542,65 @@ export class SurveyActivityService {
       if (end > curEnd) existing.endDate = ssa.endDate ?? ssa.startDate;
     }
 
-    const byUserMonth = new Map<string, any[]>();
+    const byUserSpkMonth = new Map<string, any[]>();
+    const byUserBastMonth = new Map<string, any[]>();
     for (const r of out) {
       if (r?.__blocks) delete r.__blocks;
-      const k = `${r.year}||${r.month}||${r.userId}`;
-      if (!byUserMonth.has(k)) byUserMonth.set(k, []);
-      byUserMonth.get(k)!.push(r);
+      const spkKey = `${r.spkYear}||${r.spkMonth}||${r.userId}`;
+      const bastKey = `${r.bastYear}||${r.bastMonth}||${r.userId}`;
+      if (!byUserSpkMonth.has(spkKey)) byUserSpkMonth.set(spkKey, []);
+      if (!byUserBastMonth.has(bastKey)) byUserBastMonth.set(bastKey, []);
+      byUserSpkMonth.get(spkKey)!.push(r);
+      byUserBastMonth.get(bastKey)!.push(r);
     }
 
-    const orderedUserMonths = Array.from(byUserMonth.entries())
-      .map(([key, list]) => {
-        const first = list[0] ?? {};
-        return {
-          key,
-          year: Number(first.year ?? 0),
-          month: Number(first.month ?? 0),
-          userId: String(first.userId ?? ''),
-          name: String(first.name ?? ''),
-        };
-      })
-      .sort((a, b) => {
-        const aTime = a.year * 100 + a.month;
-        const bTime = b.year * 100 + b.month;
-        if (aTime !== bTime) return aTime - bTime;
-        const nameCompare = a.name.localeCompare(b.name, 'id', {
-          sensitivity: 'base',
+    const buildOrderedDocMonths = (map: Map<string, any[]>) =>
+      Array.from(map.entries())
+        .map(([key, list]) => {
+          const first = list[0] ?? {};
+          return {
+            key,
+            year: Number(String(key).split('||')[0] ?? 0),
+            month: Number(String(key).split('||')[1] ?? 0),
+            userId: String(first.userId ?? ''),
+            name: String(first.name ?? ''),
+          };
+        })
+        .sort((a, b) => {
+          const aTime = a.year * 100 + a.month;
+          const bTime = b.year * 100 + b.month;
+          if (aTime !== bTime) return aTime - bTime;
+          const nameCompare = a.name.localeCompare(b.name, 'id', {
+            sensitivity: 'base',
+          });
+          if (nameCompare !== 0) return nameCompare;
+          return a.userId.localeCompare(b.userId);
         });
-        if (nameCompare !== 0) return nameCompare;
-        return a.userId.localeCompare(b.userId);
-      });
 
-    orderedUserMonths.forEach((item, idx) => {
+    buildOrderedDocMonths(byUserSpkMonth).forEach((item, idx) => {
       const code = `B-${String(idx + 1).padStart(3, '0')}`;
-      const list = byUserMonth.get(item.key) ?? [];
+      const list = byUserSpkMonth.get(item.key) ?? [];
       for (const r of list) {
         r.spkCode = code;
-        r.bastCode = code;
         r.spkNumber = this.buildMonthlyDocNumberFromCode(
           code,
           'SPK',
-          Number(r.month),
-          Number(r.year),
+          Number(r.spkMonth),
+          Number(r.spkYear),
         );
+      }
+    });
+
+    buildOrderedDocMonths(byUserBastMonth).forEach((item, idx) => {
+      const code = `B-${String(idx + 1).padStart(3, '0')}`;
+      const list = byUserBastMonth.get(item.key) ?? [];
+      for (const r of list) {
+        r.bastCode = code;
         r.bastNumber = this.buildMonthlyDocNumberFromCode(
           code,
           'BAST',
-          Number(r.month),
-          Number(r.year),
+          Number(r.bastMonth),
+          Number(r.bastYear),
         );
       }
     });
@@ -3674,23 +3738,44 @@ export class SurveyActivityService {
     return { from, to };
   }
 
-  private getActivityReportMonth(activity: {
-    startDate: Date;
-    handoverMonth?: number | null;
-  }) {
-    const hm = Number(activity?.handoverMonth ?? 0);
+  private normalizeMonthOrNull(value: any): number | null {
+    const month = Number(value ?? 0);
+    return Number.isInteger(month) && month >= 1 && month <= 12 ? month : null;
+  }
+
+  private getActivityReportMonth(
+    activity: {
+      startDate: Date;
+      handoverMonth?: number | null;
+      spkHandoverMonth?: number | null;
+      bastHandoverMonth?: number | null;
+    },
+    docType: 'SPK' | 'BAST' = 'SPK',
+  ) {
+    const rawMonth =
+      docType === 'BAST'
+        ? (activity?.bastHandoverMonth ??
+          activity?.spkHandoverMonth ??
+          activity?.handoverMonth)
+        : (activity?.spkHandoverMonth ?? activity?.handoverMonth);
+    const hm = Number(rawMonth ?? 0);
     if (Number.isInteger(hm) && hm >= 1 && hm <= 12) return hm;
     return new Date(activity.startDate).getMonth() + 1;
   }
 
-  private getActivityReportYear(activity: {
-    startDate: Date;
-    endDate?: Date | null;
-    handoverMonth?: number | null;
-  }) {
+  private getActivityReportYear(
+    activity: {
+      startDate: Date;
+      endDate?: Date | null;
+      handoverMonth?: number | null;
+      spkHandoverMonth?: number | null;
+      bastHandoverMonth?: number | null;
+    },
+    docType: 'SPK' | 'BAST' = 'SPK',
+  ) {
     const start = new Date(activity.startDate);
     const end = new Date(activity.endDate ?? activity.startDate);
-    const hm = Number(activity?.handoverMonth ?? 0);
+    const hm = this.getActivityReportMonth(activity, docType);
 
     if (!Number.isInteger(hm) || hm < 1 || hm > 12) {
       return start.getFullYear();
@@ -3710,14 +3795,60 @@ export class SurveyActivityService {
       startDate: Date;
       endDate?: Date | null;
       handoverMonth?: number | null;
+      spkHandoverMonth?: number | null;
+      bastHandoverMonth?: number | null;
     },
     month: number | undefined,
     year: number,
+    docType: 'SPK' | 'BAST' = 'SPK',
   ) {
-    const reportYear = this.getActivityReportYear(activity);
+    const reportYear = this.getActivityReportYear(activity, docType);
     if (reportYear !== year) return false;
     if (typeof month !== 'number') return true;
-    return this.getActivityReportMonth(activity) === month;
+    return this.getActivityReportMonth(activity, docType) === month;
+    }
+
+  private async getMonthlyBastPeriodForUser(
+    userId: string,
+    spkMonth: number,
+    spkYear: number,
+  ) {
+    const rows = await this.prisma.userProgress.findMany({
+      where: {
+        userId,
+        progressRole: { in: ['PETUGAS', 'PENGAWAS'] },
+        user: { primaryRole: 'User' },
+        subSurveyActivity: {
+          startDate: { lte: new Date(spkYear, 11, 31, 23, 59, 59, 999) },
+          endDate: { gte: new Date(spkYear, 0, 1) },
+        },
+      },
+      select: {
+        subSurveyActivity: {
+          select: {
+            startDate: true,
+            endDate: true,
+            handoverMonth: true,
+          spkHandoverMonth: true,
+          bastHandoverMonth: true,
+          },
+        },
+      },
+    });
+
+    const periods = rows
+      .map((r) => r.subSurveyActivity)
+      .filter(Boolean)
+      .filter((activity) =>
+        this.activityMatchesReportPeriod(activity as any, spkMonth, spkYear, 'SPK'),
+      )
+      .map((activity) => ({
+        month: this.getActivityReportMonth(activity as any, 'BAST'),
+        year: this.getActivityReportYear(activity as any, 'BAST'),
+      }))
+      .sort((a, b) => (a.year * 100 + a.month) - (b.year * 100 + b.month));
+
+    return periods[0] ?? { month: spkMonth, year: spkYear };
   }
 
   private parseMoney(input?: string | number | null): number {
@@ -3813,6 +3944,8 @@ export class SurveyActivityService {
             startDate: true,
             endDate: true,
             handoverMonth: true,
+            spkHandoverMonth: true,
+            bastHandoverMonth: true,
             budgetCode: true,
             unitWorkPrice: true,
           },
@@ -3836,7 +3969,13 @@ export class SurveyActivityService {
       select: {
         subSurveyActivityId: true,
         subSurveyActivity: {
-          select: { startDate: true, endDate: true, handoverMonth: true },
+          select: {
+            startDate: true,
+            endDate: true,
+            handoverMonth: true,
+          spkHandoverMonth: true,
+          bastHandoverMonth: true,
+          },
         },
         _count: { select: { samples: true } },
       },
@@ -3867,6 +4006,10 @@ export class SurveyActivityService {
         totalHonor: number;
         unitCost: number;
         budgetCode?: string | null;
+        spkMonth: number;
+        spkYear: number;
+        bastMonth: number;
+        bastYear: number;
       }
     >();
 
@@ -3898,6 +4041,10 @@ export class SurveyActivityService {
           totalHonor: honor,
           unitCost,
           budgetCode: ssaBudget ?? (ssa as any).budgetCode ?? null,
+          spkMonth: this.getActivityReportMonth(ssa, 'SPK'),
+          spkYear: this.getActivityReportYear(ssa, 'SPK'),
+          bastMonth: this.getActivityReportMonth(ssa, 'BAST'),
+          bastYear: this.getActivityReportYear(ssa, 'BAST'),
         });
       } else {
         existing.totalDocs += docs;
@@ -4312,6 +4459,10 @@ export class SurveyActivityService {
           totalCost,
           budgetCode: (base.budgetCode ?? '') as string,
           unitName,
+          spkMonth: Number(base.spkMonth ?? input.month),
+          spkYear: Number(base.spkYear ?? input.year),
+          bastMonth: Number(base.bastMonth ?? input.month),
+          bastYear: Number(base.bastYear ?? input.year),
         };
       })
       .filter(Boolean) as any[];
@@ -4329,10 +4480,26 @@ export class SurveyActivityService {
       Math.max(...eligibleRows.map((r) => r.endDate.getTime())),
     );
 
+    const bastPeriods = Array.from(
+      new Set(eligibleRows.map((r) => `${r.bastYear}||${r.bastMonth}`)),
+    );
+    if (bastPeriods.length > 1) {
+      throw new BadRequestException(
+        'BAST hanya bisa dibuat untuk satu bulan penyerahan BAST. Pisahkan kegiatan yang bulan BAST-nya berbeda.',
+      );
+    }
+    const [bastYearRaw, bastMonthRaw] = String(bastPeriods[0]).split('||');
+    const bastYear = Number(bastYearRaw) || input.year;
+    const bastMonth = Number(bastMonthRaw) || input.month;
+
     const resolvedNumbers = await this.resolveMonthlyDocNumbers({
       userId: input.userId,
       year: input.year,
       month: input.month,
+      spkYear: input.year,
+      spkMonth: input.month,
+      bastYear,
+      bastMonth,
       nomorSPK: input.nomorSPK,
       nomorBAST: input.nomorBAST,
     });

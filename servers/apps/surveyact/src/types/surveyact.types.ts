@@ -130,6 +130,12 @@ export class SubSurveyActivityType {
   @Field(() => Int, { nullable: true })
   handoverMonth?: number | null;
 
+  @Field(() => Int, { nullable: true })
+  spkHandoverMonth?: number | null;
+
+  @Field(() => Int, { nullable: true })
+  bastHandoverMonth?: number | null;
+
   @Field(() => String, { nullable: true })
   budgetCode?: string | null;
 

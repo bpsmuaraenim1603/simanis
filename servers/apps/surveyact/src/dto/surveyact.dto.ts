@@ -141,6 +141,12 @@ export class CreateSubSurveyActivityDTO {
 
   @Field(() => Int, { nullable: true })
   handoverMonth?: number;
+ 
+  @Field(() => Int, { nullable: true })
+  spkHandoverMonth?: number;
+
+  @Field(() => Int, { nullable: true })
+  bastHandoverMonth?: number;
 
   @Field()
   targetSample!: number;
@@ -181,6 +187,12 @@ export class UpdateSubSurveyActivityDTO {
 
   @Field(() => Int, { nullable: true })
   handoverMonth?: number;
+
+  @Field(() => Int, { nullable: true })
+  spkHandoverMonth?: number;
+
+  @Field(() => Int, { nullable: true })
+  bastHandoverMonth?: number;
 
   @Field()
   targetSample!: number;
