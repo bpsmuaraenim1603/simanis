@@ -268,8 +268,8 @@ export class SurveyActivityService {
       const d = ssa?.startDate;
       if (!d || !ssa) continue;
 
-      const rowYear = this.getActivityReportYear(ssa, docType);
-      const rowMonth = this.getActivityReportMonth(ssa, docType);
+      const rowYear = this.getActivityReportYear(ssa, 'SPK');
+      const rowMonth = this.getActivityReportMonth(ssa, 'SPK');
       const reportDate = new Date(rowYear, rowMonth - 1, 1);
       if (reportDate < from || reportDate > to) continue;
 
@@ -384,8 +384,8 @@ export class SurveyActivityService {
       }),
       this.getMonthlyStaffDocCode({
         userId: input.userId,
-        year: bastYear,
-        month: bastMonth,
+        year: spkYear,
+        month: spkMonth,
         docType: 'BAST',
       }),
       this.getSettingString(
@@ -434,8 +434,8 @@ export class SurveyActivityService {
       this.getMonthlyStaffDocCode({ userId, month, year, docType: 'SPK' }),
       this.getMonthlyStaffDocCode({
         userId,
-        month: bastPeriod.month,
-        year: bastPeriod.year,
+        month,
+        year,
         docType: 'BAST',
       }),
       this.getSettingString(
@@ -3543,15 +3543,11 @@ export class SurveyActivityService {
     }
 
     const byUserSpkMonth = new Map<string, any[]>();
-    const byUserBastMonth = new Map<string, any[]>();
     for (const r of out) {
       if (r?.__blocks) delete r.__blocks;
       const spkKey = `${r.spkYear}||${r.spkMonth}||${r.userId}`;
-      const bastKey = `${r.bastYear}||${r.bastMonth}||${r.userId}`;
       if (!byUserSpkMonth.has(spkKey)) byUserSpkMonth.set(spkKey, []);
-      if (!byUserBastMonth.has(bastKey)) byUserBastMonth.set(bastKey, []);
       byUserSpkMonth.get(spkKey)!.push(r);
-      byUserBastMonth.get(bastKey)!.push(r);
     }
 
     const buildOrderedDocMonths = (map: Map<string, any[]>) =>
@@ -3588,13 +3584,7 @@ export class SurveyActivityService {
           Number(r.spkMonth),
           Number(r.spkYear),
         );
-      }
-    });
 
-    buildOrderedDocMonths(byUserBastMonth).forEach((item, idx) => {
-      const code = `B-${String(idx + 1).padStart(3, '0')}`;
-      const list = byUserBastMonth.get(item.key) ?? [];
-      for (const r of list) {
         r.bastCode = code;
         r.bastNumber = this.buildMonthlyDocNumberFromCode(
           code,
@@ -3806,7 +3796,7 @@ export class SurveyActivityService {
     if (reportYear !== year) return false;
     if (typeof month !== 'number') return true;
     return this.getActivityReportMonth(activity, docType) === month;
-    }
+  }
 
   private async getMonthlyBastPeriodForUser(
     userId: string,
@@ -3829,8 +3819,8 @@ export class SurveyActivityService {
             startDate: true,
             endDate: true,
             handoverMonth: true,
-          spkHandoverMonth: true,
-          bastHandoverMonth: true,
+            spkHandoverMonth: true,
+            bastHandoverMonth: true,
           },
         },
       },
@@ -3840,13 +3830,18 @@ export class SurveyActivityService {
       .map((r) => r.subSurveyActivity)
       .filter(Boolean)
       .filter((activity) =>
-        this.activityMatchesReportPeriod(activity as any, spkMonth, spkYear, 'SPK'),
+        this.activityMatchesReportPeriod(
+          activity as any,
+          spkMonth,
+          spkYear,
+          'SPK',
+        ),
       )
       .map((activity) => ({
         month: this.getActivityReportMonth(activity as any, 'BAST'),
         year: this.getActivityReportYear(activity as any, 'BAST'),
       }))
-      .sort((a, b) => (a.year * 100 + a.month) - (b.year * 100 + b.month));
+      .sort((a, b) => a.year * 100 + a.month - (b.year * 100 + b.month));
 
     return periods[0] ?? { month: spkMonth, year: spkYear };
   }
@@ -3973,8 +3968,8 @@ export class SurveyActivityService {
             startDate: true,
             endDate: true,
             handoverMonth: true,
-          spkHandoverMonth: true,
-          bastHandoverMonth: true,
+            spkHandoverMonth: true,
+            bastHandoverMonth: true,
           },
         },
         _count: { select: { samples: true } },
