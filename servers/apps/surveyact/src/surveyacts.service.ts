@@ -268,8 +268,8 @@ export class SurveyActivityService {
       const d = ssa?.startDate;
       if (!d || !ssa) continue;
 
-      const rowYear = this.getActivityReportYear(ssa, 'SPK');
-      const rowMonth = this.getActivityReportMonth(ssa, 'SPK');
+      const rowYear = this.getActivityReportYear(ssa, docType);
+      const rowMonth = this.getActivityReportMonth(ssa, docType);
       const reportDate = new Date(rowYear, rowMonth - 1, 1);
       if (reportDate < from || reportDate > to) continue;
 
@@ -384,8 +384,8 @@ export class SurveyActivityService {
       }),
       this.getMonthlyStaffDocCode({
         userId: input.userId,
-        year: spkYear,
-        month: spkMonth,
+        year: bastYear,
+        month: bastMonth,
         docType: 'BAST',
       }),
       this.getSettingString(
@@ -434,8 +434,8 @@ export class SurveyActivityService {
       this.getMonthlyStaffDocCode({ userId, month, year, docType: 'SPK' }),
       this.getMonthlyStaffDocCode({
         userId,
-        month,
-        year,
+        month: bastPeriod.month,
+        year: bastPeriod.year,
         docType: 'BAST',
       }),
       this.getSettingString(
@@ -3543,11 +3543,22 @@ export class SurveyActivityService {
     }
 
     const byUserSpkMonth = new Map<string, any[]>();
+    const byVisibleUserBastMonth = new Map<string, any[]>();
     for (const r of out) {
       if (r?.__blocks) delete r.__blocks;
       const spkKey = `${r.spkYear}||${r.spkMonth}||${r.userId}`;
       if (!byUserSpkMonth.has(spkKey)) byUserSpkMonth.set(spkKey, []);
       byUserSpkMonth.get(spkKey)!.push(r);
+
+      const showBastOnSpkMonth =
+        Number(r.bastYear) === Number(r.spkYear) &&
+        Number(r.bastMonth) === Number(r.spkMonth);
+      if (showBastOnSpkMonth) {
+        if (!byVisibleUserBastMonth.has(spkKey)) {
+          byVisibleUserBastMonth.set(spkKey, []);
+        }
+        byVisibleUserBastMonth.get(spkKey)!.push(r);
+      }
     }
 
     const buildOrderedDocMonths = (map: Map<string, any[]>) =>
@@ -3584,7 +3595,13 @@ export class SurveyActivityService {
           Number(r.spkMonth),
           Number(r.spkYear),
         );
+      }
+    });
 
+    buildOrderedDocMonths(byVisibleUserBastMonth).forEach((item, idx) => {
+      const code = `B-${String(idx + 1).padStart(3, '0')}`;
+      const list = byVisibleUserBastMonth.get(item.key) ?? [];
+      for (const r of list) {
         r.bastCode = code;
         r.bastNumber = this.buildMonthlyDocNumberFromCode(
           code,
@@ -3595,60 +3612,26 @@ export class SurveyActivityService {
       }
     });
 
-    const makeVisibleRow = (
-      r: any,
-      displayYear: number,
-      displayMonth: number,
-      showSpk: boolean,
-      showBast: boolean,
-    ) => ({
-      ...r,
-      year: displayYear,
-      month: displayMonth,
-      spkCode: showSpk ? r.spkCode : null,
-      spkNumber: showSpk ? r.spkNumber : null,
-      bastCode: showBast ? r.bastCode : null,
-      bastNumber: showBast ? r.bastNumber : null,
-    });
+    const visibleOut = out
+      .filter((r) => {
+        const spkYear = Number(r.spkYear);
+        const spkMonth = Number(r.spkMonth);
+        return spkYear === year && (!hasMonth || spkMonth === month);
+      })
+      .map((r) => {
+        const bastYear = Number(r.bastYear);
+        const bastMonth = Number(r.bastMonth);
+        const showBast =
+          bastYear === year && (!hasMonth || bastMonth === month);
 
-    const visibleOut: any[] = [];
-
-    for (const r of out) {
-      const spkYear = Number(r.spkYear);
-      const spkMonth = Number(r.spkMonth);
-      const bastYear = Number(r.bastYear);
-      const bastMonth = Number(r.bastMonth);
-
-      const spkMatchesSelectedMonth =
-        spkYear === year && (!hasMonth || spkMonth === month);
-      const bastMatchesSelectedMonth =
-        bastYear === year && (!hasMonth || bastMonth === month);
-
-      if (!spkMatchesSelectedMonth && !bastMatchesSelectedMonth) continue;
-
-      const sameDocPeriod = spkYear === bastYear && spkMonth === bastMonth;
-
-      if (sameDocPeriod) {
-        visibleOut.push(
-          makeVisibleRow(
-            r,
-            spkYear,
-            spkMonth,
-            spkMatchesSelectedMonth,
-            bastMatchesSelectedMonth,
-          ),
-        );
-        continue;
-      }
-
-      if (spkMatchesSelectedMonth) {
-        visibleOut.push(makeVisibleRow(r, spkYear, spkMonth, true, false));
-      }
-
-      if (bastMatchesSelectedMonth) {
-        visibleOut.push(makeVisibleRow(r, bastYear, bastMonth, false, true));
-      }
-    }
+        return {
+          ...r,
+          year: Number(r.spkYear),
+          month: Number(r.spkMonth),
+          bastCode: showBast ? r.bastCode : null,
+          bastNumber: showBast ? r.bastNumber : null,
+        };
+      });
 
     visibleOut.sort((a, b) => {
       if (a.month !== b.month) return a.month - b.month;
