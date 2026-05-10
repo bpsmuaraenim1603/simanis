@@ -3595,10 +3595,60 @@ export class SurveyActivityService {
       }
     });
 
-    const visibleOut = out.filter((r) => {
-      if (hasMonth) return Number(r.year) === year && Number(r.month) === month;
-      return Number(r.year) === year;
+    const makeVisibleRow = (
+      r: any,
+      displayYear: number,
+      displayMonth: number,
+      showSpk: boolean,
+      showBast: boolean,
+    ) => ({
+      ...r,
+      year: displayYear,
+      month: displayMonth,
+      spkCode: showSpk ? r.spkCode : null,
+      spkNumber: showSpk ? r.spkNumber : null,
+      bastCode: showBast ? r.bastCode : null,
+      bastNumber: showBast ? r.bastNumber : null,
     });
+
+    const visibleOut: any[] = [];
+
+    for (const r of out) {
+      const spkYear = Number(r.spkYear);
+      const spkMonth = Number(r.spkMonth);
+      const bastYear = Number(r.bastYear);
+      const bastMonth = Number(r.bastMonth);
+
+      const spkMatchesSelectedMonth =
+        spkYear === year && (!hasMonth || spkMonth === month);
+      const bastMatchesSelectedMonth =
+        bastYear === year && (!hasMonth || bastMonth === month);
+
+      if (!spkMatchesSelectedMonth && !bastMatchesSelectedMonth) continue;
+
+      const sameDocPeriod = spkYear === bastYear && spkMonth === bastMonth;
+
+      if (sameDocPeriod) {
+        visibleOut.push(
+          makeVisibleRow(
+            r,
+            spkYear,
+            spkMonth,
+            spkMatchesSelectedMonth,
+            bastMatchesSelectedMonth,
+          ),
+        );
+        continue;
+      }
+
+      if (spkMatchesSelectedMonth) {
+        visibleOut.push(makeVisibleRow(r, spkYear, spkMonth, true, false));
+      }
+
+      if (bastMatchesSelectedMonth) {
+        visibleOut.push(makeVisibleRow(r, bastYear, bastMonth, false, true));
+      }
+    }
 
     visibleOut.sort((a, b) => {
       if (a.month !== b.month) return a.month - b.month;
