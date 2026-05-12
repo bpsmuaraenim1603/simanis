@@ -524,6 +524,35 @@ export class SurveyActivityService {
     return `${dd}-${mm}-${yyyy}`;
   }
 
+  private formatDateLongId(date: Date) {
+    const d = new Date(date);
+    const day = d.getDate();
+    const month = this.monthNameId(d.getMonth() + 1);
+    const year = d.getFullYear();
+    return `${day} ${month} ${year}`;
+  }
+
+  private formatDateRangeId(startDate: Date, endDate: Date) {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const startDay = start.getDate();
+    const endDay = end.getDate();
+    const startMonth = this.monthNameId(start.getMonth() + 1);
+    const endMonth = this.monthNameId(end.getMonth() + 1);
+    const startYear = start.getFullYear();
+    const endYear = end.getFullYear();
+
+    if (startYear === endYear && start.getMonth() === end.getMonth()) {
+      return `${startDay} s.d. ${endDay} ${endMonth} ${endYear}`;
+    }
+
+    if (startYear === endYear) {
+      return `${startDay} ${startMonth} s.d. ${endDay} ${endMonth} ${endYear}`;
+    }
+
+    return `${startDay} ${startMonth} ${startYear} s.d. ${endDay} ${endMonth} ${endYear}`;
+  }
+
   private formatNumberID(n: number) {
     const v = Number(n);
     const safe = Number.isFinite(v) ? v : 0;
@@ -4651,20 +4680,22 @@ export class SurveyActivityService {
     const hariBast = this.dayNameId(input.bastDocDate);
     const namaBulanSpk = this.monthNameId(input.spkDocDate.getMonth() + 1);
     const namaBulanBast = this.monthNameId(input.bastDocDate.getMonth() + 1);
-    const tanggalFormatSpk = this.formatDateId(input.spkDocDate);
+    const bulanPeriode = this.monthNameId(input.month);
+    const bulanPeriodeCaps = String(bulanPeriode || '').toUpperCase();
+    const tanggalFormatSpk = this.formatDateLongId(input.spkDocDate);
     const tanggalSpk = input.spkDocDate.getDate();
     const tanggalTerbilangSpk = this.terbilang(tanggalSpk);
 
-    const tanggalFormatBast = this.formatDateId(input.bastDocDate);
+    const tanggalFormatBast = this.formatDateLongId(input.bastDocDate);
     const tanggalBast = input.bastDocDate.getDate();
     const tanggalTerbilangBast = this.terbilang(tanggalBast);
     const tahunTerbilang = this.terbilang(input.year);
 
     const tanggalMulai = minStart.getDate();
     const tanggalSelesai = maxEnd.getDate();
-    const tanggalMulaiPerjanjian = this.formatDateId(minStart);
-    const tanggalSelesaiPerjanjian = this.formatDateId(maxEnd);
-    const jangkaWaktuPerjanjian = `${tanggalMulaiPerjanjian} sampai dengan ${tanggalSelesaiPerjanjian}`;
+    const tanggalMulaiPerjanjian = this.formatDateLongId(minStart);
+    const tanggalSelesaiPerjanjian = this.formatDateLongId(maxEnd);
+    const jangkaWaktuPerjanjian = this.formatDateRangeId(minStart, maxEnd);
 
     const grandTotal = spkEligibleRows.reduce(
       (acc, r) => acc + (Number(r.totalCost) || 0),
@@ -4682,10 +4713,11 @@ export class SurveyActivityService {
     const honorTerbilang = `${honorTotalAllTerbilang} Rupiah`.trim();
 
     const rowsSpk = spkEligibleRows.map((r, i) => {
-      const tglMulai = this.formatDateId(r.startDate);
-      const tglSelesai = this.formatDateId(r.endDate);
+      const tglMulai = this.formatDateLongId(r.startDate);
+      const tglSelesai = this.formatDateLongId(r.endDate);
       const tanggalMulaiRow = String(r.startDate.getDate());
       const tanggalSelesaiRow = String(r.endDate.getDate());
+      const jangkaWaktu = this.formatDateRangeId(r.startDate, r.endDate);
       const honorSatuan = this.formatNumberID(r.unitCost);
       const honorTotal = this.formatNumberID(r.totalCost);
       return {
@@ -4696,7 +4728,7 @@ export class SurveyActivityService {
         tanggalSelesai: tanggalSelesaiRow,
         tglMulai,
         tglSelesai,
-        jangkaWaktu: `${tglMulai} s.d ${tglSelesai}`,
+        jangkaWaktu,
         volume: r.totalDocs,
         satuan: r.unitName,
         honorSatuan,
@@ -4708,7 +4740,7 @@ export class SurveyActivityService {
     const rowsBast = bastEligibleRows.map((r, i) => ({
       no: i + 1,
       kegiatan: r.activityName,
-      tglSelesai: this.formatDateId(r.endDate),
+      tglSelesai: this.formatDateLongId(r.endDate),
       volume: r.totalDocs,
       satuan: r.unitName,
       bebanAnggaran: r.budgetCode || '',
@@ -4722,6 +4754,8 @@ export class SurveyActivityService {
       desaTinggalPetugas,
       tahun: String(input.year),
       tahunTerbilang,
+      bulanPeriode,
+      bulanPeriodeCaps,
       tanggalMulai,
       tanggalSelesai,
       tanggalMulaiPerjanjian,
