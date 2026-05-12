@@ -20,6 +20,14 @@ type PreviewRow = {
   startDate: string;
   endDate: string;
   eligible: boolean;
+  spkEligible?: boolean;
+  bastEligible?: boolean;
+  includedSPK?: boolean;
+  includedBAST?: boolean;
+  spkMonth?: number;
+  spkYear?: number;
+  bastMonth?: number;
+  bastYear?: number;
   totalDocs: number;
   totalHonor: number;
   unitCost: number;
@@ -33,6 +41,8 @@ type EditableRow = PreviewRow & {
   unitName: string;
   editUnitName: string;
   included: boolean;
+  includedSPK: boolean;
+  includedBAST: boolean;
 };
 
 function toNumber(v: any) {
@@ -121,6 +131,8 @@ export default function BastSpkPage() {
             editUnitName: "Dokumen",
             unitName: "Dokumen",
             included: r.eligible,
+            includedSPK: !!r.spkEligible,
+            includedBAST: !!r.bastEligible,
           };
         });
         setRows(mapped);
@@ -225,7 +237,7 @@ export default function BastSpkPage() {
   }, [selectedUserId, users]);
 
   const eligibleCount = useMemo(
-    () => rows.filter((r) => r.eligible).length,
+    () => rows.filter((r) => r.spkEligible || r.bastEligible).length,
     [rows],
   );
 
@@ -259,7 +271,7 @@ export default function BastSpkPage() {
       const merged = { ...cur, ...next };
 
       const td = toNumber(merged.editTotalDocs);
-      const uc = toNumber(merged.unitCost);
+      const uc = toNumber(merged.editUnitCost);
       merged.editTotalCost = Number((td * uc).toFixed(2));
 
       clone[idx] = merged;
@@ -281,8 +293,8 @@ export default function BastSpkPage() {
       <div>
         <h1 className="text-2xl font-bold">BAST & SPK</h1>
         <p className="text-gray-600 mt-1">
-          Preview kegiatan bulanan petugas. Dokumen hanya dibuat untuk kegiatan
-          yang sudah selesai.
+          Preview kegiatan bulanan petugas. SPK dan BAST dapat berisi kegiatan
+          yang berbeda sesuai bulan penyerahan masing-masing.
         </p>
         {expiresAtInfo ? (
           <p className="text-xs text-gray-500 mt-1">
@@ -405,7 +417,9 @@ export default function BastSpkPage() {
                 SPK: <b>{nomorSPK || "-"}</b> | BAST: <b>{nomorBAST || "-"}</b>
               </div>
             ) : null}
-          </div>\<div>
+          </div>
+          
+          <div>
             <label className="block text-sm font-semibold mb-1">Nomor SPK</label>
             <input
               className="w-full rounded-md border px-3 py-2 bg-white"
@@ -450,7 +464,7 @@ export default function BastSpkPage() {
             <span className="font-semibold">
               {monthName(month)} {year}
             </span>{" "}
-            | Kegiatan selesai:{" "}
+            | Kegiatan bisa dicetak:{" "}
             <span className="font-semibold">{eligibleCount}</span>
           </div>
         )}
@@ -461,7 +475,7 @@ export default function BastSpkPage() {
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-bold">Preview Kegiatan</h2>
           <span className="text-sm text-gray-600">
-            Editable hanya untuk kegiatan selesai.
+            ESPK dan BAST dapat dipilih terpisah sesuai status cetaknya.
           </span>
         </div>
 
@@ -472,13 +486,15 @@ export default function BastSpkPage() {
                 <th className="border p-2 text-left">Kegiatan</th>
                 <th className="border p-2">Start</th>
                 <th className="border p-2">End</th>
-                <th className="border p-2">Status</th>
+                <th className="border p-2">Status SPK</th>
+                <th className="border p-2">Status BAST</th>
                 <th className="border p-2">Satuan</th>
                 <th className="border p-2">Jumlah Satuan</th>
                 <th className="border p-2">Harga Satuan Pekerjaan</th>
                 <th className="border p-2">Total Honor</th>
                 <th className="border p-2">Kode Beban</th>
-                <th className="border p-2">Masukkan</th>
+                <th className="border p-2">Masuk SPK</th>
+                <th className="border p-2">Masuk BAST</th>
               </tr>
             </thead>
             <tbody>
@@ -486,14 +502,14 @@ export default function BastSpkPage() {
                 <tr>
                   <td
                     className="border p-3 text-center text-gray-600"
-                    colSpan={9}
+                    colSpan={12}
                   >
                     Belum ada data. Klik “Tampilkan Kegiatan”.
                   </td>
                 </tr>
               ) : (
                 rows.map((r, idx) => {
-                  const disabled = !r.eligible;
+                  const disabled = !(r.spkEligible || r.bastEligible);
                   return (
                     <tr
                       key={r.subSurveyActivityId}
@@ -508,9 +524,16 @@ export default function BastSpkPage() {
                       </td>
                       <td className="border p-2 text-center">
                         <span
-                          className={`px-2 py-1 rounded text-xs ${r.eligible ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-800"}`}
+                          className={`px-2 py-1 rounded text-xs ${r.spkEligible ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-800"}`}
                         >
-                          {r.eligible ? "Selesai" : "Belum selesai"}
+                          {r.spkEligible ? "Bisa" : "Tidak"}
+                        </span>
+                      </td>
+                      <td className="border p-2 text-center">
+                        <span
+                          className={`px-2 py-1 rounded text-xs ${r.bastEligible ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-800"}`}
+                        >
+                          {r.bastEligible ? "Bisa" : "Tidak"}
                         </span>
                       </td>
                       <td className="border p-2">
@@ -559,14 +582,33 @@ export default function BastSpkPage() {
                       <td className="border p-2 text-center">
                         <input
                           type="checkbox"
-                          disabled={!r.eligible}
-                          checked={!!r.included}
+                          disabled={!r.spkEligible}
+                          checked={!!r.includedSPK}
                           onChange={(e) =>
                             setRows((prev) => {
                               const clone = [...prev];
                               clone[idx] = {
                                 ...clone[idx],
-                                included: e.target.checked,
+                                includedSPK: e.target.checked,
+                                included: e.target.checked || clone[idx].includedBAST,
+                              };
+                              return clone;
+                            })
+                          }
+                        />
+                      </td>
+                      <td className="border p-2 text-center">
+                        <input
+                          type="checkbox"
+                          disabled={!r.bastEligible}
+                          checked={!!r.includedBAST}
+                          onChange={(e) =>
+                            setRows((prev) => {
+                              const clone = [...prev];
+                              clone[idx] = {
+                                ...clone[idx],
+                                includedBAST: e.target.checked,
+                                included: clone[idx].includedSPK || e.target.checked,
                               };
                               return clone;
                             })
@@ -598,12 +640,14 @@ export default function BastSpkPage() {
                 return toast.error("Nama desa petugas wajib diisi.");
 
               const payloadRows = rows
-                .filter((r) => r.eligible && r.included)
+                .filter((r) => (r.includedSPK && r.spkEligible) || (r.includedBAST && r.bastEligible))
                 .map((r) => ({
                   subSurveyActivityId: r.subSurveyActivityId,
                   unitName: (r.editUnitName || "Dokumen").trim() || "Dokumen",
                   totalDocs: toNumber(r.editTotalDocs),
                   included: !!r.included,
+                  includedSPK: !!r.includedSPK,
+                  includedBAST: !!r.includedBAST,
                 }));
 
               setSpkUrl(null);
@@ -663,7 +707,7 @@ export default function BastSpkPage() {
 
         {eligibleCount === 0 && rows.length > 0 && (
           <p className="mt-3 text-sm text-yellow-700">
-            Tidak ada kegiatan selesai pada periode ini. Dokumen belum bisa
+            Tidak ada kegiatan yang bisa dicetak pada periode ini. Dokumen belum bisa
             dibuat.
           </p>
         )}

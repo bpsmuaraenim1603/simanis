@@ -693,8 +693,32 @@ export class MonthlyStaffDocPreviewRowType {
   @Field(() => String, { nullable: true })
   unitName?: string | null;
 
-  @Field(() => String, { nullable: true })
+  @Field(() => Boolean, { nullable: true })
   included?: boolean | null;
+
+  @Field(() => Int, { nullable: true })
+  spkMonth?: number | null;
+
+  @Field(() => Int, { nullable: true })
+  spkYear?: number | null;
+
+  @Field(() => Int, { nullable: true })
+  bastMonth?: number | null;
+
+  @Field(() => Int, { nullable: true })
+  bastYear?: number | null;
+
+  @Field(() => Boolean, { nullable: true })
+  spkEligible?: boolean | null;
+
+  @Field(() => Boolean, { nullable: true })
+  bastEligible?: boolean | null;
+
+  @Field(() => Boolean, { nullable: true })
+  includedSPK?: boolean | null;
+
+  @Field(() => Boolean, { nullable: true })
+  includedBAST?: boolean | null;
 }
 
 @ObjectType()

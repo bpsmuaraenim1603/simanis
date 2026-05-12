@@ -505,6 +505,12 @@ export class MonthlyStaffDocRowInput {
 
   @Field({ nullable: true })
   included?: boolean;
+
+  @Field({ nullable: true })
+  includedSPK?: boolean;
+
+  @Field({ nullable: true })
+  includedBAST?: boolean;
 }
 
 @InputType()

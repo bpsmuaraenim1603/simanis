@@ -8,6 +8,14 @@ export const GET_MONTHLY_STAFF_DOC_PREVIEW = gql`
       startDate
       endDate
       eligible
+      spkEligible
+      bastEligible
+      includedSPK
+      includedBAST
+      spkMonth
+      spkYear
+      bastMonth
+      bastYear
       totalDocs
       totalHonor
       unitCost
